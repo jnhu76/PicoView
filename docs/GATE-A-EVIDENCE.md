@@ -11,17 +11,19 @@ sample definitions, and hosts are never adjusted inside the report).
 
 **GATE-A: FAIL — Product Phase B remains blocked.**
 
-The architecture mechanisms are all proven (see Mechanism verdicts): the
-Windows stock target, the native image-resource seam, the WIC first-image
-path, generation cancellation, and Per-Monitor DPI V2 behavior work end to
-end with bounded guest/host messages and no second runtime. However, the
-**measured physical budgets for startup, settled baseline memory, 24 MP
-viewing memory, idle CPU, and direct-manipulation P95 are not met** by the
-only build admitted for measurement (the Phase-A architecture harness on
-the 28.9 GiB iGPU architecture host). Per BENCHMARK §12 these are recorded
-as FAIL with their physical mechanisms, the PRD numbers are unchanged, and
-five bounded correctives are opened as the new frontier. Product Phase B
-tickets (#5, #6, #8, #10, #16, #17, #18) stay `blocked`.
+The architecture mechanisms are proven (see Mechanism verdicts) — with one
+bounded exception: the OS-delivered `WM_DPICHANGED` leg of the DPI proof
+was not exercisable on the single-display host and is tracked as corrective
+C6 — while the native image seam, WIC first-image path, cancellation, and
+dependency posture all hold with bounded guest/host messages and no second
+runtime. However, the **measured physical budgets for startup, settled
+baseline memory, 24 MP viewing memory, idle CPU, and direct-manipulation
+P95 are not met** by the only build admitted for measurement (the Phase-A
+architecture harness on the 28.9 GiB iGPU architecture host). Per BENCHMARK
+§12 these are recorded as FAIL with their physical mechanisms, the PRD
+numbers are unchanged, and six bounded correctives are opened as the new
+frontier. Product Phase B tickets (#5, #6, #8, #10, #16, #17, #18) stay
+`blocked`.
 
 # Identity
 
@@ -39,7 +41,7 @@ tickets (#5, #6, #8, #10, #16, #17, #18) stay `blocked`.
 | # | Gate question | Verdict | Evidence |
 | --- | --- | --- | --- |
 | 1 | `windows-app` is a real tested stock target through the existing desktop architecture | **PASS** | ARCH-A1: windows-app target proven; runtime-generic extension only |
-| 2 | Large native-owned image composes without O(image-bytes) QuickJS transport | **PASS** | ARCH-A2: 4K native resource; largest svc line 7,373 B vs 48 MB plane; A5 storm: 30,650 B total vs 12.58 MB plane |
+| 2 | Large native-owned image composes without O(image-bytes) QuickJS transport | **PASS** | ARCH-A2: 4K native resource, 2,138 B total svc vs 31.6 MiB resource; ARCH-A3: largest host→guest line 7,373 B (102-entry manifest) vs 48 MB plane; A5 storm: 30,650 B total vs 12.58 MB plane |
 | 3 | First JPEG/WIC path end-to-end; source-handle lifetime bounded | **PASS** | ARCH-A3: file→WIC→seam→present; handle closed at read completion; retire-on-replace synchronous |
 | 4 | 12/24/50 MP evidence: native scaling, latency, memory | **PASS** (characterization complete) | ARCH-A4: source-transform queried (2000×1500 / 3000×2000 / 2172×1448), fit total P50 25.1/45.1/43.4 ms, memory = kept plane |
 | 5 | Rapid-request cancellation; no stale publication/retention | **PASS** | ARCH-A5: 120 requests → 24 decodes + 96 cancels, newest-only publish; work-in-flight = 1 structurally |
@@ -51,14 +53,15 @@ tickets (#5, #6, #8, #10, #16, #17, #18) stay `blocked`.
 | Budget (PRD) | Measured (ARCH-A7/A4) | Verdict | Mechanism / corrective |
 | --- | --- | --- | --- |
 | Process start → usable window ≤150 ms P50 (>300 P95 fails) | 837 / 904 ms | **FAIL** | wgpu adapter/device init + Naga shader compilation = 589–621 ms (69–72% of startup). Corrective C1 |
-| Cold activation → first useful image ≤300 ms P50 (>500 P95 fails) | 857 / 924 ms | **FAIL** | same mechanism (T2≈T6; marker bias ≤1 tick disclosed in A7) |
-| Warm request → first useful image ≤120 ms P50 (>250 P95 fails) | 25.1–45.1 ms fit total; request→present 66/77 ms (12 MP) | **PASS** | within budget once the pipeline is live |
+| Cold activation → first useful image ≤300 ms P50 (>500 P95 fails) | 857 / 924 ms (present-submitted **proxy**, BENCHMARK §5; marker bias ≤1 tick disclosed in A7) | **FAIL** | same mechanism (T2≈T6 at this configuration's granularity) |
+| Warm request → first useful image ≤120 ms P50 (>250 P95 fails) | 66.13 / 76.97 ms T6 request→present (A3, 12 MP, n=50); fit decode open→bound 25.1–45.1 ms (A4) | **PASS** | within budget once the pipeline is live |
 | No-large-image settled baseline ≤40 MiB WS-Private (>64 FAIL) | 226.1 MiB | **FAIL** | full substrate residency (QuickJS arena, wgpu + driver surfaces, text engine, all proof harnesses) in the architecture host build. Corrective C2 |
 | Ordinary 24 MP Fit viewing ≤128 MiB | 254.7 MiB settled | **FAIL** | baseline dominance (above) + 24 MP fit plane (~23 MiB); not image-resource pathology. Corrective C2 |
 | Rapid-request transient ≤384 MiB | 250.6 MiB peak (A5 stress) | **PASS** | coalescing keeps work-in-flight = 1; cost ≈ one plane |
 | Five-process aggregate | 1.55 GiB WS-Private / 3.22 GiB Private Bytes (5 × identical state) | **FAIL** (derivative of the baseline FAIL) | per-process dominance as above. Corrective C2 |
 | Idle CPU ≤0.2% normalized | 0.50% | **FAIL** | fixed 60 Hz worker deadline wake incl. guest JS frame callback; no event-driven idle suspend. Corrective C3 |
 | Static idle: no PicoView-owned continuous render loop | 0 present submissions in the 30 s window; presents cease after settle in A5/A6 runs | **PASS** | render only on draw-list hash change |
+| Static idle: no recurring PicoView filesystem scan | no filesystem access outside explicit open requests in the architecture path (A3/A5/A7 evidence) | **PASS** | — |
 | Direct manipulation ≤20 ms P95 input→present (where measurable) | sparse-cadence P50 21.23 ms / P95 41.34 ms; floor 19.77 ms | **FAIL** | present cadence/quantization dominates (app work ≤0.31 ms/input); budget handed to GATE-A by A4 unbeaten. Corrective C4 |
 | No repeated application-caused >33 ms stalls | 0 application-caused (5 pacing gaps in 47 inputs; no back-to-back) | **PASS** | work-trace attribution |
 | Downloadable payload ≤15 MiB; installed private footprint ≤25 MiB | 12.16 MiB (exe+js+pak; .pdb excluded) | **PASS** (prototype accounting) | installer layer is Phase B |
@@ -73,10 +76,12 @@ tickets (#5, #6, #8, #10, #16, #17, #18) stay `blocked`.
 | C3 | Event-driven idle suspend for the runtime worker | 60 Hz deadline wake incl. guest JS tick | idle ≤0.2% |
 | C4 | Present-scheduling measurement refinement & pacing fix for input→present | ~16.7 ms quantization; 2–3 frame backlog spikes | ≤20 ms P95 (metric unchanged) |
 | C5 | 16 GiB reference-class rerun (or owner-approved equivalence) | host-class delta | all RAM-sensitive rows |
+| C6 | Two-monitor host re-run of the DPI proof (OS-delivered WM_DPICHANGED leg) | single-display host limitation | PMv2 mechanism 6 |
 
-These issues are created from this gate and labeled `ready-for-agent`;
-they are Phase-A/infrastructure correctives, not Product Phase B work.
-Product Phase B tickets stay `blocked` until the gate passes on re-run.
+Tracked as issues #25 (C1), #26 (C2), #27 (C3), #28 (C4), #29 (C5),
+#31 (C6), all labeled `ready-for-agent`; they are
+Phase-A/infrastructure correctives, not Product Phase B work. Product
+Phase B tickets stay `blocked` until the gate passes on re-run.
 
 # Acceptance criteria map (issue #11)
 
@@ -97,13 +102,14 @@ Product Phase B tickets stay `blocked` until the gate passes on re-run.
 
 # Gate decision
 
-The gate is recorded as **FAIL**: the substrate is architecture-suitable,
-but no evidence exists that the defining startup, memory, or idle budgets
-are reachable on the admitted build, and the measurement host is not the
-reference class. Product Phase B remains blocked. Re-admission requires
-the five correctives above (or the owner's explicit equivalence decisions)
-and a gate re-run — a subsequent GATE evaluation ticket, not an in-place
-revision of this report.
+The gate is recorded as **FAIL**: the substrate is architecture-suitable
+(with the DPI OS-delivery leg tracked as C6), but no evidence exists that
+the defining startup, memory, or idle budgets are reachable on the
+admitted build, and the measurement host is not the reference class.
+Product Phase B remains blocked. Re-admission requires the six correctives
+C1–C6 (#25–#29, #31) — or the owner's explicit equivalence decisions for
+specific rows — and a gate re-run, recorded as a subsequent GATE
+evaluation ticket, not an in-place revision of this report.
 
 Per the campaign's brake rule this is a truthful blocked result with
 executable evidence: the architecture experiments succeeded; the physical
