@@ -180,6 +180,6 @@ The first meaningful milestone is not “PicoView v1 complete.”
 
 It is:
 
-> **GATE-A: PocketJS Windows + native image-resource + first-image architecture admitted by executable evidence.**
+> **PocketJS Windows + native image-resource architecture admitted or rejected by GATE-A using reproducible evidence.**
 
-Only then does PicoView move to full product work.
+Only after that decision does ordinary product implementation become executable.
