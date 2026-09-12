@@ -12,6 +12,8 @@ Every benchmark report MUST record:
 - effective PocketJS commit SHA;
 - PocketJS campaign base SHA;
 - build profile and compiler/toolchain versions;
+- native Windows host confirmation;
+- exact `rustc -Vv` and Cargo version for Rust-dependent results;
 - Windows edition/build;
 - CPU model and logical processor count;
 - installed RAM;
@@ -21,12 +23,23 @@ Every benchmark report MUST record:
 - whether the source was on local NVMe or another medium;
 - timestamp and machine power mode.
 
+Architecture GATE-A and Release GATE-B Windows measurements MUST execute as native Windows processes. WSL measurements may be exploratory but cannot close Windows host, WIC, DPI, process-memory, startup/idle, or packaging gates.
+
 ## 2. PocketJS campaign baseline
 
 The initial Architecture Phase A baseline is:
 
 - repository: `https://github.com/pocket-stack/pocketjs`
 - base SHA: `a5a85356e172db8a32aefa983ee1259f60406f69`
+
+Initial native Windows Rust campaign baseline supplied by the project:
+
+```text
+stable-x86_64-pc-windows-msvc
+rustc 1.98.1
+```
+
+The exact toolchain used for a result is still recorded in that result; this line does not replace evidence identity.
 
 If PocketJS is patched during the campaign, reports MUST name both the base and the effective patched SHA/patch series.
 
@@ -183,4 +196,4 @@ For every defining PRD metric, a gate report states exactly one:
 - `FAIL` — metric/behavior violates it;
 - `PASS-WITH-CORRECTIVE` — the gate is allowed to proceed only when the corrective is explicitly bounded, tracked, and does not redefine the failed metric.
 
-Do not make a test pass by changing sample definitions, percentile rules, machine accounting, or PRD thresholds inside the result report.
+Do not make a test pass by changing sample definitions, percentile rules, machine accounting, toolchain identity, execution host, or PRD thresholds inside the result report.
