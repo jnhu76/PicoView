@@ -3,69 +3,67 @@ import { Image, Text, View, type NodeMirror } from "@pocketjs/framework/octane/c
 import { useFrame } from "@pocketjs/framework/octane/lifecycle";
 import { getOps } from "@pocketjs/framework/octane";
 
-// PicoView A2 architecture proof guest.
+// PicoView A3 architecture proof guest — first real JPEG through the
+// native image seam.
 //
-// Proves the native image-resource seam: a natively generated 3840x2160
-// image resource is registered HOST-SIDE (Ui::register_native_texture) and
-// this guest receives ONLY bounded semantic state — {id, handle, w, h} —
-// over the existing svc channel. It composes the resource through ordinary
-// image nodes (setImage) and the ordinary TEX_QUAD path. No pixel payload
-// ever crosses QuickJS: the largest object this realm ever holds is the
-// numeric handle plus a status string.
+// This guest is the CONTROL PLANE of the A3 vertical slice. It sends one
+// bounded file-request intent at a time — {t:"a3open",req,path} — and
+// receives ONLY bounded semantic state back:
+//   {t:"a3img",req,handle,w,h,orient}   success: bind and present
+//   {t:"a3error",req,code}              bounded failure: record, continue
+// The host reads/decodes the file with Windows Imaging Component and
+// registers the plane through the A2 seam (register_native_texture). No
+// encoded byte and no decoded pixel ever enters this realm: the largest
+// object here is the numeric handle, the dimensions, and a status string.
 //
-// Composition proofs wired into the layout:
-//   transform/scaling — the 4K texture is bound to a main image node and a
-//     small thumbnail node, both far smaller than the texture;
-//   clipping          — the main image node is deliberately LARGER than its
-//     overflow-hidden stage, so the core clips it;
-//   z-order           — an ordinary opaque badge view is painted above the
-//     image, chrome/status bars above both;
-//   resize            — the stage is flex-sized, so live window resizes
-//     relayout and recompose through the normal viewport path.
-//
-// Lifetime proof: every announced handle is retained in `keptHandles` for
-// the whole session. When the host retires a resource natively, the guest
-// still holds the handle — rebinding it must be ignored (deterministic
-// absence) and the surviving composition must be untouched. Guest JS
-// retention therefore demonstrably does NOT control resource lifetime.
+// Request pacing: strictly sequential — the next file is requested only
+// after the previous request resolves, so every result correlates to
+// exactly one guest intent. Errors do not wedge the walk: the error is
+// recorded and the next request proceeds.
 
-const A2_SERVICE = "picoview-a2";
+const A3_SERVICE = "picoview-a3";
 
-interface A2ImgMsg {
-  t: "a2img";
-  id: string;
+interface A3ManifestMsg {
+  t: "a3manifest";
+  files: string[];
+}
+
+interface A3ImgMsg {
+  t: "a3img";
+  req: string;
   handle: number;
   w: number;
   h: number;
+  orient: number;
 }
 
-interface A2RetiredMsg {
-  t: "a2retired";
-  id: string;
-  handle: number;
+interface A3ErrorMsg {
+  t: "a3error";
+  req: string;
+  code: string;
 }
 
-type A2Msg = A2ImgMsg | A2RetiredMsg;
+type A3Msg = A3ManifestMsg | A3ImgMsg | A3ErrorMsg;
 
-interface A2Svc {
-  poll(): A2Msg[];
+interface A3Svc {
+  poll(): A3Msg[];
   send(line: Record<string, unknown>): void;
 }
 
-function connectA2(): A2Svc | null {
+function connectA3(): A3Svc | null {
   const ops = getOps();
-  if (!ops.svcOpen || !ops.svcPoll || !ops.svcSend || !ops.svcOpen(A2_SERVICE)) return null;
+  if (!ops.svcOpen || !ops.svcPoll || !ops.svcSend || !ops.svcOpen(A3_SERVICE)) return null;
   const poll = ops.svcPoll.bind(ops);
   const send = ops.svcSend.bind(ops);
   return {
     poll() {
       const batch = poll();
       if (!batch) return [];
-      const events: A2Msg[] = [];
+      const events: A3Msg[] = [];
       for (const line of batch.split("\n")) {
         if (line === "") continue;
         try {
-          events.push(JSON.parse(line) as A2Msg);
+          events.push(JSON.parse(line) as A3Msg);
         } catch {
           // A malformed line is a host bug; skip it rather than wedge.
         }
@@ -78,63 +76,68 @@ function connectA2(): A2Svc | null {
   };
 }
 
+function fileName(path: string): string {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return cut >= 0 ? path.slice(cut + 1) : path;
+}
+
 export default function PicoViewGuest() {
-  const [info, setInfo] = useState("A2: waiting for native image resource…");
+  const [info, setInfo] = useState("A3: waiting for manifest…");
   const mainRef = useRef<NodeMirror | null>(null);
   const thumbRef = useRef<NodeMirror | null>(null);
   const state = useRef({
-    svc: null as A2Svc | null,
-    // Deferred bindings for the first frames before nodeRef callbacks fire.
-    pendingMain: -1,
-    pendingThumb: -1,
-    // Deliberately retained handles: JS refs do NOT own the resource.
-    keptHandles: [] as number[],
+    svc: null as A3Svc | null,
+    files: [] as string[],
+    next: 0,
+    pending: false,
+    currentPath: "",
+    boundHandle: -1,
+    ok: 0,
+    failed: 0,
+    done: false,
   });
 
   useFrame(() => {
     const s = state.current;
-    if (!s.svc) s.svc = connectA2();
+    if (!s.svc) s.svc = connectA3();
     const svc = s.svc;
     if (!svc) return;
-    const ops = getOps();
-
-    // Apply bindings that arrived before the image nodes were mounted.
-    if (s.pendingMain >= 0 && mainRef.current) {
-      ops.setImage(mainRef.current.id, s.pendingMain);
-      s.pendingMain = -1;
-    }
-    if (s.pendingThumb >= 0 && thumbRef.current) {
-      ops.setImage(thumbRef.current.id, s.pendingThumb);
-      s.pendingThumb = -1;
-    }
 
     for (const msg of svc.poll()) {
-      if (msg.t === "a2img") {
-        s.keptHandles.push(msg.handle);
-        if (mainRef.current) ops.setImage(mainRef.current.id, msg.handle);
-        else s.pendingMain = msg.handle;
-        if (thumbRef.current) ops.setImage(thumbRef.current.id, msg.handle);
-        else s.pendingThumb = msg.handle;
+      if (msg.t === "a3manifest") {
+        s.files = msg.files;
+        setInfo(`A3: manifest — ${msg.files.length} file request(s) queued`);
+      } else if (msg.t === "a3img") {
+        s.ok += 1;
+        s.pending = false;
+        s.boundHandle = msg.handle;
+        if (mainRef.current) getOps().setImage(mainRef.current.id, msg.handle);
+        if (thumbRef.current) getOps().setImage(thumbRef.current.id, msg.handle);
         setInfo(
-          `A2: bound ${msg.id} handle=${msg.handle} ${msg.w}x${msg.h} — guest holds ${s.keptHandles.length} handle(s)`,
+          `A3: ${msg.req} bound handle=${msg.handle} ${msg.w}x${msg.h} orient=${msg.orient} (${fileName(s.currentPath)})`,
         );
-        svc.send({ t: "a2ack", id: msg.id, handle: msg.handle, bound: "main+thumb" });
-      } else if (msg.t === "a2retired") {
-        // The host already freed the resource natively. The guest still
-        // holds the handle: rebinding it must be silently ignored (stale
-        // handles resolve to deterministic absence), and the surviving
-        // composition must not change.
-        if (mainRef.current) ops.setImage(mainRef.current.id, msg.handle);
-        setInfo(
-          `A2: host retired ${msg.id} handle=${msg.handle} — stale rebind ignored; composition survives`,
-        );
-        svc.send({
-          t: "a2ack",
-          id: msg.id,
-          retired: true,
-          keptRefs: s.keptHandles.length,
-        });
+        svc.send({ t: "a3ack", req: msg.req, bound: "main+thumb" });
+      } else if (msg.t === "a3error") {
+        s.failed += 1;
+        s.pending = false;
+        setInfo(`A3: ${msg.req} error code=${msg.code} (${fileName(s.currentPath)}) — bounded failure, walk continues`);
+        svc.send({ t: "a3ack", req: msg.req, error: msg.code });
       }
+    }
+
+    // Sequential guest intent: request the next file once the previous
+    // request resolved (success or bounded error).
+    if (!s.pending && s.next < s.files.length) {
+      const req = `r${s.next + 1}`;
+      s.currentPath = s.files[s.next];
+      svc.send({ t: "a3open", req, path: s.currentPath });
+      s.next += 1;
+      s.pending = true;
+    } else if (!s.pending && s.files.length > 0 && !s.done && s.next >= s.files.length) {
+      s.done = true;
+      setInfo(
+        `A3: walk complete — ${s.ok} presented, ${s.failed} bounded error(s); QuickJS held only handles, numbers, strings`,
+      );
     }
   });
 
@@ -142,16 +145,18 @@ export default function PicoViewGuest() {
     <View class="w-full h-full flex-col bg-slate-900">
       <View class="flex-row items-center justify-between px-4 py-2 bg-slate-900">
         <Text class="text-sm text-white font-bold">PicoView</Text>
-        <Text class="text-xs text-slate-400">Architecture A2 — native image resource</Text>
+        <Text class="text-xs text-slate-400">Architecture A3 — first JPEG / WIC</Text>
       </View>
       <View class="flex-1 overflow-hidden bg-slate-800">
-        {/* MAIN image: the native 3840x2160 resource composed through an
-            ordinary layout box, deliberately LARGER than this overflow-hidden
-            stage (880x495 box, offset -80/-40) — proves transform/scaling and
-            clipping in one node. */}
+        {/* MAIN image: the WIC-decoded, natively oriented resource composed
+            through an ordinary layout box (clipped by the overflow-hidden
+            stage), exactly as in A2 — one seam, no second image path. */}
         <Image
           nodeRef={(node: NodeMirror | null) => {
             mainRef.current = node;
+            if (node && state.current.boundHandle >= 0) {
+              getOps().setImage(node.id, state.current.boundHandle);
+            }
           }}
           style={{ posType: 1, insetL: -80, insetT: -40, width: 880, height: 495 }}
         />
@@ -159,6 +164,9 @@ export default function PicoViewGuest() {
         <Image
           nodeRef={(node: NodeMirror | null) => {
             thumbRef.current = node;
+            if (node && state.current.boundHandle >= 0) {
+              getOps().setImage(node.id, state.current.boundHandle);
+            }
           }}
           style={{ posType: 1, insetR: 16, insetB: 16, width: 120, height: 68 }}
         />
@@ -166,9 +174,9 @@ export default function PicoViewGuest() {
             image (later sibling in painter order). */}
         <View
           class="bg-slate-900 border border-slate-600"
-          style={{ posType: 1, insetL: 16, insetT: 12, width: 260, height: 36 }}
+          style={{ posType: 1, insetL: 16, insetT: 12, width: 300, height: 36 }}
         >
-          <Text class="text-xs text-white"> UI element above the native image </Text>
+          <Text class="text-xs text-white"> WIC decode — native plane, JS holds a handle </Text>
         </View>
       </View>
       <View class="flex-row items-center justify-between px-4 py-1 bg-slate-900 border-t border-slate-700">

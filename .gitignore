@@ -1,0 +1,6 @@
+# Local tooling state (Mimosa security scanner)
+.mimosa/
+
+# Benchmark/physical-evidence scratch: samples, logs, run outputs.
+# Only curated evidence reports under docs/ are committed.
+evidence/
