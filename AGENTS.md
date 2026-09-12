@@ -122,7 +122,7 @@ Before coding:
 - confirm the ticket is `ready-for-agent`;
 - confirm all declared blockers are complete;
 - identify the highest practical end-to-end seam;
-- record any new dependency or architecture decision the ticket would introduce;
+- record any new dependency or architecture decision that the ticket would introduce;
 - confirm the exact PocketJS source identity if runtime behavior is involved.
 
 During coding:
@@ -178,16 +178,14 @@ After GATE-A, Product Phase B adds:
 - deterministic BrowseSession ordering fixtures;
 - current-file filesystem effects;
 - format/animation behavior;
-- Windows UI Automation inspection;
-- final GATE-B regression measurements.
-
-Use existing PocketJS desktop/backend/simulator/frame-trace patterns where they fit rather than inventing a second verification philosophy.
+- UI Automation inspection;
+- GATE-B release-candidate reruns.
 
 ## Scope guard
 
-v1 excludes:
+v1 explicitly excludes:
 
-- destructive image editing;
+- editing;
 - library/database behavior;
 - cloud/account behavior;
 - Filmstrip;
@@ -200,16 +198,18 @@ v1 excludes:
 - true HDR;
 - generalized updater/telemetry/network subsystems.
 
-If a task seems to require one of these, surface the authority conflict rather than implementing it.
+If a task appears to require one of these, stop and surface the conflict rather than implementing it.
 
-## Documentation authority
+## Documentation
 
-- PRD owns product boundary, budgets, feature cuts, and gate policy.
-- SPEC owns cross-cutting system/execution/test decisions.
-- BENCHMARK owns measurement semantics.
-- accepted ADRs own evidence-backed durable technical choices.
-- CONTEXT owns current state and working facts; it does not override accepted ADRs.
-- POCKETJS-BASELINE owns the external source identity for the current architecture campaign.
-- issues own bounded execution slices.
+Keep product truth centralized.
 
-Do not create a second competing architecture document.
+- PRD owns product boundary, budgets, non-goals, and phase/gate policy.
+- SPEC owns cross-cutting system behavior and execution graph.
+- BENCHMARK owns physical measurement semantics.
+- accepted ADRs own evidence-backed durable implementation choices.
+- CONTEXT owns current state and working assumptions.
+- POCKETJS-BASELINE freezes external source identity for the current architecture campaign.
+- Issues own bounded execution slices.
+
+Do not create a competing architecture authority document.
