@@ -21,7 +21,9 @@ presenting the previous state — no catastrophic allocation.
 | PocketJS A4 branch | `picoview-a4-large-jpeg-fit` = `fa936129` + A4 patch (local; Mimosa audit pending before any upstream push) |
 | A4 diff scope | `hosts/desktop/src/{a3.rs,main.rs,tests.rs}` only; **zero diff** in `contracts/`, `framework/`, `engine/`, `vapor` |
 | Toolchain | `rustc 1.98.1 (48a229cea 2026-09-01)`, `stable-x86_64-pc-windows-msvc`; release build (`cargo test --release`, `--release` harness binary) |
-| OS / GPU | Windows 11 (10.0.26200), native Windows host (not WSL); wgpu adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, LowPower), Vulkan / Bgra8Unorm |
+| Machine (BENCHMARK §1) | AMD Ryzen 7 5800H, 16 logical processors; 28.9 GiB installed RAM; display 60 Hz; C: on KIOXIA EXCERIA NVMe SSD; power plan Balanced. Measurement campaign ran 2026-09-12 ~17:50–18:30 UTC (log wall clocks); machine identity recorded 2026-09-12T18:47Z |
+| GPU | AMD Radeon(TM) Graphics — integrated, wgpu adapter `(IntegratedGpu, requested LowPower)`, Vulkan / Bgra8Unorm, driver 31.0.21923.11000 (2025-07-01). **Reference-class deviation (stated):** the PRD reference class reads "16 GiB RAM, local NVMe, hardware-accelerated desktop GPU"; this machine matches RAM and NVMe but the GPU is an *integrated* accelerator. GATE-A must weigh iGPU-class results when arbitrating GPU-dependent budgets |
+| OS | Windows 11 (10.0.26200), native Windows host (not WSL) |
 | Guest | `guest/app.octane.tsx` (Octane), compiled to `dist/picoview-a4-main.{js,pak}` via `bun tools/pocket.ts compile --target windows-app --manifest guest/pocket.json --project-root . --outdir dist`; guest entry `main.octane.tsx` resolves `app.octane.tsx` |
 | Guest plan | id `dev.picoview.arch-a4-guest`, output `picoview-a4-main`, planHash `sha256:f5063916caefad2865d428577c4d82e73cd9b26b2a18453c469de09c7ba94e15`; resolved plan committed as `guest/picoview-a4-main.plan.json` (viewport 720×480 logical @ density 2 = 1440×960 physical, policy dynamic) |
 | Scratch evidence | `evidence/tmp/` (not committed): run logs, memwatch JSONs, screenshots; committed corroboration is unit tests + quoted log lines below |
@@ -70,7 +72,7 @@ Generated synthetic photo-like gradient scenes (deterministic generator
 | --- | --- | --- | --- |
 | `picoview-12mp.jpg` | 4000×3000 | 1,231,842 B | 48,000,000 B |
 | `picoview-24mp.jpg` | 6000×4000 | 1,890,113 B | 96,000,000 B |
-| `picoview-50mp.jpg` | 8688×5792 | 2,340,430 B | 201,227,264 B |
+| `picoview-50mp.jpg` | 8688×5792 | 2,340,430 B | 201,283,584 B |
 | `picoview-orient6.jpg` | 1200×900 + EXIF 6 | 61,327 B | (A3 sample, reused) |
 | `picoview-corrupt.jpg` | 512 B truncation | — | — (error corpus) |
 | `picoview-fake.jpg` | PNG bytes, .jpg name | 67 B | — (sniff corpus) |
@@ -79,16 +81,19 @@ Generated synthetic photo-like gradient scenes (deterministic generator
 
 Same method as A3: host-side `A3SVC,tx/rx` mirrors + guest outbox counters.
 
-* Largest svc line in the A4 zoom/pan campaign: **176 B** (`a4open` path +
-  fit fields; `a3img` bounded semantic state; `a3ack` geometry numbers).
+* Largest svc line across the A4 campaigns: **177 B** (an `a3ack` geometry
+  line in the saturated log; 176 B in the sparse campaign, where the
+  longest is an `a4open` path+fit line). `a3img` carries bounded semantic
+  state and `a3ack` bounded geometry numbers.
   The multi-MB planes never appear on the wire — a 96 MB plane travels
   file → WIC → `register_native_texture` → `handle: i32`.
 * `a4open` adds `{fitW, fitH}` (two integers) to the request; the response
   format is unchanged from A3 plus `mode/nativeW/nativeH` (three scalar
   fields, present since A3's announce).
-* Guest shape-validates every announced image message (handle/w/h numbers)
-  before binding; corrupt/missing/fake inputs arrive only as bounded
-  `{t:"a3error",req,code}`.
+* Guest parses every announced line as JSON and binds after field access;
+  there is **no runtime shape validation** in the guest (the sender is the
+  trusted native host) — hostile input reaches this path only as a bounded
+  `{t:"a3error",req,code}` produced by the host's own admission checks.
 
 ## Fit decode — WIC source-transform (MEASUREMENT)
 
@@ -119,11 +124,12 @@ The unit test `a4_source_transform_reports_closest_native_size` pins the
 probe behavior; `a4_scaled_decode_produces_oriented_plane_at_native_size`
 pins oriented scaled output at the native size.
 
-INFERENCE (bounded): Fit cost is governed by the *kept plane*, not stored
-megapixels — 50 MP Fit is no more expensive than 12 MP Fit (43.4 vs 25.1 ms
-total P50; the difference vs 12 MP is the ¼-rung DCT decode width, and its
-memory cost is identical). Blind full-decode retention would have kept
-48/96/201 MB planes; the seam kept 12/24/12.6 MB.
+INFERENCE (bounded): Fit memory cost is governed by the *kept plane*, not
+stored megapixels — the 50 MP sample's memory cost is identical to the
+12 MP sample's (+12.9 MB vs control). Time cost is bounded but not equal:
+50 MP Fit total P50 43.4 ms vs 12 MP's 25.1 ms (the ¼-rung DCT decode is
+wider), still far inside the warm-request budget. Blind full-decode
+retention would have kept 48/96/201 MB planes; the seam kept 12/24/12.6 MB.
 
 ## 100% (full decode) behavior (FACT + MEASUREMENT)
 
@@ -167,14 +173,16 @@ inputs=47 measured=47 missing=0 P50=21.23ms P95=41.34ms min=19.77ms max=53.90ms 
 ```
 
 Attribution per sample: guest work between input and view change is
-**160–308 µs** on every one of the 47 inputs (`work` frame traces) — more
+**159–308 µs** on every one of the 47 inputs (`work` frame traces) — more
 than 100× below the 33 ms stall threshold. The five >33 ms samples
-(31.6–53.9 ms) sit on ~16.7 ms quantization steps and show no corresponding
-work spike: they are presentation-pacing gaps (composition present cadence),
-not application-caused stalls.
+(35.23, 35.64, 41.34, 46.43, 53.90 ms) sit on ~16.7 ms quantization steps
+(60 Hz present cadence, recorded in Machine identity) and show no
+corresponding work spike: they are presentation-pacing gaps, not
+application-caused stalls, and no two occur back-to-back.
 
-**Saturated flood** (80 inputs at 1–5-tick spacing, same session,
-`bench-panzoom.log`): P50=122.49 ms, P95=156.31 ms, over33ms=76/77.
+**Saturated flood** (80 inputs at 1–4-tick spacing — gap distribution
+{1:30, 4:48, 8:1} — same session, `bench-panzoom.log`): P50=122.49 ms,
+P95=156.31 ms, over33ms=76/77.
 Discrimination run (sparse above) proves the flood number is presentation-
 queue backlog under input flood, not substrate work latency. Known behavior,
 recorded for A5 (cancellation/resource bounds), which owns saturation
@@ -294,6 +302,18 @@ Non-Windows hosts compile unchanged (`decode_jpeg_wic_scaled` has a
   so screenshots clip the stage's right/bottom edge. Composition, geometry
   math, and all measurements are stage-coordinate and unaffected; a future
   guest aligns stage and viewport.
+* The `a4open` fit clamp hardcodes `min(8192)` instead of referencing
+  `pocketjs_core::NATIVE_TEX_MAX_DIM` (same value today). Cosmetic
+  divergence risk only; fold into the next runtime patch.
+* The oriented-scaled unit test uses a 2:1 fixture on which the
+  stored-space fit swap (R90/R270) is not discriminating, and pins size
+  only, not scaled pixel content. The swap logic is verified by inspection
+  plus the full-path orientation oracles; a non-uniform-aspect content
+  oracle would harden it.
+* Key-driven re-requests reuse `req` ids (e.g. `1` on `r1` re-sends
+  `r1` for a second distinct request). Harmless — publish is strictly
+  sequential and retire is slot-based — but it weakens req-id correlation
+  in logs; the latency analysis joins on ticks, not req ids.
 * Presentation-queue behavior under input flood (P50 122 ms) is documented,
   not fixed: saturation discipline is A5's acceptance territory.
 
