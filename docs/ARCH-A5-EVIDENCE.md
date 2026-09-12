@@ -204,10 +204,11 @@ Test suite: `cargo test --release` hosts/desktop **26 passed / 0 failed /
   makes the walk silently advance past that file (harness-only state;
   the recorded storm starts after the walk settled — arrivals 123 = 3
   walk + 120 stress, zero walk requests cancelled).
-* The "newest fails after its batch's cancels" composition (cancel batch
-  issued, then the newest decode errors) is implied by the synchronous
-  handle_open paths but not explicitly unit-pinned; a one-line test
-  would harden it.
+* The "newest fails after its batch's cancels" composition is unit-pinned
+  by `a3_missing_file_pushes_bounded_error_and_harness_continues`
+  (r1 answered `cancelled`, newest r2 fails with the real `missing`
+  code, live resource stays empty). An earlier draft of this report
+  under-claimed that coverage.
 * Pre-existing dead-code warnings in the non-test binary build
   (`probe_source_transform` / `SourceTransformProbe` are test-and-probe
   surface since A4); cosmetic, fold into the next runtime patch.
