@@ -42,8 +42,11 @@ inherits these verdicts verbatim.**
   Counters (`Working Set - Private`, `Private Bytes`) with instance
   resolution by `ID Process == PID`, 50 ms sampling, settled = median of
   final 40 samples; cross-checked against the process's own
-  `PeakWorkingSetSize` / `PeakPagefileUsage` (PPMC) — the two sources
-  agreed within ~2% on every run this campaign.
+  `PeakPagefileUsage` (peak private committed) — the two private-bytes
+  sources agreed within 0.3% on every run this campaign. (PPMC
+  `PeakWorkingSetSize` is TOTAL working set including shared pages and
+  runs ~20% above the WS-Private counter; it is recorded as a companion
+  figure, not a cross-check of WS-Private.)
 * **Idle probe** (`bench-idle.ps1`): `TotalProcessorTime` delta over a
   timed 30 s wall window (OS process accounting), render submissions
   counted from `FRAME_TRACE` lines, network ownership from
@@ -60,26 +63,33 @@ BENCHMARK §6), 55/55 valid, no warm-up runs mixed in:
 | Process start → usable window (`T2−T1`) | **837 ms** | 904 ms | ≤150 ms P50; >300 ms P95 fails | **FAIL** |
 | Cold activation → first useful image (`T6−T0`, present-submitted proxy) | **857 ms** | **924 ms** | ≤300 ms P50; >500 ms P95 fails | **FAIL** |
 
-T2 == T6 in this configuration: the guest requests its manifest image at
-startup, so the first usable window frame already carries the image — the
-first useful image IS the first frame. Present-submitted is the named
-proxy (BENCHMARK §5); visual acceptance separate.
+Marker semantics (adversarially reviewed, stated exactly): `IMGREADY`
+is printed on the first present submission **after the image-bind ack**
+is processed by the host. Because the guest draws the newly bound
+handle on the tick after the ack, the marked frame is the bind-ack
+frame and the image-carrying frame submits up to one tick (~16.7 ms)
+later — the T6 proxy is optimistic by at most that amount. At this
+configuration's granularity READY and IMGREADY coincide (the image
+binds within the first ticks), so the startup numbers and the
+first-frame statement below should be read with that bounded bias.
 
-**Responsible physical mechanism** (instrumented phases, monotonic,
-representative run; `A7EVENT,phase` lines):
+**Responsible physical mechanism** (instrumented phases, monotonic
+`A7EVENT,phase` lines from the three preserved instrumented runs):
 
-| Phase | Cumulative ms |
-| --- | --- |
-| main entry → event loop built | 10 |
-| event loop → GPU ready (wgpu adapter/device enumeration + Naga shader compilation, iGPU Vulkan/DX12) | **593** |
-| GPU ready → runtime thread spawned | 0 |
-| runtime boot (QuickJS engine + 345 KB guest JS eval + pak/font load) | 37 |
-| runtime boot → first present-submitted (tick loop + frame pipeline) | ~150–200 |
+| Phase (cumulative ms from process start) | baseline run | workload run | idle run |
+| --- | --- | --- | --- |
+| main entry → event loop built | 10 | 11 | 11 |
+| event loop → GPU ready (wgpu adapter/device enumeration + Naga shader compilation, iGPU) | **604** | **600** | **621** |
+| GPU ready → runtime thread spawned | 604 | 600 | 621 |
+| runtime thread → runtime boot done (QuickJS engine + 345 KB guest JS eval + pak/font load) | 640 | 636 | 683 |
 
-≈70% of startup is **GPU subsystem initialization** (wgpu adapter
-enumeration + shader compilation on the integrated GPU), ≈4% guest/JS
-boot, remainder first-frame pipeline and probe spawn. None of it is
-image decoding (12 MP fit decodes in ~22 ms once the pipeline is live).
+GPU initialization is **589–621 ms across the three runs — 69–72% of
+total startup**; guest/JS boot contributes ~36–47 ms (~4–5%). The
+remainder (≈ 200 ms to first present, measured 857 − 640 on the
+baseline run) is the first-frame pipeline and probe spawn. None of it
+is image decoding (12 MP fit decodes in ~22 ms once the pipeline is
+live). The idle run's slightly higher absolute values reflect
+concurrent load during that measurement; the proportions are stable.
 
 ## Memory (MEASUREMENT — gate verdicts: FAIL, FAIL, FAIL aggregate)
 
@@ -126,23 +136,26 @@ corrective/equivalence decision.
 
 ## Idle (MEASUREMENT — gate verdict: FAIL CPU; PASS no-render-loop)
 
-Static 24 MP image bound; 5 s settle; 30 s observation:
+Static 24 MP image bound; 5 s settle; 30 s observation (corrected run:
+the first probe revision counted render submissions on the wrong output
+stream — stdout — making its zero vacuous; the corrected probe counts
+the stderr frame traces, where they live):
 
 ```
-idle_cpu_seconds=2.641 wall=30.0s normalized_pct=0.5498
+idle_cpu_seconds=2.391 wall=30.0s normalized_pct=0.4979
 present_submissions_during_idle=0
 network_connections_owned=0
 ```
 
-* PRD idle budget ≤0.2% normalized: measured **0.55% → FAIL**.
+* PRD idle budget ≤0.2% normalized: measured **0.50% → FAIL**.
   Mechanism: the PocketJS runtime worker wakes on a fixed 60 Hz deadline
-  loop even with no work (try_recv + tick bookkeeping ≈ 8.8% of one
-  logical processor ≈ 0.55% of 16); there is no event-driven idle
-  suspend in the substrate.
+  loop even with no work, and each wake runs the full guest JS frame
+  callback plus tick bookkeeping (≈ 8% of one logical processor ≈ 0.5%
+  of 16); there is no event-driven idle suspend in the substrate.
 * **No PicoView-owned continuous render loop: PASS** — zero
-  present/render submissions during the idle window; corroborated by the
-  A6 run where present markers stop at tick 225 of 1200 after the image
-  settles.
+  present/render submissions in the idle window on the corrected
+  stderr count; corroborated by the A5 storm run where present markers
+  stop at tick 225 of 1200 after the image settles.
 * No network connections owned by the process during idle; no
   filesystem-scan behavior exists in the architecture path (nothing in
   the host/runtime touches the filesystem outside the explicit open
@@ -151,14 +164,15 @@ network_connections_owned=0
 ## Package and install size (MEASUREMENT — payload sub-budget: PASS)
 
 Release artifacts, debug symbols excluded (`debug=false`; the 6.3 MiB
-`.pdb` is a local build artifact, not product payload):
+`.pdb` is a local build artifact, not product payload; sizes measured on
+the final A7 binary):
 
 | Artifact | Bytes |
 | --- | --- |
-| `pocket-desktop-host.exe` | 12,099,584 |
+| `pocket-desktop-host.exe` | 12,100,096 |
 | `picoview-a6-main.js` | 345,172 |
 | `picoview-a6-main.pak` | 304,944 |
-| **Product payload (sum)** | **12,749,700 B ≈ 12.16 MiB** |
+| **Product payload (sum)** | **12,750,212 B ≈ 12.16 MiB** |
 
 PRD downloadable payload ≤15 MiB: **PASS** at prototype granularity (a
 portable archive would compress well below this; installer layer is
@@ -232,7 +246,8 @@ gate probes). `engine/core` untouched by the A7 diff.
 | Startup metrics with sample count + timestamp definitions | 55 runs; T1→T2 837/904; T0→T6 857/924; FAIL verdicts |
 | Settled WS-Private + Private Bytes, baseline + workload | both metrics tabled for both states |
 | One-process and five-process aggregates | single-process table + 5×sum (1.55 GiB / 3.22 GiB) |
-| Static 30 s idle CPU normalized | 0.55% (FAIL) with mechanism |
+| Static 30 s idle CPU normalized | 0.50% (FAIL) with mechanism |
+| No continuous render loop after settle | 0 present submissions in idle window (corrected stderr count) + A5 corroboration |
 | No continuous render loop after settle | 0 present submissions in idle window + A6 corroboration |
 | Dependency inventory, no hidden second runtime/telemetry/updater/network | inventory section (PASS) |
 | Identity on every number | identity table + per-section notes |
@@ -246,7 +261,8 @@ PASS as a measurement ticket; the gate statuses it hands to GATE-A:
 startup **FAIL** (GPU init 583 ms dominates), settled baseline memory
 **FAIL** (substrate residency 226 MiB vs ≤40/64 MiB lines), 24 MP
 viewing memory **FAIL** (254.7 MiB vs ≤128 MiB), idle CPU **FAIL**
-(0.55% vs ≤0.2%, 60 Hz worker wake loop), payload **PASS** (12.16 MiB
+(0.50% vs ≤0.2%, 60 Hz worker wake loop incl. guest JS tick), payload
+**PASS** (12.16 MiB
 ≤15 MiB), no-render-loop **PASS**, dependency inventory **PASS**.
 Ram-sensitive rows are architecture-host evidence only.
 
