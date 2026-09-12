@@ -9,7 +9,7 @@ Issue: #14 `[ARCH-A2]` — Prove native image-resource composition without JS pi
 | Item | Value |
 |------|-------|
 | PicoView starting SHA | `7ee3ade7b9b2b89dec83d9a70b8314d9e6199aee` |
-| PicoView evidence SHA | recorded at commit time (guest + this report; see git log) |
+| PicoView evidence SHA | `8c216442785a0219722d0d8f8f656304b8ef0f8c` (guest A2 + this report; corrective SHA added below) |
 | PocketJS frozen base SHA | `a5a85356e172db8a32aefa983ee1259f60406f69` |
 | PocketJS A1 SHA | `62ee522ff79b68730450844775748fe0a3bffc24` (branch `picoview-a1-windows-target`) |
 | PocketJS effective A2 SHA | `fe32ea825e05246d8a8dd7d28cb122cedd42ee92` (branch `picoview-a2-image-resource`, created from the A1 commit) |
