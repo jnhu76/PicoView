@@ -105,7 +105,7 @@ The project uses GitHub issues as execution tickets.
 
 Tickets are intended to be **tracer bullets**: narrow, demoable end-to-end slices, not horizontal “build all rendering” / “build all UI” buckets.
 
-This repository does not yet have a configured `ready-for-agent` label vocabulary. Until that label exists, ticket bodies explicitly carry `Status: ready-for-agent`.
+The `ready-for-agent` label is the execution triage label for the parent spec and the tracer-bullet tickets produced from it.
 
 ## Near-term outcome
 
