@@ -36,6 +36,21 @@ Release-level goals:
 - No telemetry, resident updater/service, startup network dependency, media database, plugin system, Filmstrip, Slideshow, Print, or Share in v1.
 - Architecture GATE-A precedes Product Phase B.
 
+## Authoritative development environment
+
+Architecture Phase A Windows evidence is now produced on **native Windows**, not inside WSL.
+
+Current Rust campaign toolchain:
+
+```text
+stable-x86_64-pc-windows-msvc
+rustc 1.98.1
+```
+
+WSL remains acceptable for reading, note-taking, repository inspection, and non-Windows helper scripts, but it is not authoritative evidence for Windows stock-target behavior, winit/wgpu presentation, WIC, DPI, Windows startup/memory/idle metrics, or packaging.
+
+The exact `rustc -Vv` / Cargo identity used by a gate report is recorded with the report.
+
 ## PocketJS campaign baseline
 
 Architecture Phase A is planned against:
@@ -47,7 +62,7 @@ See `docs/POCKETJS-BASELINE.md`.
 
 Do not silently follow a moving PocketJS `main` during the campaign.
 
-Every runtime-dependent report records the PicoView SHA, campaign base SHA, and effective PocketJS SHA/patch series.
+Every runtime-dependent report records the PicoView SHA, campaign base SHA, effective PocketJS SHA/patch series, and native Windows toolchain identity.
 
 ## Important PocketJS reality
 
@@ -88,7 +103,7 @@ The tracker is deliberately staged.
 
 Initial frontier:
 
-- **#13 `[ARCH-A0]`** — freeze PocketJS baseline, workspace topology, and benchmark contract.
+- **#13 `[ARCH-A0]`** — freeze PocketJS baseline, workspace topology, native-Windows toolchain identity, and benchmark contract.
 
 Downstream Architecture Phase A:
 
@@ -149,7 +164,7 @@ Browse eligibility is established cheaply through extension/capability knowledge
 5. `CONTEXT.md`
 6. current GitHub execution ticket
 
-`docs/POCKETJS-BASELINE.md` freezes the external source identity used by the current Architecture Phase A campaign.
+`docs/POCKETJS-BASELINE.md` freezes the external source identity and authoritative native-Windows campaign host used by Architecture Phase A.
 
 A lower-authority source must not silently override a higher one.
 
@@ -172,7 +187,10 @@ Stop and investigate when:
 - a static image requires a PicoView-owned continuous render loop;
 - Windows support is implemented as an unrelated PicoView-only runtime fork without earned evidence;
 - a dependency enters without recorded user pain and budget cost;
-- a `blocked` Product Phase B ticket is started before GATE-A.
+- a `blocked` Product Phase B ticket is started before GATE-A;
+- a `/goal` or other autonomous run attempts to continue past the assigned ticket, silently weakens a gate, changes the PocketJS baseline, or starts a downstream blocked issue.
+
+For autonomous runs, **stopping with a concrete blocker is success of the control system, not failure of the project**.
 
 ## Near-term outcome
 
