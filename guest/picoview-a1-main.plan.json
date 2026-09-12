@@ -1,0 +1,30 @@
+{
+  "app": {
+    "id": "dev.picoview.arch-a1-guest",
+    "output": "picoview-a1-main",
+    "title": "PicoView A1 Guest",
+    "version": "0.1.0",
+    "entry": "guest/app.octane.tsx",
+    "framework": "octane"
+  },
+  "target": {
+    "id": "windows-app",
+    "hostAbi": 4
+  },
+  "viewport": {
+    "logical": [720, 480],
+    "physical": [1440, 960],
+    "presentation": "native",
+    "rasterDensity": 2,
+    "policy": "dynamic"
+  },
+  "features": {
+    "input.buttons": true,
+    "display.viewport.live": true,
+    "text.glyphs.baked": true,
+    "io.offload": true,
+    "text.layout.offload": true
+  },
+  "companions": [],
+  "planHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://pocketjs.dev/schema/pocket-2.json",
+  "pocket": 2,
+  "id": "dev.picoview.arch-a1-guest",
+  "name": "picoview-arch-a1-guest",
+  "title": "PicoView A1 Guest",
+  "version": "0.1.0",
+  "engine": {
+    "capabilities": {
+      "requires": [
+        "text.glyphs.baked",
+        "input.buttons",
+        "display.viewport.live"
+      ]
+    }
+  },
+  "app": {
+    "entry": "guest/app.octane.tsx",
+    "output": "picoview-a1-main",
+    "framework": "octane",
+    "viewport": {
+      "dynamic": {
+        "default": [720, 480],
+        "min": [320, 240],
+        "max": [4096, 4096]
+      }
+    }
+  }
+}
