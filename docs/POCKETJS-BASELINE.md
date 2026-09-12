@@ -12,6 +12,30 @@ Status: **frozen campaign baseline**
 
 This is the source identity against which PicoView Architecture Phase A was planned and adversarially reviewed.
 
+## Authoritative development host
+
+Architecture Phase A Windows results are produced on **native Windows**, not inside WSL.
+
+Current Rust toolchain baseline supplied for the campaign:
+
+```text
+stable-x86_64-pc-windows-msvc
+rustc 1.98.1
+```
+
+WSL may still be used for reading, note-taking, repository inspection, and non-Windows helper scripts, but it is **not authoritative evidence** for:
+
+- Windows stock-target admission;
+- winit/wgpu Windows behavior;
+- WIC integration;
+- Per-Monitor DPI V2;
+- Windows process startup timing;
+- Working Set - Private / Private Bytes;
+- native Windows idle CPU behavior;
+- Windows packaging/association behavior.
+
+Every gate report records the exact `rustc -Vv` / Cargo identity actually used. A toolchain update after evidence collection does not silently inherit old measurements; the report states whether rerun is required.
+
 ## Baseline facts relevant to PicoView
 
 At this commit:
@@ -26,12 +50,12 @@ These are baseline observations, not permanent PocketJS truths. If upstream chan
 
 ## Development topology
 
-Default campaign topology:
+Default campaign topology on native Windows:
 
 ```text
-<workspace>/
-  PicoView/     # jnhu76/PicoView
-  pocketjs/     # pocket-stack/pocketjs or an equivalent worktree
+<workspace>\
+  PicoView\     # jnhu76/PicoView
+  pocketjs\     # pocket-stack/pocketjs or an equivalent worktree
 ```
 
 The PocketJS checkout is pinned to the exact base SHA before architecture work begins.
@@ -43,7 +67,8 @@ Every architecture report records:
 - PicoView SHA;
 - PocketJS base SHA;
 - effective PocketJS SHA (if patched);
-- patch/PR reference when available.
+- patch/PR reference when available;
+- native Windows toolchain identity.
 
 ## Rebase policy
 
@@ -58,7 +83,7 @@ A rebase to a newer PocketJS commit requires an explicit recorded decision that 
 
 ## Authority boundary
 
-This file freezes source identity and integration assumptions only.
+This file freezes source identity, authoritative development host, and integration assumptions only.
 
 - PRD owns PicoView product boundaries and physical budgets.
 - SPEC owns system behavior and phase/gate structure.
