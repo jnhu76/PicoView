@@ -182,6 +182,11 @@ capture and is not PicoView content.
 * Guest `DENSITY` constant (2) goes stale relative to the actual raster
   after a transition; affects harness Fit sizing policy only — no fit/
   full request was issued after a transition in this proof.
+* Core-baked text/vector coverage (glyph atlas, rounded-corner masks)
+  stays at the plan density — core `Ui` raster_density is immutable by
+  design — so hud text at a driven 2× is magnified from the 2×-baked
+  pak (soft edges possible); geometry and the image frame remain 1:1.
+  Phase-A hud-only impact; fold into the Phase B viewer chrome work.
 * The probe-only `A6EVENT` trace lines are emitted only after the first
   driven transition (`scale_driven` gate) to keep normal runs' stderr
   unchanged.
