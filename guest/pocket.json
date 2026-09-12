@@ -1,9 +1,9 @@
 {
   "$schema": "https://pocketjs.dev/schema/pocket-2.json",
   "pocket": 2,
-  "id": "dev.picoview.arch-a5-guest",
-  "name": "picoview-arch-a5-guest",
-  "title": "PicoView A5 Guest",
+  "id": "dev.picoview.arch-a6-guest",
+  "name": "picoview-arch-a6-guest",
+  "title": "PicoView A6 Guest",
   "version": "0.1.0",
   "engine": {
     "capabilities": {
@@ -16,7 +16,7 @@
   },
   "app": {
     "entry": "guest/main.octane.tsx",
-    "output": "picoview-a5-main",
+    "output": "picoview-a6-main",
     "framework": "octane",
     "viewport": {
       "dynamic": {

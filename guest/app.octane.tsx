@@ -84,6 +84,9 @@ interface SvcResizeEvent {
   t: "resize";
   w: number;
   h: number;
+  /** A6: monitor truth that rode along with the transition (96 = 100%). */
+  dpi?: number;
+  density?: number;
 }
 
 type A3Msg =
@@ -306,7 +309,17 @@ export default function PicoViewGuest() {
           setInfo("A5 stress running: 120 rapid Fit requests…");
         }
       } else if (msg.t === "resize") {
-        // Harness keeps a fixed viewport; stage size is constant here.
+        // A6: a scale transition happened. The guest's stage, image box
+        // and zoom/pan state are all logical and need NO recomputation —
+        // logical stability across the DPI transition is the proof. Only
+        // the monitor truth (dpi/density) is recorded for display; the
+        // bound texture (image coordinates) is DPI-independent by design.
+        if (msg.dpi !== undefined || msg.density !== undefined) {
+          setInfo(
+            `A6: scale transition — logical=${msg.w}x${msg.h} dpi=${msg.dpi ?? "?"} density=${msg.density ?? "?"} (composition unchanged, box=(${s.box.bx.toFixed(1)},${s.box.by.toFixed(1)},${s.box.bw.toFixed(1)},${s.box.bh.toFixed(1)}))`,
+          );
+          svc.send({ t: "a3ack", req: `dpi-${msg.dpi ?? 0}`, bound: `${s.mode}@${s.zoom.toFixed(3)}`, geom: [s.box.bx, s.box.by, s.box.bw, s.box.bh], zoom: s.zoom });
+        }
       }
     }
 
@@ -369,7 +382,7 @@ export default function PicoViewGuest() {
     <View class="w-full h-full flex-col bg-slate-900">
       <View class="flex-row items-center justify-between px-4 py-2 bg-slate-900">
         <Text class="text-sm text-white font-bold">PicoView</Text>
-        <Text class="text-xs text-slate-400">Architecture A5 — stress / cancellation / bounds</Text>
+        <Text class="text-xs text-slate-400">Architecture A6 — Per-Monitor DPI V2</Text>
       </View>
       <View class="flex-1 overflow-hidden bg-slate-800">
         <Image
