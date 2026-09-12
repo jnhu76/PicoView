@@ -9,7 +9,7 @@ Issue: #3 `[ARCH-A3]` — Present the first JPEG through the native image-resour
 | Item | Value |
 |------|-------|
 | PicoView base SHA | `72c1dd3` (branch `arch/a3-wic-first-jpeg`) |
-| PicoView evidence SHA | pinned exactly by the follow-up commit on this branch (guest A3 + this report; see the identity note at the end of this file) |
+| PicoView evidence SHA | `2af10ff4396eb012105348448c5233aeeeb7f3df` (guest A3 + this report's body; pinned by the follow-up `docs:` commit on this branch) |
 | PocketJS frozen base SHA | `a5a85356e172db8a32aefa983ee1259f60406f69` |
 | PocketJS effective A2 SHA | `fe32ea825e05246d8a8dd7d28cb122cedd42ee92` (branch `picoview-a2-image-resource`) |
 | PocketJS effective A3 SHA | `fa9361297de3ed9fe66f84cfb25c053b2584892a` (branch `picoview-a3-wic-first-jpeg`, created from the A2 commit) |
