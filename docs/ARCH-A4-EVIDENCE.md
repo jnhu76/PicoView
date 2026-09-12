@@ -24,7 +24,7 @@ presenting the previous state — no catastrophic allocation.
 | Machine (BENCHMARK §1) | AMD Ryzen 7 5800H, 16 logical processors; 28.9 GiB installed RAM; display 60 Hz; C: on KIOXIA EXCERIA NVMe SSD; power plan Balanced. Measurement campaign ran 2026-09-12 ~17:50–18:30 UTC (log wall clocks); machine identity recorded 2026-09-12T18:47Z |
 | GPU | AMD Radeon(TM) Graphics — integrated, wgpu adapter `(IntegratedGpu, requested LowPower)`, Vulkan / Bgra8Unorm, driver 31.0.21923.11000 (2025-07-01). **Reference-class deviation (stated):** the PRD reference class reads "16 GiB RAM, local NVMe, hardware-accelerated desktop GPU"; this machine matches RAM and NVMe but the GPU is an *integrated* accelerator. GATE-A must weigh iGPU-class results when arbitrating GPU-dependent budgets |
 | OS | Windows 11 (10.0.26200), native Windows host (not WSL) |
-| Guest | `guest/app.octane.tsx` (Octane), compiled to `dist/picoview-a4-main.{js,pak}` via `bun tools/pocket.ts compile --target windows-app --manifest guest/pocket.json --project-root . --outdir dist`; guest entry `main.octane.tsx` resolves `app.octane.tsx` |
+| Guest | `guest/app.octane.tsx` (Octane), compiled to `dist/picoview-a4-main.{js,pak}` via `bun tools/pocket.ts compile --target windows-app --manifest guest/pocket.json --project-root . --outdir dist`; guest entry `main.octane.tsx` resolves `app.octane.tsx`. The compile runs from the **PocketJS checkout root** (only there do `tools/pocket.ts` and the tsconfig module mappings exist); `pocketjs/guest/` is a directory junction to `PicoView/guest/`, left in place as scaffolding for reproducibility |
 | Guest plan | id `dev.picoview.arch-a4-guest`, output `picoview-a4-main`, planHash `sha256:f5063916caefad2865d428577c4d82e73cd9b26b2a18453c469de09c7ba94e15`; resolved plan committed as `guest/picoview-a4-main.plan.json` (viewport 720×480 logical @ density 2 = 1440×960 physical, policy dynamic) |
 | Scratch evidence | `evidence/tmp/` (not committed): run logs, memwatch JSONs, screenshots; committed corroboration is unit tests + quoted log lines below |
 
@@ -314,6 +314,13 @@ Non-Windows hosts compile unchanged (`decode_jpeg_wic_scaled` has a
   `r1` for a second distinct request). Harmless — publish is strictly
   sequential and retire is slot-based — but it weakens req-id correlation
   in logs; the latency analysis joins on ticks, not req ids.
+* PR-level review MINORs, recorded not fixed: the pan handler applies the
+  move delta on the press-transition event as well (harness-benign —
+  scripted moves precede presses — and clamped); the full-mode box anchors
+  top-left rather than centered for planes smaller than the stage (all A4
+  samples exceed the stage); `a3_huge_fixture` in the desktop test module
+  is not `#[cfg(windows)]`-gated (dead-code warning on non-Windows test
+  builds only). All fold into the next runtime patch.
 * Presentation-queue behavior under input flood (P50 122 ms) is documented,
   not fixed: saturation discipline is A5's acceptance territory.
 
