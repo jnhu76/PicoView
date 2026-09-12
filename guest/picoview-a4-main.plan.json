@@ -1,10 +1,10 @@
 {
   "app": {
-    "id": "dev.picoview.arch-a3-guest",
-    "title": "PicoView A3 Guest",
+    "id": "dev.picoview.arch-a4-guest",
+    "title": "PicoView A4 Guest",
     "version": "0.1.0",
     "entry": "guest/main.octane.tsx",
-    "output": "picoview-a3-main",
+    "output": "picoview-a4-main",
     "framework": "octane"
   },
   "target": {
@@ -30,5 +30,5 @@
     "text.glyphs.baked": true
   },
   "companions": [],
-  "planHash": "sha256:3fba5b233dc5e9a254fa7e0d24b291b13201bfae72433a1719e305f357885886"
+  "planHash": "sha256:f5063916caefad2865d428577c4d82e73cd9b26b2a18453c469de09c7ba94e15"
 }
