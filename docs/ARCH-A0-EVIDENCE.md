@@ -15,7 +15,7 @@ Verdict: **PASS** (no blockers)
 | PocketJS checkout state | local branch `pico-arch-a` at base SHA, worktree clean, no submodules |
 | Note | `origin/main` equaled the base SHA at clone time; the local pin, not upstream tracking, is authoritative for the campaign |
 
-This report is the commit immediately following `db7d4cf`; all runtime evidence was captured with the environment below.
+All runtime evidence below was captured at `db7d4cf`. The authority docs were then amended by the native-Windows environment freeze (`8ba174c`…`5c1e4c4` — host confirmation, toolchain identity, evidence-identity fields) and this report is committed on top of that freeze; its statements remain consistent with the amended authority docs (see §7).
 
 ## 2. Native Windows confirmation
 
@@ -122,6 +122,8 @@ Assessment: **sufficient to plan instrumentation for later tickets**. Each A0-re
 | Package/install accounting | §10 (download payload vs installed app-private footprint; OS-inbox exclusion rule; per-dependency ledger) | Unambiguous |
 
 Evidence-identity fields required by §1 (SHAs, build profile, Windows build, CPU/RAM/GPU/driver, refresh rate, sample identity, medium, power mode) are all obtainable on this host; GPU/driver/CPU/RAM/OS values recorded above satisfy the A0 evidence-format requirement.
+
+Alignment with the amended contract (`5c1e4c4`): BENCHMARK §1 now additionally requires **native Windows host confirmation** and the **exact `rustc -Vv`/Cargo identity** — both are recorded in §2 and §4 of this report, so the evidence above already satisfies the extended identity list.
 
 Gaps to carry into later tickets (none block A0; none justify weakening the contract):
 
