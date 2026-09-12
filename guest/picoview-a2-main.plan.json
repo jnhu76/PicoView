@@ -1,0 +1,34 @@
+{
+  "app": {
+    "id": "dev.picoview.arch-a2-guest",
+    "title": "PicoView A2 Guest",
+    "version": "0.1.0",
+    "entry": "guest/main.octane.tsx",
+    "output": "picoview-a2-main",
+    "framework": "octane"
+  },
+  "target": {
+    "id": "windows-app",
+    "hostAbi": 4
+  },
+  "viewport": {
+    "logical": [
+      720,
+      480
+    ],
+    "physical": [
+      1440,
+      960
+    ],
+    "presentation": "native",
+    "rasterDensity": 2,
+    "policy": "dynamic"
+  },
+  "features": {
+    "display.viewport.live": true,
+    "input.buttons": true,
+    "text.glyphs.baked": true
+  },
+  "companions": [],
+  "planHash": "sha256:23e48746cae1981d86195d71e86ea1f9f52381b0de268f81212ad85ecf5cca01"
+}
