@@ -30,7 +30,7 @@ The v1 execution spec therefore uses two phases with a hard architecture gate be
 PicoView is a PocketJS application with a deliberately split control/data architecture:
 
 ```text
-PocketView/PicoView product intent
+PicoView product intent
        ↓
 PocketJS guest / QuickJS
        │ bounded commands/state only
