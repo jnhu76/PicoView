@@ -32,7 +32,9 @@ One mechanism, end to end, on the admitted A3/A4 seam:
 
 * **Coalescing drain (PocketJS host, `a3.rs`/`main.rs`)**: guest open
   requests (`a3open`/`a4open`) no longer decode inline inside the svc
-  drain. They are accepted into a bounded pending queue (`queue_open`);
+  drain. They are accepted into a pending queue whose per-entry state is
+  bounded (path string + two integers; depth bounded by arrivals within
+  one drain, freed wholesale by `mem::take`);
   once per tick, after the full drain, `process_pending` collapses the
   queue to its **newest** entry and answers every superseded request with
   a bounded `{t:"a3error",req,code:"cancelled"}` reply **before any
@@ -68,24 +70,29 @@ A3BOUNDARY,successes=27,failures=96,cancels=96,decodes=27,
 
 FACT, per the log:
 
-* 120 stress requests (`p0`–`p119`) arrived in 24 same-tick batches of 5;
-  each batch collapsed to 1 decode + 4 cancels (`code=cancelled`).
+* 120 stress requests (`p0`–`p119`) arrived across 24 drain batches
+  (ticks 200–223): one 6-request batch at tick 200 (5 cancels), twenty-two
+  5-request batches (4 cancels each), one 4-request batch at tick 223
+  (3 cancels). Each batch collapsed to exactly **1 decode + N−1
+  cancels** (`code=cancelled`).
 * The published sequence ends `… p110, p115, p119` — the **newest
   requested generation is the final published state**; no cancelled or
   superseded request ever produced an `a3img` (96 cancels, 0 stale imgs).
 * Total svc traffic for the entire storm: **30,650 B** against a live
-  12,580,224-B plane — the boundary stays a control plane (≈ 2,400×
-  smaller than one pixel payload).
+  12,580,224-B plane — the boundary stays a control plane (the plane is
+  ≈ 410× the entire storm's boundary traffic).
 * Final live resource: exactly **one** plane (`currentPlane=12580224`,
   the 50 MP fit), with a synchronous `retiredReq` chain on every img
   line — retirement never waited for GC (A2's GC-independence, now under
   storm conditions).
 
-Supplementary run (arrivals paced 1/frame instead of bursts — the first
-attempt): 122 decodes / 1 cancel, peak WS-Private 299.5 MiB. Recorded to
-show the coalescing is *load-bearing only when queue depth exists*; the
-guest and host share one frame loop, so 1-per-frame arrivals never queue.
-This is why the stress mode fires bursts.
+Supplementary session observation (context, not on-disk evidence — its
+log and watch JSON were overwritten by the burst run): with arrivals
+paced 1/frame the same 120 requests produced 122 decodes / 1 cancel and
+peak WS-Private 299.5 MiB. The guest and host share one frame loop, so
+1-per-frame arrivals never queue and coalescing has nothing to collapse;
+this is why the committed stress mode fires bursts. Recorded here for
+completeness; the burst run above is the evidence-bearing configuration.
 
 ## Memory during the stress (MEASUREMENT)
 
@@ -94,7 +101,7 @@ memwatch 50 ms sampling (`mem-a5-stress.watch.json`, scratch), burst run:
 | Metric | Value | Budget/note |
 | --- | --- | --- |
 | **Peak WS-Private (sampled)** | **262,758,400 B = 250.6 MiB** | PRD hard budget ≤384 MiB → **PASS**, margin ≈ 133 MiB |
-| Max Private Bytes (sampled) | 620,744,704 B = 591.9 MiB | companion metric (BENCHMARK dual-metric rule) |
+| Max Private Bytes (sampled) | 620,744,704 B = 592.0 MiB | companion metric (BENCHMARK dual-metric rule) |
 | Settled WS-Private | 262,758,400 B | includes the bound 50 MP fit plane + session baseline |
 | PPMC PeakWorkingSetSize | 387,903,488 B | total working set (non-normative), still < 384 MiB+4 |
 | PPMC PeakPagefileUsage | 695,078,912 B | peak private committed (companion) |
@@ -121,8 +128,9 @@ From the same `--trace-frames` run, after the drain:
 
 ## Hostile inputs, extreme dimensions, overflow (FACT + MEASUREMENT)
 
-Live hostile walk (`a5-hostile.log`, release binary, exit **0** — no
-crash), fit-first walk over a hostile manifest:
+Live hostile walk (`a5-hostile.log`, release binary, exit **0** observed
+by the session runner — the log carries no panic/crash markers and clean
+frame cadence through tick 400), fit-first walk over a hostile manifest:
 
 | Request | Input | Outcome (log line) |
 | --- | --- | --- |
@@ -178,6 +186,28 @@ Test suite: `cargo test --release` hosts/desktop **26 passed / 0 failed /
 
 ## Known non-blocking findings (MINOR, recorded)
 
+* The `failures` counter includes cancellations (a cancel rides the same
+  bounded reply path as a decode failure), so in the storm boundary line
+  `failures=96` is entirely cancels; the separate `cancels=` counter is
+  the precise field. GATE-A readers must not read `failures` as a
+  hostile-failure count.
+* The pending queue is per-entry-bounded but not capped; adversarial
+  review confirms no amplification (each superseded request costs one
+  bounded text reply) and the queue frees wholesale per drain. The
+  pre-existing `sent` log mirror grows for process lifetime (predates
+  A5; harness-only).
+* `process_pending` is skipped for a tick if the drain loop's
+  pre-existing `save`-intent error path returns early; queued entries
+  simply persist and coalesce next tick (latency, not correctness;
+  unreachable in PicoView runs — the guest never emits `save`).
+* Guest quirk: a stress burst that cancels an in-flight *walk* request
+  makes the walk silently advance past that file (harness-only state;
+  the recorded storm starts after the walk settled — arrivals 123 = 3
+  walk + 120 stress, zero walk requests cancelled).
+* The "newest fails after its batch's cancels" composition (cancel batch
+  issued, then the newest decode errors) is implied by the synchronous
+  handle_open paths but not explicitly unit-pinned; a one-line test
+  would harden it.
 * Pre-existing dead-code warnings in the non-test binary build
   (`probe_source_transform` / `SourceTransformProbe` are test-and-probe
   surface since A4); cosmetic, fold into the next runtime patch.
