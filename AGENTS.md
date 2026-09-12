@@ -37,6 +37,21 @@ If it is `blocked`, stop. Do not work around the blocker just because the body l
 
 When a blocker closes, the tracker must explicitly move the newly unblocked issue from `blocked` to `ready-for-agent`; agents must not infer the transition silently.
 
+## Authoritative Windows environment
+
+Architecture Phase A Windows evidence is produced on **native Windows**, not inside WSL.
+
+Current campaign Rust baseline:
+
+```text
+stable-x86_64-pc-windows-msvc
+rustc 1.98.1
+```
+
+WSL may be used for reading, repository inspection, and non-Windows helper scripts, but WSL results cannot close Windows host, WIC, DPI, process-memory, startup/idle, or packaging gates.
+
+Record exact `rustc -Vv` and Cargo identity in runtime-dependent evidence. Do not silently update the toolchain during a measurement campaign.
+
 ## Current architecture campaign baseline
 
 Architecture Phase A begins from the PocketJS baseline in `docs/POCKETJS-BASELINE.md`:
@@ -49,7 +64,8 @@ Every architecture result that depends on PocketJS records:
 
 - PicoView SHA;
 - PocketJS campaign base SHA;
-- effective PocketJS SHA/patch series.
+- effective PocketJS SHA/patch series;
+- native Windows toolchain identity.
 
 The default workspace topology is a PicoView checkout plus a sibling PocketJS checkout/worktree pinned to the exact source identity. Do not copy PocketJS source into PicoView to make a ticket easier.
 
@@ -113,6 +129,27 @@ Do **not** implement Product Phase B work before GATE-A passes merely because a 
 
 Product Phase B includes BrowseSession, final Open/refresh UX, Handle, broad format/animation, full viewer chrome, UI Automation, and release packaging.
 
+## Autonomous-run brake rule
+
+`/goal` or any other long-running agent mode may execute **one tracker ticket only** unless the user explicitly starts a new goal for the next ticket.
+
+Completion of a ticket does not authorize starting its successor.
+
+The autonomous run MUST stop and report a concrete blocker if any of the following happens:
+
+- the assigned issue is not `ready-for-agent`;
+- a required authority document is missing or contradictory;
+- the PocketJS effective source identity cannot be stated exactly;
+- continuing requires changing the frozen PocketJS baseline;
+- continuing requires weakening a PRD/SPEC/BENCHMARK gate;
+- continuing would start a downstream `blocked` ticket;
+- continuing would introduce a new runtime, decoder, DrawList opcode, compositor mechanism, or architecture seam not authorized by the assigned ticket;
+- a defining acceptance criterion is impossible on the observed substrate without such an authority change.
+
+Do not hide an architecture failure with a workaround merely to complete the goal.
+
+A truthful `blocked/impossible` result with executable evidence is a successful architecture experiment.
+
 ## Ticket discipline
 
 Tickets are vertical tracer bullets. Work only the assigned ticket and its acceptance criteria.
@@ -122,7 +159,7 @@ Before coding:
 - confirm the ticket is `ready-for-agent`;
 - confirm all declared blockers are complete;
 - identify the highest practical end-to-end seam;
-- record any new dependency or architecture decision that the ticket would introduce;
+- record any new dependency or architecture decision the ticket would introduce;
 - confirm the exact PocketJS source identity if runtime behavior is involved.
 
 During coding:
@@ -178,38 +215,5 @@ After GATE-A, Product Phase B adds:
 - deterministic BrowseSession ordering fixtures;
 - current-file filesystem effects;
 - format/animation behavior;
-- UI Automation inspection;
-- GATE-B release-candidate reruns.
-
-## Scope guard
-
-v1 explicitly excludes:
-
-- editing;
-- library/database behavior;
-- cloud/account behavior;
-- Filmstrip;
-- Slideshow;
-- Print;
-- Share;
-- batch operations;
-- plugins;
-- RAW development;
-- true HDR;
-- generalized updater/telemetry/network subsystems.
-
-If a task appears to require one of these, stop and surface the conflict rather than implementing it.
-
-## Documentation
-
-Keep product truth centralized.
-
-- PRD owns product boundary, budgets, non-goals, and phase/gate policy.
-- SPEC owns cross-cutting system behavior and execution graph.
-- BENCHMARK owns physical measurement semantics.
-- accepted ADRs own evidence-backed durable implementation choices.
-- CONTEXT owns current state and working assumptions.
-- POCKETJS-BASELINE freezes external source identity for the current architecture campaign.
-- Issues own bounded execution slices.
-
-Do not create a competing architecture authority document.
+- bounded Windows UI Automation;
+- release-candidate regressions against the admitted architecture.
