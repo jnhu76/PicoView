@@ -18,7 +18,7 @@ stretch, no persistent blur.
 | PocketJS campaign base | `a5a85356e172db8a32aefa983ee1259f60406f69` (frozen Phase-A baseline) |
 | PocketJS effective A6 base | `a832dc8e` (A5 effective, branch `picoview-a5-cancel-bounds`) |
 | PocketJS A6 branch | `picoview-a6-dpi` = `a832dc8e` + A6 patch (local; Mimosa audit pending before any upstream push) |
-| A6 diff scope | `hosts/desktop/src/{main.rs,plan.rs,tests.rs,gpu.rs}`, `hosts/desktop/Cargo.toml` (one feature flag + one already-in-tree crate name); **zero diff** in `contracts/`, `framework/`, `engine/`, `vapor` |
+| A6 diff scope | `hosts/desktop/src/{main.rs,plan.rs,tests.rs,gpu.rs}`, `hosts/desktop/Cargo.toml` + `Cargo.lock` (one feature flag + one already-in-tree crate name); **zero diff** in `contracts/`, `framework/`, `engine/`, `vapor` |
 | New dependency note | `raw-window-handle = "0.6"` (windows-only usage): names the crate **already in the wgpu/winit dependency tree**; used solely to read the window HWND for the PMv2 assertion. Plus `Win32_UI_HiDpi` feature on the already-admitted `windows 0.62` crate. No new runtime/decoder/stack |
 | Toolchain | `rustc 1.98.1 (48a229cea 2026-09-01)`, `stable-x86_64-pc-windows-msvc`; release build |
 | Machine (BENCHMARK §1) | AMD Ryzen 7 5800H, 16 logical processors; 28.9 GiB RAM; C: on KIOXIA EXCERIA NVMe SSD; power plan Balanced. Single display: 2560×1440 at 100% scale (96 DPI) — see Limitations |
@@ -71,7 +71,8 @@ Minimal runtime-generic DPI machinery, no new seam:
 
 Run `a6-dpi.log` (release binary, live window, 24 MP sample, zoom `=`
 at tick 100, `--scale-at 2.0@400 --scale-at 1.0@900`, `--trace-frames`,
-quit 1600, exit 0):
+quit 1600; clean exit observed by the session runner — the log itself
+ends at the expected tick 1600 cadence with no error lines):
 
 ```
 A6EVENT,dpi-awareness,per_monitor_v2=true,windowDpi=96
@@ -86,7 +87,10 @@ A6EVENT,raster,density=1,scale=1,logical=720x480
 FACT, per the log: the OS window physically became 1440×960 client
 pixels at 200% and 720×480 at 100% (`A6EVENT,physical` lines are the
 winit `Resized` reports of real OS size); the logical viewport is
-`720x480` through both; the raster density followed (1→2→1). No stale
+`720x480` through both; the raster tracked the scale (the pre-transition
+raster ran at the plan density 2 on this 100% monitor — the pre-existing
+A3/A4 configuration — and the post-transition states ran density 2 and
+1 respectively, each exactly 1:1 with physical client pixels). No stale
 prior-scale transform exists anywhere in the chain — each stage is
 derived from the current scale and the invariant logical viewport.
 
@@ -155,15 +159,37 @@ capture and is not PicoView content.
 
 ## Known non-blocking findings (MINOR, recorded)
 
-* `A6EVENT,physical/scale/raster` lines are emitted only after the
-  first driven transition (`scale_driven` gate) to keep normal runs'
-  stderr unchanged.
+* Density trajectory wording (fixed by review): the pre-transition raster
+  runs at the plan density 2 (downscaled blit to the 720×480 window on
+  this 100% monitor — the pre-existing A3/A4 configuration, kept for
+  backward compatibility); driven states are exactly 1:1.
+* PMv2 verification is log-only: the `SetProcessDpiAwarenessContext`
+  result is discarded and a `per_monitor_v2=false` probe would not fail
+  the run. Review confirms the call is not too late (winit pins PMv2 at
+  event-loop build) and the post-creation probe is genuine.
+* The host's logical viewport is frozen at plan values: a real monitor
+  move re-asserts plan-logical size, snapping a user-resized window back.
+  Intentional invariant policy; real resize UX is Phase B (#5/#17).
+* During scripted phases the physical cursor domain divides by the
+  driven scale while this monitor stays at 96 DPI, and winit's IME
+  caret path still converts with the OS scale — inert in this proof
+  (no pointer/IME traffic between transitions); the real-OS arm is
+  self-consistent.
+* Scheduler hygiene: the parsed tick schedule remains as dead state
+  alongside the wall-clock copy; `apply_scale` uses a blocking channel
+  send; the nominal tick in `A6EVENT,scale` lines is the schedule value
+  (runtime actually reached ~360/860 at those wall moments).
+* Guest `DENSITY` constant (2) goes stale relative to the actual raster
+  after a transition; affects harness Fit sizing policy only — no fit/
+  full request was issued after a transition in this proof.
+* The probe-only `A6EVENT` trace lines are emitted only after the first
+  driven transition (`scale_driven` gate) to keep normal runs' stderr
+  unchanged.
 * `Input::Resize` still ignores geometry in `--fixed` mode (pre-existing);
   `Input::Scale` intentionally applies regardless (density policy is
   orthogonal to user resizability).
-* The probe-only `A6EVENT` trace lines use the epoch-less format; the
-  A7 monotonic-clock instrumentation work will fold timestamp discipline
-  for all harness events.
+* The A7 monotonic-clock instrumentation work will fold timestamp
+  discipline for all harness events (A6EVENT lines are epoch-less).
 
 ## Acceptance criteria map
 
@@ -173,7 +199,7 @@ capture and is not PicoView content.
 | 100%→200%→100% updates geometry without stale transforms | physical 720×480→1440×960→720×480; logical/raster lines derived from current scale each time |
 | Logical layout stable while physical changes | logical=720x480 through both transitions; guest box unchanged |
 | Pointer-anchored zoom preserves anchor across transition | zoom-1 / dpi-192 / dpi-96 geoms byte-identical |
-| No persistent OS-bitmap blur | raster density follows scale (1→2→1), present 1:1; 200% screenshot crisp |
+| No persistent OS-bitmap blur | raster follows driven scale (states 2 and 1, each 1:1 with physical pixels), present 1:1; 200% screenshot crisp |
 | Proof distinguishes image/logical/physical/DPI domains | domain definitions in report + code; conversion + density functions unit-pinned |
 | No UI Automation layer introduced | diff scope: desktop host + guest harness only |
 
