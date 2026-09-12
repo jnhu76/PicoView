@@ -67,12 +67,19 @@ The compile-time gate in `plan.rs` explicitly rejects all non-macOS/Linux host O
 
 ## Build/Run Commands
 
+Guest source resolution: the plan's entry (`guest/main.octane.tsx`) is
+resolved relative to the pocketjs root. During this campaign the PicoView
+`guest/` directory was exposed there as a temporary symlink
+(`ln -s ../PicoView/guest pocketjs/guest`); the canonical committed guest
+source lives in PicoView. The symlink is build-time scratch and is not part
+of the PocketJS commit.
+
 ```text
 # Build release binary
 cd pocketjs/hosts/desktop
 cargo build --release
 
-# Build Octane guest (from pocketjs root)
+# Build Octane guest (from pocketjs root, with guest/ resolvable as above)
 bun tools/build.ts --plan=.pocket/windows-app/picoview-a1-main.plan.json
 
 # Run guest
