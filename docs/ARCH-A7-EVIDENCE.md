@@ -229,6 +229,13 @@ gate probes). `engine/core` untouched by the A7 diff.
 
 ## Known non-blocking findings (MINOR, recorded)
 
+* Clock-naming trap (PR review): the `FRAME_TRACE` field still named
+  `wall` now carries the monotonic process clock, and stdout
+  `READY`/`IMGREADY` markers remain wall-millis — three clock families
+  coexist in one log stream. Safe today (no tooling subtracts across
+  them; the probes timestamp line arrival with their own QPC clock);
+  rename the field before any external consumer exists.
+
 * `A7EVENT,phase` lines are unconditional stderr (attribution
   evidence); fold behind a trace flag in the packaging pass.
 * The five-process probe uses `WindowStyle Minimized` real windows;
