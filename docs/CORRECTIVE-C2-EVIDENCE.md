@@ -72,8 +72,9 @@ refuted by measurement; harness stripping is still done (§2) because the
 ticket forbids the product candidate from instantiating
 TEST_ONLY/EVIDENCE_ONLY state.
 
-Backend/allocator sensitivity — four committed-scratch runs, first-present
-stage, exact bytes in `stage-{baseline,dx12,memhints,vkonly}.log`:
+Backend/allocator sensitivity — committed-scratch runs, first-present
+stage, exact bytes in `stage-{baseline,renderer,dx12,memhints,vkonly}.log`
+(the GATE-A-config first-present row is from `stage-renderer.log`):
 
 | wgpu configuration | WS-Private at first present | Private Bytes |
 | --- | ---: | ---: |
@@ -117,7 +118,7 @@ Classification of every Phase-A mechanism:
 | A4 source-transform probe | EVIDENCE_ONLY | feature-gated out |
 | A3 audit counters + `sent` line retention + A3SVC/A3EVENT/A3BOUNDARY logging | EVIDENCE_ONLY | zero-sized stub / compiled out |
 | Input scripting (`--type/--click/--mouse/--key/--press`), `--storm`, `--resize-at`, `--scale-at` drivers | TEST_ONLY | feature-gated out |
-| A6EVENT/A2EVENT/A7EVENT stderr channels | EVIDENCE_ONLY | behind `--announce-ready` (measurement runs) |
+| A6EVENT/A2EVENT/A7EVENT stderr channels | EVIDENCE_ONLY | behind `--announce-ready` (measurement runs); one exception: the one-shot `A6EVENT,dpi-awareness` PMv2 assertion at window creation is still unconditional — zero steady-state cost, folded behind the flag in C1's pass |
 | READY/IMGREADY markers, `--trace-frames`, `--quit-after`, `POCKET_MEM_STAGE` probe | measurement plumbing, no resident state | unconditional flags (off by default) |
 | net.rs SVC-WIRE, supervisor/system mode, editor protocol | PRODUCT_REQUIRED (portable host architecture; dormant, no cost) | unconditional |
 | QuickJS runtime config | PRODUCT_REQUIRED | unchanged; measured usage ~3.8 MiB at boot (boot_guest_eval delta) — no oversized arena/limit found to remove |
@@ -151,7 +152,7 @@ across different states and is withdrawn.)
 
 Per-process five-process distribution (visible windows, per-process
 median over a 14 s sampled window, raw samples in
-`pocketjs/evidence/tmp/c2/five-c2-raw.json`): 79.3 / 79.2 / 76.5 /
+`PicoView/evidence/tmp/five-c2-raw.json`): 79.3 / 79.2 / 76.5 /
 104.2 / 76.6 MiB WS-Private. One process settled ~25 MiB above its
 siblings; the aggregate verdict has 6× margin either way. (The earlier
 minimized-window single-snapshot run — 5 × byte-identical 76.7 MiB — is
@@ -205,12 +206,16 @@ residency, which no wgpu-supported configuration measured here removes.
   measurement): same-origin `A7EVENT,phase` values across 5 cold product
   spawns (`startup-v2-*.stderr.log`): event_loop_built 8–9 ms, gpu_ready
   **165–184 ms** (pre-C2 same-origin: 600–621 ms), runtime_boot_done
-  201–230 ms (pre-C2: 636–683 ms). The clock-origin defect an early
-  draft of this section had (phase clock anchored after init, making the
-  comparison different-origin) was found in adversarial review and fixed
-  in the probe; the numbers above are the corrected-origin rerun. No
-  budget trade: startup improved, memory improved, all behavior checks
-  pass.
+  201–230 ms (pre-C2: 636–683 ms). The pre-C2 range is the A7-campaign
+  measurement (preserved in that campaign's scratch logs, e.g.
+  `stage-boot.log` at 686/738 ms with the probe intermediate; the exact
+  per-run lines predate this c2/ scratch directory); the magnitude and
+  direction are corroborated and C1's normative rerun supersedes it. The
+  clock-origin defect an early draft of this section had (phase clock
+  anchored after init, making the comparison different-origin) was found
+  in adversarial review and fixed in the probe; the numbers above are the
+  corrected-origin rerun. No budget trade: startup improved, memory
+  improved, all behavior checks pass.
 
 ## 5. Gate accounting (numbers unchanged; reading referred to the gate)
 
