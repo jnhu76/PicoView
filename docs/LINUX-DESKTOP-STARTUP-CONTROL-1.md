@@ -503,8 +503,9 @@ Current campaign consequences remain:
 
 Next owner task before any new startup performance work:
 
-1. make the BENCHMARK T1 anchor operationally literal (`T1_PROCESS_ENTRY`), and
-2. define the startup benchmark machine-state specification, then
+1. keep `BENCHMARK.md`'s `T1_PROCESS_ENTRY` semantics unchanged and make the
+   benchmark harness anchor that literal process-entry event directly;
+2. define the startup benchmark machine-state specification; then
 3. only remeasure/re-adjudicate if those authority changes are accepted.
 
 No Windows perf corrective and no direct/native-host experiment is earned by
