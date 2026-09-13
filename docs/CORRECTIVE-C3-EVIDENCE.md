@@ -144,12 +144,13 @@ belongs to GATE-A2.
 Instrument bound: `TotalProcessorTime` quantizes at the scheduler tick
 (~15.6 ms), so a 30 s window can hide up to ~0.0033 % normalized — the
 0.0000 % readings are therefore "≤ 0.0033 %", still 60× under the budget.
-The zero-wake structure corroborates independently: both parked runs'
-stderr shows `C3EVENT,suspend` (211/219 ms pre-fix; 256 ms in the §5
-re-run on the fixed build — the svc gate correctly holds parking one extra
-tick until the inbound queue drains) and **no** `C3EVENT,wake` and no A3
-activity after settle, i.e. zero ticks, zero renders, zero present
-submissions inside the window.
+The zero-wake structure corroborates independently: all four runs are on
+the FIXED build (`2d35706f`), and both parked runs' stderr shows
+`C3EVENT,suspend,229/248 ms,tick=2` — the tick=2 hold is the svc gate
+working (pre-fix archived runs parked at tick=1: 184/210/230 ms in
+`suspend-verify2`/`wake-test`/`wmclose`) — followed by **no**
+`C3EVENT,wake` and no A3 activity after settle, i.e. zero ticks, zero
+renders, zero present submissions inside the window.
 
 The 60 Hz control arm's spread (0.047 vs 0.094 s) is unexplained but
 noise-dominated; the headline parked-vs-loop comparison is unaffected (both
@@ -160,10 +161,12 @@ parked runs read zero; the largest loop reading is still 10× under budget).
 
 ## 5. Wake behavior + the review BLOCKER regression
 
-- Parked → `WM_CLOSE` (real OS event): suspend at 256 ms (tick=2 — the new
-  svc gate holds parking until the inbound ack queue drains; pre-fix runs
-  parked at tick=1), `C3EVENT,wake,4151 ms`, clean process exit **109 ms**
-  after the post (archived: `wmclose2.exit`, `wmclose2.err`).
+- Parked → `WM_CLOSE` (real OS event): suspend at 256 ms (tick=2 — the svc
+  gate holds parking until the inbound ack queue drains), `C3EVENT,wake,
+  4151 ms`, clean process exit **109 ms** after the post (archived:
+  `wmclose2.exit`, `wmclose2.err`; the wrapper did not capture the numeric
+  exit code — `WaitForExit(5000)` success with no error output is the
+  clean-exit evidence).
 - Wake→work latency: the parked branch consumes one input, then runs the
   normal loop-top drain + tick — the same code the 60 Hz loop executes.
   No direct input→present measurement is claimed (see the injected-keyboard
