@@ -256,12 +256,15 @@ No production code was optimized anywhere in this campaign.
      the COMPLETE raw evidence, i.e. all 230 files of the
      experiment-evidence subtree (per-run NORMTRACE logs, frozen
      summaries, machine states, DAG dump, runner/parser/audit scripts,
-     guest bundles, Windows wedge evidence, RUNLOG.md), packaged as ONE
-     deterministic archive (sorted paths, uid/gid 0, empty uname/gname,
-     mtime 0, gzip mtime 0); raw size 1,263,186 bytes, compressed
-     175,428 bytes;
+     the windows-target guest bundle (`dist-winref/`), Windows wedge
+     evidence, RUNLOG.md), packaged as ONE deterministic archive
+     (sorted paths, uid/gid 0, empty uname/gname, mtime 0, gzip mtime 0;
+     members carry the exact canonical git blob bytes — sourced via
+     `git ls-tree` + `git cat-file`, independent of any working-tree
+     EOL/autocrlf conversion); raw size 1,263,186 bytes, compressed
+     174,484 bytes;
    - `docs/cross-os-normalized-desktop-startup-1/raw-evidence.sha256`
-     (sha256 `d4268d27ddb205f6e57dfd7ab84ffcb02f85d0a4735e70093bcf2e712db303f2`);
+     (sha256 `9d55742d1f6350226726dfa5f2347eebd03c4b3d7100395127df0ced3e540219`);
    - `docs/cross-os-normalized-desktop-startup-1/raw-evidence-contents.txt`
      (sorted archive-relative path list, 230 entries).
 
@@ -278,9 +281,18 @@ No production code was optimized anywhere in this campaign.
 
 Verification recorded at packaging: DETERMINISTIC_ARCHIVE PASS (two
 independent builds produced identical sha256); ROUNDTRIP_BYTE_VERIFICATION
-PASS (230/230 files byte-equal against the archive branch @ the SHA above;
-no path escapes; archive metadata normalized); SECRET AUDIT PASS (no
-credentials, private keys, or token material in the packaged inputs).
+PASS (230/230 files byte-equal, after extraction, against the canonical
+git blobs of the archive branch @ the SHA above — no path escapes; archive
+metadata normalized); SECRET AUDIT PASS (no credentials, private keys, or
+token material in the packaged inputs).
+
+ERRATUM (scope note): the frozen RUNLOG's DELIVERY RECORD cites an earlier
+packaging state (`b8e6f1d` + sync, 239 files) — it predates the final
+review-fix sync. The EVIDENCE RETENTION section above (tip `44319343…`,
+230 files) is authoritative. Similarly, RUNLOG's raw prose about the
+hidden-window and driver incidents predates the report's evidence-bounded
+wording and is retained verbatim as a process log; the report's scoped
+wording governs.
 
 ## DISPOSITION
 
