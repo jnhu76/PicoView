@@ -37,7 +37,7 @@ gate closes on them), and guest-boot attribution on the preserved C2-era
 | `DEFAULT` backend-sweep penalty vs Vulkan | +577 ms | `phases-DEFAULT.log` (n=1) |
 | wgpu instance, **warm driver cache** | ≈ 87–89 ms | C1 build `phases-final-*.err`: instance thread starts at process entry, main thread receives at `gpu_instance` 85–104 ms (5-run median 89) — an upper bound on warm instance init |
 | guest boot (assets→surface→supervisor→QuickJS→eval), C2-era serial | ~33 ms | preserved C2-era `startup-v2-*.stderr.log` 5-run phase deltas |
-| window creation (`event_loop_built` → `runtime_thread_spawning`) | ~62 ms | C1 build `phases-final-*.err` (63–77 ms, median 69) |
+| window creation (`event_loop_built` → `runtime_thread_spawning`) | ~69 ms | C1 build `phases-final-*.err` (63–77 ms, median 69) |
 
 Shader/pipeline compilation measured ~5 ms — there is nothing to earn from an
 app-owned pipeline cache; the only large cache term is the OS/driver ICD
@@ -216,12 +216,15 @@ boot in both states).
 
 ## 8. Next unblocked issue
 
-The GATE-A re-admission frontier remains #25–#29/#31 (all open,
-`ready-for-agent`); execution is serialized by the campaign mission order,
+The GATE-A re-admission frontier's open corrective tickets — #27, #28, #29,
+#31, with #25 closing through this corrective — are all
+`ready-for-agent`; execution is serialized by the campaign mission order,
 not by label transitions. With C1 done, **C3/#27 (event-driven idle
 suspend)** is next in that order. Startup and memory readings above are
 referred to GATE-A2; no budget was weakened to obtain any number in this
-report.
+report. Before GATE-A2 adjudicates, the raw evidence artifacts (CSV/stage
+logs) and the PocketJS branch must be pushed or archived — they currently
+exist only as local untracked files, as recorded in §0.
 
 ## 9. Review trail
 
