@@ -18,13 +18,16 @@ Measured on the campaign host this session (`Win32_OperatingSystem`,
 | Item | PRD reference class | This host | Verdict |
 | --- | --- | --- | --- |
 | Total physical RAM | 16 GiB | **28.92 GiB** (5.34 GiB free at measurement) | deviates |
-| GPU | discrete-class hardware-accelerated desktop GPU | **AMD Radeon(TM) Graphics, integrated** (shared memory, `AdapterRAM` ≈ 3 GiB aperture) | deviates |
+| GPU | hardware-accelerated desktop GPU (PRD); the ticket frames this as discrete-class | **AMD Radeon(TM) Graphics, integrated** (shared memory, `AdapterRAM` ≈ 3 GiB aperture) | deviates |
 
-The host deviates from the reference class on **both** axes. The iGPU is
-not a minor variant: integrated GPUs share the memory bus with the CPU, so
-RAM-sensitive measurements (working-set behavior, paging under decode
-bursts, five-process aggregate) are structurally different from a
-discrete-card host, independent of the RAM size.
+The host deviates from the reference class on **both** axes. The "discrete-
+class" reading is ticket #29's (owner authority) — the PRD text says
+"hardware-accelerated desktop GPU" without the word discrete. The deviation
+holds either way: the iGPU is not a minor variant, because integrated GPUs
+share the memory bus with the CPU, so RAM-sensitive measurements (working-
+set behavior, paging under decode bursts, five-process aggregate) are
+structurally different from a discrete-card host, independent of the RAM
+size.
 
 ## 1. Why no rerun and no substitute was attempted
 
