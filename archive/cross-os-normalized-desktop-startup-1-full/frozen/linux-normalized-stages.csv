@@ -14,7 +14,8 @@ guest_eval,31236,31970,47780,49947,50
 renderer_acquire,23876,27387,71432,76186,50
 first_tick,164,203,71710,76481,50
 render,1466,1848,73198,78023,50
-redraw_delivery,-3271,-3091,70108,74836,50
+redraw_delivery,None,None,None,None,0
+request_to_present,25,33,73325,78154,50
 surface_acquire,42,51,73368,78197,50
 blit_ensure,482,554,73890,78753,50
 present_encode,890,1039,75048,79886,50
