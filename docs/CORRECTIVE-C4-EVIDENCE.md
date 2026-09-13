@@ -20,7 +20,7 @@ Budget accounting is referred to GATE-A2 like every other row.
 | PocketJS chain end before C4 | `2d35706f` (`picoview-c3-idle-suspend`) |
 | PocketJS C4 commit | `a46eb7e0` on `picoview-c4-present-pacing` (INPUT_TRACE stamps + parked trace mode; local; upstream push pending fresh-context audit) |
 | Toolchain | `rustc 1.98.1 (48a229cea 2026-09-01) stable-x86_64-pc-windows-msvc` (unchanged) |
-| Host | AMD Ryzen 7 5800H (16 logical processors), 28.9 GiB RAM (NOT reference class — C5), AMD Radeon(TM) iGPU driver 31.0.21923.11000, Windows 11 Pro build 26200, power plan Balanced; samples on local SATA/NVMe SSD |
+| Host | AMD Ryzen 7 5800H (16 logical processors), 28.9 GiB RAM (NOT reference class — C5), AMD Radeon(TM) iGPU driver 31.0.21923.11000, Windows 11 Pro build 26200, power plan Balanced; display 60 Hz; samples on local SATA/NVMe SSD |
 | Samples | `picoview-12mp.jpg` bound texture for the decode-free zoom path; 12/24/50 MP + behavior fixtures |
 | Binary profiles | pacing runs: plain `--release` product build (no `bench-harness`); behavior rows: `--features bench-harness` build (A3 line logging) |
 | Classification | RUNTIME_GENERIC (host measurement plumbing + one never-park gate relaxation); no present semantics change |
@@ -66,9 +66,26 @@ hardware-injection number is claimed. The shipped driver posts scan-code-
 correct `WM_KEYDOWN`/`WM_KEYUP` to the window: posted messages traverse the
 real winit → runtime → guest → render → present pipeline (60/60 keys arrive;
 winit resolves the logical key from the scan code — an earlier driver
-revision with a wrong scan code resolved as `enter`/`escape`, which is how
-the resolution path was confirmed). The single non-hardware step is the
-OS input-queue delivery; a human-verification pass remains a GATE-A2 item.
+revision with a wrong scan code resolved as `enter` (archived in
+`c4-driver3-parked.err`), which is how the resolution path was confirmed).
+The single non-hardware step is the OS input-queue delivery; a human-
+verification pass remains a GATE-A2 item.
+
+**Window condition (disclosed per review):** all pacing runs spawn the
+window `Start-Process -WindowStyle Minimized` and never restore it — the
+measured surface is minimized/occluded for the whole run. The wake
+quantization comparison (this ticket's objective) is window-state-
+independent — both arms share the condition and the input→render term does
+not touch the present queue — but the absolute T_present and P95-vs-budget
+figures are **occluded-window numbers**: Fifo present on a visible window
+can additionally block on vsync. GATE-A2's integrated session must re-measure
+with a visible window before claiming the budget on the final display.
+
+Pairing method (spelled out per review): the i-th `INPUT_TRACE` stamp (keys
+are strictly ordered, 600 ms apart) pairs with the first `render-submit`
+stamp ≥ it and the first `present-submit` stamp ≥ that render. Validity:
+renders == presses + 2 boot renders in both arms, and max latency
+(25.7 ms) ≪ press spacing (600 ms), so order-pairing cannot shift.
 
 Two instrumentation notes recorded with the change: `--trace-frames` no
 longer forces the never-park gate (the parked path is semantics-safe by C3's
@@ -103,22 +120,38 @@ multi-frame gaps on the decode-free path in both arms.
 ## 4. The decode term (why switches exceed 20 ms — measured, not pacing)
 
 Re-fit presses (`f` → new WIC decode of the same 12 MP source, n = 20,
-parked arm): input→present submission **P50 37.4 / P95 40.8 ms** — dominated
-by the synchronous in-tick decode (12 MP WIC decode ≈ 43–48 ms in the A3
-records), consistent with GATE-A/A4's attribution of its multi-frame gaps to
-decode work on 24 MP switches, not to present scheduling. Removing decode
-from the interactive latency budget is A3/A5 territory (coalescing,
+parked arm — **n < 50: exploratory per BENCHMARK, closes no gate**):
+input→present submission **P50 37.4 / P95 40.8 ms** — dominated by the
+synchronous in-tick decode (the trace's in-tick work for these presses is
+~27.3 ms; the A3 records' 43–48 ms cold-open decode is the upper bound — a
+warm re-fit of an already-open source plausibly decodes faster than a cold
+open). This is consistent with GATE-A/A4's attribution of its multi-frame
+gaps to decode work on 24 MP switches, not to present scheduling. Removing
+decode from the interactive latency budget is A3/A5 territory (coalescing,
 cancellation, prefetch is forbidden for Previous/Next speculation), not C4.
 
 ## 5. Present-mode statement
 
 The surface presents `PresentMode::Fifo` with
 `desired_maximum_frame_latency: 1` (C2 baseline; unchanged). At sparse
-interaction cadence the render→present submission term measured 1.5–2.6 ms
-P95 — queue pacing is not a controllable latency term under this workload.
-Submission-to-photon (DWM/vsync) remains outside the app and outside the
-metric: input→present-**submission** is the named proxy (BENCHMARK), never
-"display photon latency".
+interaction cadence **under the disclosed minimized-window condition** the
+render→present submission term measured 1.5–2.6 ms P95 — queue pacing is
+not a controllable latency term for this workload **on an occluded surface;
+a visible window can add vsync-blocking that this measurement does not
+bound** (GATE-A2 re-measures visible). Submission-to-photon (DWM/vsync)
+remains outside the app and outside the metric: input→present-
+**submission** is the named proxy (BENCHMARK), never "display photon
+latency".
+
+### Disproved-assumption correction (C3 §5)
+
+C3's evidence attributed the posted-key non-delivery to "winit focus
+semantics". C4's runs disprove that: posted keys with a valid scan code
+deliver 60/60 to a minimized window. The corrected explanation is the scan
+code: winit resolves the logical key from the lParam scan code, and a zero
+scan code produces a key the guest cannot use. C3's doc is corrected by
+this ticket per the read-before-changing authority rule (authority docs are
+updated when an assumption is disproved).
 
 ## 6. Budget accounting (definition unchanged)
 
