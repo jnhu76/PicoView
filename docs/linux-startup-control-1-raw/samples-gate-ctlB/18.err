@@ -1,0 +1,10 @@
+A7EVENT,phase,main_entry,0ms
+A7EVENT,phase,event_loop_built,5ms
+A7EVENT,phase,window_create_begin,6ms
+A7EVENT,phase,window_created,7ms
+A7EVENT,phase,gpu_instance,7ms
+A7EVENT,phase,gpu_instance_done,63ms
+A7EVENT,phase,gpu_adapter_device,95ms
+A7EVENT,phase,gpu_surface_configured,98ms
+CONTROL_B_GPU: Vulkan / AMD Radeon RX 580 2048SP (RADV POLARIS10) / Bgra8Unorm
+A7EVENT,phase,first_present,100ms

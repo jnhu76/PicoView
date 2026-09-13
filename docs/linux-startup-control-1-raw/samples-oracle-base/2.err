@@ -1,0 +1,17 @@
+A7EVENT,phase,main_entry,0ms
+A7EVENT,phase,event_loop_built,6ms
+A7EVENT,phase,runtime_thread_spawning,9ms
+[2026-09-13T12:16:44Z WARN  wgpu_hal::vulkan::instance] Unable to find extension: VK_EXT_physical_device_drm
+A7EVENT,phase,runtime_boot_done,46ms
+[2026-09-13T12:16:44Z INFO  wgpu_hal::gles::egl] Using Wayland platform
+A7EVENT,phase,gpu_instance,72ms
+[2026-09-13T12:16:44Z WARN  wgpu_hal::gles::egl] Re-initializing Gles context due to Wayland window
+[2026-09-13T12:16:44Z INFO  pocket3d::gpu] adapter: "AMD Radeon RX 580 2048SP (RADV POLARIS10)" (DiscreteGpu, requested LowPower)
+A7EVENT,phase,gpu_adapter_device,113ms
+A7EVENT,phase,gpu_surface_configured,117ms
+[2026-09-13T12:16:44Z INFO  pocket_desktop_host::gpu] Pocket UI GPU: Vulkan / AMD Radeon RX 580 2048SP (RADV POLARIS10) / Bgra8Unorm
+A7EVENT,phase,gpu_ready,117ms
+A6EVENT,scale,1,logical=720x480,tick=0
+A6EVENT,physical,720x480,scale=1,logical=720x480
+A7EVENT,phase,runtime_renderer_ready,119ms
+A6EVENT,raster,density=1,scale=1,logical=720x480

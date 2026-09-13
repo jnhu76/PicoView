@@ -1,0 +1,12 @@
+csv,n,p50,p95,min,max,iqr,na_count,label
+run-sessA-stock.csv,55,132,279,107,324,104,0,exploratory - tail contaminated by self-inflicted background load
+run-sessA-d2.csv,25,124,140,110,142,9,0,exploratory - density flag clobbered by plan; stock-equivalent replicates
+run-sessB-stock.csv,55,127,141,112,144,13,0,gate batch (verified quiescent)
+run-sessB-x11.csv,20,106,122,102,124,5,0,exploratory - X11/XWayland arm
+run-sessC-stock.csv,50,123,141,114,156,12,0,gate batch (post-oracle clean rebuild)
+run-sessC-d2.csv,25,125,137,117,144,10,0,exploratory - density flag clobbered by plan; stock-equivalent replicates
+run-gate-ctlA.csv,20,11,12,10,14,1,0,control A gate (winit only)
+run-gate-ctlB.csv,20,107,112,99,123,6,0,control B gate (winit + wgpu)
+run-oracle-base.csv,5,133,149,124,149,9,0,oracle baseline (instrumented binary env-unset)
+run-oracle-crit.csv,6,184,194,181,194,3,0,oracle +100ms main-thread pre-window
+run-oracle-guest.csv,6,160,168,153,168,8,0,oracle +100ms runtime-lane pre-boot

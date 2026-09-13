@@ -1,0 +1,4 @@
+A7EVENT,phase,main_entry,0ms
+A7EVENT,phase,event_loop_built,9ms
+A7EVENT,phase,window_create_begin,9ms
+A7EVENT,phase,window_created,12ms

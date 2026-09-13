@@ -1,0 +1,8 @@
+== ambient 2026-09-13T20:19:46+08:00 ==
+uptime:  20:19:46 up  1:13,  4 users,  load average: 0.22, 0.37, 0.89
+mem: used_mb=4652 available_mb=59484
+psi_mem: some avg10=0.00 avg60=0.00 avg300=0.00 total=3 full avg10=0.00 avg60=0.00 avg300=0.00 total=3 
+vmstat: r=0 b=0 us=0 sy=0 id=100 wa=0
+kwin_cpu:  0.6
+wayland_compositor: /usr/bin/kwin_wayland --wayland-fd 7 --socket wayland-0 --xw
+loadavg: 0.20 0.36 0.88 1/1153 41718

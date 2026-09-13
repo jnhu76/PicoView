@@ -1,0 +1,6 @@
+A7EVENT,phase,main_entry,0ms
+A7EVENT,phase,event_loop_built,6ms
+A7EVENT,phase,window_create_begin,6ms
+A7EVENT,phase,window_created,8ms
+A7EVENT,phase,loop_alive_after_window,8ms
+READY_KIND=about_to_wait

@@ -1,0 +1,58 @@
+   Compiling pocket-desktop-host v0.1.0 (/home/jnhu/Source/pocketjs-linux-startup-control/pocketjs-control/hosts/desktop)
+warning: enum `QuarterTurn` is never used
+   --> src/a3.rs:129:6
+    |
+129 | enum QuarterTurn {
+    |      ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `PlaneTransform` is never constructed
+   --> src/a3.rs:139:8
+    |
+139 | struct PlaneTransform {
+    |        ^^^^^^^^^^^^^^
+
+warning: function `exif_orientation_transform` is never used
+   --> src/a3.rs:151:4
+    |
+151 | fn exif_orientation_transform(value: u16) -> PlaneTransform {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variants `NotJpeg`, `Corrupt`, and `TooLarge` are never constructed
+   --> src/a3.rs:167:5
+    |
+165 | enum A3DecodeError {
+    |      ------------- variants in this enum
+166 |     /// Container is not JPEG (content masquerading under a JPEG job).
+167 |     NotJpeg,
+    |     ^^^^^^^
+168 |     /// Container parses as JPEG but pixels cannot be produced.
+169 |     Corrupt,
+    |     ^^^^^^^
+170 |     /// Post-transform plane exceeds the native admission bound.
+171 |     TooLarge,
+    |     ^^^^^^^^
+    |
+    = note: `A3DecodeError` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `checked_plane_bytes` is never used
+   --> src/a3.rs:223:4
+    |
+223 | fn checked_plane_bytes(w: u32, h: u32) -> Result<u64, A3DecodeError> {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `MemSnapshot` is never constructed
+  --> src/memprobe.rs:20:12
+   |
+20 | pub struct MemSnapshot {
+   |            ^^^^^^^^^^^
+
+warning: function `enabled` is never used
+  --> src/memprobe.rs:25:4
+   |
+25 | fn enabled() -> bool {
+   |    ^^^^^^^
+
+warning: `pocket-desktop-host` (bin "pocket-desktop-host") generated 7 warnings
+    Finished `release` profile [optimized] target(s) in 4.61s
