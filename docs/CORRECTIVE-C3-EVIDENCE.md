@@ -180,11 +180,16 @@ parked runs read zero; the largest loop reading is still 10× under budget).
   test: `svc_guest_pending_tracks_the_inbound_queue` (round-trips a pushed
   line through the real `svcPoll` op).
 - Injected-keyboard limitation (reproducible in BOTH modes): PostMessage
-  key-down to a minimized window wakes the loop but does not deliver a
-  guest-visible key (winit focus semantics; the same limitation the A5
-  campaign hit with SendKeys). Control run with the loop forced 60 Hz
-  (`--trace-frames`) reproduced the non-delivery, exonerating the parked
-  path. End-to-end real-input response belongs to C4's real-input driver.
+  key-down to a minimized window wakes the loop but, as measured by C3's
+  build, did not deliver a guest-visible key. **Corrected by C4:** the root
+  cause is the missing lParam scan code (winit resolves the logical key
+  from the scan code — a zero scan produces an unusable key), not focus;
+  posted keys with a valid scan code deliver 60/60 to a minimized window
+  (CORRECTIVE-C4-EVIDENCE.md §2). The separate SendKeys/SendInput hardware
+  injection failures on this unattended desktop remain unexplained; the
+  control run with the loop forced 60 Hz (`--trace-frames`) reproduced the
+  non-delivery either way, exonerating the parked path. End-to-end
+  real-input response belongs to C4's driver.
 
 ## 6. Behavior verification
 
