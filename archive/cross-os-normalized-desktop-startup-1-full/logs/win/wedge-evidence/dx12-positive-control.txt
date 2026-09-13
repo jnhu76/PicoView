@@ -1,0 +1,2 @@
+# DX12 positive control (same binary, same machine, 2026-09-13T16:52:06Z)
+NORMTRACE,run=0,thread=main,event=E190_FIRST_USABLE_PRESENT_SUBMITTED,us=473554

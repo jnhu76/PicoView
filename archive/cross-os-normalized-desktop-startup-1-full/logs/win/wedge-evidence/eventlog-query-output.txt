@@ -1,0 +1,2 @@
+=== Display-related events (last 2h) ===
+=== Application errors (last 2h, AMD/pocket) ===

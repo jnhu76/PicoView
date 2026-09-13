@@ -39,7 +39,8 @@ Final authority report: `docs/CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1.md` (slim PR
   6. `hosts/desktop/examples/norm-a.rs`, `norm-b.rs` — winit-only / winit+normalized-wgpu
      controls (arms A/B), same trace vocabulary.
   7. `hosts/desktop/Cargo.toml` — build-dep none needed; add `pollster = "0.4"`
-     (0.4.0 already locked transitively; lockfile content unchanged).
+     (0.4.0 already locked transitively; the package SET is unchanged — the
+     lockfile gains only the new dependency edge line).
 
 ### Guest identity (arm C)
 - Guest source: PicoView `guest/main.octane.tsx` (entry), built artifacts in
@@ -183,10 +184,12 @@ Final authority report: `docs/CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1.md` (slim PR
 - A winit-only (n=20):      P50 10.0 ms   P95 11.4 ms   min  9.2  max 11.7  IQR 1.2
 - B winit+normalized wgpu (n=20): P50 69.8 ms   P95 72.2 ms   min 62.5  max 80.7  IQR 3.4
 - C full PocketJS E00→E190 (n=50): P50 75.7 ms   P95 80.6 ms   min 68.1  max 87.8  IQR 3.2
-- Key C own-duration stages (P50): gpu_instance 34.9 ms (side thread,
-  overlapped), runtime_boot 34.1 ms (guest_eval 31.2 inside), renderer_acquire
-  23.9 ms (dominated by waiting for the device handle), adapter 19.0,
-  device 3.8, window_create 2.5, surface_config 2.1, render 1.5.
+- Key C own-duration stages (P50): gpu_instance 34.9 ms (executes on the
+  side thread OVERLAPPED with the main lane, and is simultaneously ON the
+  critical path via the E21→E40 receive wait), runtime_boot 34.1 ms
+  (guest_eval 31.2 inside), renderer_acquire 23.9 ms (dominated by waiting
+  for the device handle), adapter 19.0, device 3.8, window_create 2.5,
+  surface_config 2.1, render 1.5.
 
 ## PHASE 9 — LINUX FREEZE
 
@@ -213,8 +216,9 @@ Final authority report: `docs/CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1.md` (slim PR
    `no compatible GPU adapter: ... vulkan not compatible with provided
    surface` — wgpu's Vulkan backend rejects the surface of a hidden HWND,
    and hidden windows also suppress redraw delivery (arm A would never see
-   RedrawRequested). All 50 C samples + partial A/B were labeled
-   INVALID_ENVIRONMENT and archived at `logs/win/C-invalid-hidden/`.
+   RedrawRequested). All 50 C samples were labeled
+   INVALID_ENVIRONMENT and archived at `logs/win/C-invalid-hidden/`
+   (arms A/B produced no samples in that attempt — see (2)).
    Correction: visible windows (identical to the Linux/KWin arm), plus a
    verification sample gate before headline batches.
 2. Same attempt exposed a runner bug: empty `-ArgumentList` (arms A/B)
@@ -227,8 +231,10 @@ Final authority report: `docs/CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1.md` (slim PR
   mechanized in win-collect-visible.ps1 (REVIEW-1 minors).
 
 ### WINDOWS VULKAN WEDGE — autonomous blocker (authoritative evidence)
-Onset window: between 23:36 (last successful visible-window run, endpoint
-166.2 ms) and 23:53 (first failure), 2026-09-13 local.
+Onset window: between 23:36 (last successful visible-window run) and
+23:53 (first failure), 2026-09-13 local. The successful 23:2x run
+(E190 = 166.2 ms) is a single n=1 ungated smoke sample — ONSET-DATING
+EVIDENCE ONLY, not a measurement result and not quotable as one.
 Symptom: EVERY Vulkan process fails at
 `vkGetPhysicalDeviceSurfaceCapabilitiesKHR → ERROR_UNKNOWN` — including
 `vulkaninfo` itself (system-wide, tool-independent). The DX12 backend of
@@ -236,9 +242,14 @@ the SAME binary works. Win+Ctrl+Shift+B driver reset did NOT clear it.
 Display pipeline mode-cycle was not executed (marshaling failed; tool
 abandoned). Windows Event Log shows NO display/TDR events in the window
 (userspace driver-state wedge, no crash).
+Evidence captures (logs/win/wedge-evidence/): vulkaninfo-summary-failing.txt
+(captured again at 2026-09-13T16:55Z — wedge still persisting ~1 h after
+onset), dx12-positive-control.txt (same binary, DX12, reaches E190),
+eventlog-query-output.txt (no display/TDR events).
 Autonomous remedies attempted: driver reset (no effect), 15 spaced probes
 over 45 minutes (no recovery), gated collector with per-batch ambient
-gates (ready but never reached verify). Machine reboot or AMD driver
+gates (reached verify; the verify sample failed on the wedge, so headline
+batches were correctly refused). Machine reboot or AMD driver
 reinstall is OUT OF SCOPE for an autonomous run (the operator actively
 uses this machine; other agent sessions are live on it).
 
@@ -254,6 +265,62 @@ honest campaign outcome is:
   are fabricated, reused from historical reports, or substituted (DX12 is
   a different backend family — substituting it would violate the
   normalized-policy authority).
+
+---
+
+## REVIEWER 3 — CAUSALITY: REVISE → fixed
+
+Audit confirmed: no cross-OS causal overclaim, serial-only DAG arithmetic
+(re-verified exactly), zero suspect language, both instrumentation commits
+measurement-only, no Windows numbers in any frozen artifact, blocked
+disposition honest. Fixes applied to this record:
+1. MAJOR-1 (stale CSVs): STALE READ by the reviewer — both
+   `frozen/linux-normalized-stages.csv` and the slim-PR
+   `docs/.../stages-summary.csv` were refreshed BEFORE the reviewer
+   finished; verified current: `redraw_delivery,None,...,0` +
+   `request_to_present,25,33,...,50`. No data defect shipped.
+2. MAJOR-2 (blocker evidence retention overstated): FIXED — explicit
+   captures now exist under `logs/win/wedge-evidence/`
+   (vulkaninfo-summary-failing.txt re-captured at 16:55Z with the wedge
+   still present; dx12-positive-control.txt reaching E190 on the same
+   binary; eventlog-query-output.txt).
+3. MINOR-1: explicit hardware-mismatch caveat added below.
+4. MINOR-2: the 166.2 ms pre-wedge smoke annotated as n=1 onset-dating
+   evidence only, not a result.
+5. MINOR-3/4: "partial A/B" corrected (A/B produced no samples in the
+   hidden attempt); "ready but never reached verify" corrected to
+   "reached verify; verify failed".
+6. NOTE-1: lockfile wording corrected (package set unchanged; one
+   dependency-edge line). NOTE-2: gpu_instance overlap-vs-critical-path
+   wording clarified. NOTE-4: carried into the slim report LIMITATIONS.
+
+### HARDWARE-MISMATCH CAVEAT (binding for any future cross-OS delta)
+The two hosts differ in CPU class AND GPU type: Linux = Xeon E5-2666 v3
+(Haswell-EP class) + Radeon RX 580 2048SP DISCRETE (RADV/Mesa); Windows =
+Ryzen 7 5800H (Zen3 APU) + integrated Radeon Graphics (AMD Windows
+Vulkan driver). Absolute cross-OS millisecond deltas would be CONFOUNDED
+by hardware even after the Windows arm is rerun; only stage-SHAPE
+comparison is meaningful, per the experiment protocol.
+
+---
+
+## DELIVERY RECORD
+
+- Archive branch: `archive/cross-os-normalized-desktop-startup-1-full`
+  (b8e6f1d + sync 0c5feaa) — 239 files, full raw evidence.
+- Slim report branch: `exp/cross-os-normalized-desktop-startup-1-slim` —
+  `docs/CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1.md` +
+  `docs/cross-os-normalized-desktop-startup-1/{stages-summary.csv,
+  source-identity.md}`. DRAFT PR opened; NOT merged. PR #42 untouched
+  (KEEP DRAFT).
+- No production optimization authorized or performed (measurement series
+  only on PocketJS picoview-c4-present-pacing: 50e3ed8e + e15674db).
+- Windows-arm rerun procedure (owner, after reboot/driver fix):
+  1) `vulkaninfo --summary` must succeed;
+  2) rebuild host at e15674db (or descendant) on Windows;
+  3) run `win-collect-visible.ps1` (gated, per-batch ambient);
+  4) `parse_norm.py A|B|C` per dir;
+  5) compare against frozen/linux-normalized-summary.json.
 
 (to be continued)
 
