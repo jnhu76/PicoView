@@ -169,6 +169,14 @@ export default function PicoViewGuest() {
   const [info, setInfo] = useState("A5: waiting for manifest…");
   const mainRef = useRef<NodeMirror | null>(null);
   const [box, setBox] = useState<Box>({ bx: 0, by: 0, bw: STAGE_W, bh: STAGE_H });
+  // C3 static-frames declaration: every guest-visible change here is driven
+  // by an input event or an A3 service reply (manifest walk, walk keys,
+  // clicks, stress bursts) — the frame callback never advances state on its
+  // own. Declaring that lets the host park the worker between events; if a
+  // self-driven JS animation is ever added, it must retract this first via
+  // `getOps().__pocketStaticFrames?.(false)`. Optional call: hosts without
+  // the binding keep the continuous tick loop.
+  getOps().__pocketStaticFrames?.(true);
   const state = useRef({
     svc: null as A3Svc | null,
     files: [] as string[],
