@@ -62,13 +62,13 @@ For the merged knowledge artifact, use this order:
 
 1. `docs/BENCHMARK.md` — normative timestamp semantics.
 2. `docs/WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1.md` — later direct
-   Windows decomposition and T1-anchor finding.
+   Windows decomposition and harness/T1-anchor finding.
 3. This Linux control report — cross-platform control evidence, reconciled to
    the later Windows measurements.
 4. Frozen archive snapshot at `982914b...` — immutable experiment-time report,
    raw evidence and review history.
 
-`BENCHMARK.md` defines:
+`BENCHMARK.md` already defines:
 
 - `T0_ACTIVATION_REQUEST` — external activation/open request;
 - `T1_PROCESS_ENTRY` — PicoView process entry begins;
@@ -77,10 +77,11 @@ For the merged knowledge artifact, use this order:
 - process-start → usable-window metric = `T2 - T1`;
 - process-cold activation → first useful image = `T6 - T0`.
 
-The later #40 audit leaves an owner-level benchmark-policy task: make the
-measurement harness anchor literal `T1_PROCESS_ENTRY` directly and specify the
-startup machine state. This report does not open a new gate or re-adjudicate
-GATE-A/GATE-A2.
+The later #40 audit therefore leaves an **operational measurement task**, not a
+semantic redefinition: instrument the harness so its T1 anchor is the literal
+`T1_PROCESS_ENTRY` already required by `BENCHMARK.md`, and separately define the
+startup machine-state specification. This report does not open a new gate or
+re-adjudicate GATE-A/GATE-A2.
 
 ---
 
@@ -288,8 +289,8 @@ compared directly against Linux 123–127 ms and called an architecture tax.
 - quiet-session in-process estimate band: roughly **125–153 ms**;
 - degraded/noisy direct P50: **199 ms**, n=24, exploratory;
 - startup remains sensitive to host/session state;
-- no gate re-adjudication is possible until T1 anchoring and machine-state
-  policy are fixed by the owner.
+- no gate re-adjudication is possible until the harness uses the normative
+  process-entry anchor directly and machine-state policy is specified.
 
 The quiet Windows band is therefore in approximately the same 150 ms class as
 the Linux result, rather than being stably ~100 ms slower.
@@ -503,8 +504,8 @@ Current campaign consequences remain:
 
 Next owner task before any new startup performance work:
 
-1. keep `BENCHMARK.md`'s `T1_PROCESS_ENTRY` semantics unchanged and make the
-   benchmark harness anchor that literal process-entry event directly;
+1. instrument the benchmark harness so its T1 anchor is the literal
+   `T1_PROCESS_ENTRY` already specified by `BENCHMARK.md`;
 2. define the startup benchmark machine-state specification; then
 3. only remeasure/re-adjudicate if those authority changes are accepted.
 
