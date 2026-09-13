@@ -179,7 +179,11 @@ next, then C6/#31 and the NEW GATE-A2. No budget was weakened.
 
 ## 9. Review trail
 
-Two fresh-context adversarial reviews (measurement methodology;
-runtime-semantics/scope) ran before the PR — dispositions in §10 of the
-evidence git history (raw driver transcripts under
-`pocketjs/evidence/tmp/c4*`).
+One fresh-context adversarial review (measurement methodology +
+runtime-semantics/scope, combined) ran before the PR: VERDICT PASS with
+five findings, all dispositioned in commit `d7450f4` of this branch
+(window condition disclosed in §2, n<50 exploratory label in §4, pairing
+method spelled out in §2, decode citation reconciled in §4, and the C3 §5
+assumption corrected in that document). Raw driver transcripts are
+preserved untracked under `pocketjs/evidence/tmp/c4*` (see §8 archive
+note).
