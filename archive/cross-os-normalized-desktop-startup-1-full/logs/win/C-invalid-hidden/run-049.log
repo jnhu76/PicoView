@@ -1,0 +1,25 @@
+NORMTRACE,run=49,thread=main,event=E00_MAIN_ENTRY,us=44
+NORMTRACE,run=49,thread=main,event=E10_EVENT_LOOP_BEGIN,us=5600
+NORMTRACE,run=49,thread=main,event=E11_EVENT_LOOP_READY,us=32578
+NORMTRACE,run=49,thread=pocket-gpu-instance,event=E30_GPU_INSTANCE_BEGIN,us=32762
+NORMTRACE,run=49,thread=main,event=E20_WINDOW_CREATE_BEGIN,us=38126
+NORMTRACE,run=49,thread=main,event=E21_WINDOW_CREATE_END,us=115643
+NORMTRACE,run=49,thread=pocket-runtime,event=E80_RUNTIME_THREAD_BEGIN,us=121567
+NORMTRACE,run=49,thread=pocket-runtime,event=E81_ASSET_READ_BEGIN,us=127053
+NORMTRACE,run=49,thread=pocket-gpu-instance,event=E31_GPU_INSTANCE_END,us=129294
+NORMTRACE,run=49,thread=pocket-runtime,event=E82_ASSET_READ_END,us=134299
+NORMTRACE,run=49,thread=pocket-runtime,event=E83_UI_SURFACE_BEGIN,us=143656
+NORMTRACE,run=49,thread=main,event=E40_SURFACE_CREATE_BEGIN,us=138257
+NORMTRACE,run=49,thread=pocket-runtime,event=E84_UI_SURFACE_END,us=145270
+NORMTRACE,run=49,thread=main,event=E41_SURFACE_CREATE_END,us=146512
+NORMTRACE,run=49,thread=pocket-runtime,event=E85_QUICKJS_BEGIN,us=147804
+NORMTRACE,run=49,thread=main,event=E50_ADAPTER_BEGIN,us=148670
+NORMTRACE,run=49,thread=pocket-runtime,event=E86_QUICKJS_END,us=150139
+NORMTRACE,run=49,thread=pocket-runtime,event=E87_GUEST_EVAL_BEGIN,us=152064
+[2026-09-13T15:46:34Z ERROR wgpu_hal::vulkan::adapter] get_physical_device_surface_capabilities: An unknown error has occurred, due to an implementation or application bug
+
+thread 'main' (14680) panicked at src\main.rs:1118:38:
+called `Option::unwrap()` on a `None` value
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Error: GPU initialization: no compatible GPU adapter: No suitable graphics adapter found; noop not requested, vulkan not compatible with provided surface, metal not requested, dx12 not requested, gl not requested, webgpu not requested
+WALL_SPAWN_EXIT_MS=327,exitcode=

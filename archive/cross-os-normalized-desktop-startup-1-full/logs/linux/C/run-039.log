@@ -1,0 +1,57 @@
+NORMTRACE,run=39,thread=main,event=E00_MAIN_ENTRY,us=95
+NORMTRACE,run=39,thread=main,event=E10_EVENT_LOOP_BEGIN,us=226
+NORMTRACE,run=39,thread=main,event=E11_EVENT_LOOP_READY,us=8867
+NORMTRACE,run=39,thread=main,event=E20_WINDOW_CREATE_BEGIN,us=8910
+NORMTRACE,run=39,thread=pocket-gpu-instance,event=E30_GPU_INSTANCE_BEGIN,us=9032
+NORMTRACE,run=39,thread=main,event=E21_WINDOW_CREATE_END,us=11398
+NORMTRACE,run=39,thread=pocket-runtime,event=E80_RUNTIME_THREAD_BEGIN,us=14293
+NORMTRACE,run=39,thread=pocket-runtime,event=E81_ASSET_READ_BEGIN,us=14370
+NORMTRACE,run=39,thread=pocket-runtime,event=E82_ASSET_READ_END,us=15555
+NORMTRACE,run=39,thread=pocket-runtime,event=E83_UI_SURFACE_BEGIN,us=15585
+NORMTRACE,run=39,thread=pocket-runtime,event=E84_UI_SURFACE_END,us=15644
+NORMTRACE,run=39,thread=pocket-runtime,event=E85_QUICKJS_BEGIN,us=15798
+NORMTRACE,run=39,thread=pocket-runtime,event=E86_QUICKJS_END,us=16330
+NORMTRACE,run=39,thread=pocket-runtime,event=E87_GUEST_EVAL_BEGIN,us=17265
+[2026-09-13T15:40:28Z WARN  wgpu_hal::vulkan::instance] Unable to find extension: VK_EXT_physical_device_drm
+NORMTRACE,run=39,thread=pocket-gpu-instance,event=E31_GPU_INSTANCE_END,us=45251
+NORMTRACE,run=39,thread=main,event=E40_SURFACE_CREATE_BEGIN,us=45349
+NORMTRACE,run=39,thread=main,event=E41_SURFACE_CREATE_END,us=45464
+NORMTRACE,run=39,thread=main,event=E50_ADAPTER_BEGIN,us=45508
+NORMTRACE,run=39,thread=pocket-runtime,event=E88_GUEST_EVAL_END,us=48466
+NORMTRACE,run=39,thread=pocket-runtime,event=E89_RUNTIME_BOOT_DONE,us=48544
+NORMTRACE,run=39,thread=pocket-runtime,event=E90_RENDERER_BEGIN,us=48563
+NORMTRACE,run=39,thread=main,event=E51_ADAPTER_END,us=64414
+[2026-09-13T15:40:28Z INFO  pocket3d::gpu] adapter: "AMD Radeon RX 580 2048SP (RADV POLARIS10)" (DiscreteGpu, requested LowPower)
+NORMTRACE,run=39,thread=main,event=E60_DEVICE_BEGIN,us=64466
+NORMTRACE,run=39,thread=main,event=E61_DEVICE_END,us=68395
+NORMTRACE,run=39,thread=main,event=E70_SURFACE_CAPS_BEGIN,us=68426
+NORMTRACE,run=39,thread=main,event=E71_SURFACE_CAPS_END,us=70025
+NORMTRACE,run=39,thread=main,event=E72_SURFACE_CONFIG_BEGIN,us=70057
+NORMTRACE,run=39,thread=main,event=E73_SURFACE_CONFIG_END,us=72255
+[2026-09-13T15:40:28Z INFO  pocket_desktop_host::gpu] Pocket UI GPU: Vulkan / AMD Radeon RX 580 2048SP (RADV POLARIS10) / Bgra8Unorm
+NORMTRACE,run=39,thread=main,event=E131_REDRAW_CALLBACK,us=72352
+NORMTRACE,run=39,thread=pocket-runtime,event=E91_RENDERER_READY,us=73657
+NORMTRACE,run=39,thread=pocket-runtime,event=E100_FIRST_TICK_BEGIN,us=73784
+NORMTRACE,run=39,thread=pocket-runtime,event=E101_GUEST_FRAME_DONE,us=73850
+NORMTRACE,run=39,thread=pocket-runtime,event=E102_SURFACE_TICK_DONE,us=73947
+NORMTRACE,run=39,thread=pocket-runtime,event=E110_RENDER_BEGIN,us=74001
+NORMTRACE,run=39,thread=pocket-runtime,event=E112_RENDER_TARGET_READY,us=74038
+NORMTRACE,run=39,thread=pocket-runtime,event=E111_DRAWLIST_READY,us=74073
+NORMTRACE,run=39,thread=pocket-runtime,event=E113_RENDER_QUEUE_SUBMIT,us=75449
+NORMTRACE,run=39,thread=pocket-runtime,event=E120_WAKE_SEND_BEGIN,us=75478
+NORMTRACE,run=39,thread=pocket-runtime,event=E121_WAKE_SEND_END,us=75499
+NORMTRACE,run=39,thread=main,event=E122_WAKE_RECEIVED,us=75514
+NORMTRACE,run=39,thread=main,event=E130_REQUEST_REDRAW,us=75555
+NORMTRACE,run=39,thread=main,event=E140_GET_TEXTURE_BEGIN,us=75582
+NORMTRACE,run=39,thread=main,event=E141_GET_TEXTURE_END,us=75627
+NORMTRACE,run=39,thread=main,event=E150_BLIT_BEGIN,us=75653
+NORMTRACE,run=39,thread=main,event=E151_BLIT_END,us=76153
+NORMTRACE,run=39,thread=main,event=E160_PRESENT_ENCODE_BEGIN,us=76191
+NORMTRACE,run=39,thread=main,event=E161_PRESENT_ENCODE_END,us=77108
+NORMTRACE,run=39,thread=main,event=E162_PRESENT_QUEUE_SUBMIT,us=77617
+NORMTRACE,run=39,thread=main,event=E170_PRE_PRESENT_NOTIFY,us=77655
+NORMTRACE,run=39,thread=main,event=E180_PRESENT_BEGIN,us=77679
+NORMTRACE,run=39,thread=main,event=E181_PRESENT_RETURN,us=77739
+NORMTRACE,run=39,thread=main,event=E190_FIRST_USABLE_PRESENT_SUBMITTED,us=77767
+BENCHMARK_CONFIG {"app":"picoview-a6-main","arm":"C-full-pocketjs","clock":"process-local Instant; origin E00_MAIN_ENTRY","desired_maximum_frame_latency":1,"force_fallback_adapter":false,"force_scale":1.0,"gpu":{"adapter":"AMD Radeon RX 580 2048SP (RADV POLARIS10)","adapter_backend":"Vulkan","alpha_mode":"Auto","desired_maximum_frame_latency":1,"device_type":"DiscreteGpu","present_mode":"Fifo","surface_format":"Bgra8Unorm","surface_size":[720,480]},"gpu_backend_policy":"(Backends(VULKAN), MemoryUsage)","guest":"picoview-a6-main|js_bytes=357860|js_fnv=0x506ae38d1739469b|pak_bytes=78576|pak_fnv=0x71f91c52dded33cc","host_abi":4,"logical_viewport":[720,480],"pocket_gpu_backend_env":"VULKAN","pocketjs_sha":"e15674db1ca9179732c22e5a9a191ba21ebf3e70","pocketjs_tree":"f09cf9fa116d3fa92d64f49fec7edf1d088d059e","power_preference":"LowPower","present_mode":"Fifo","quit_after_ticks":30,"raster_density":1,"target_id":"linux-app"}
+WALL_EXIT_RC=0

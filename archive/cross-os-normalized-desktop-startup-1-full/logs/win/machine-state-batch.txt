@@ -1,0 +1,64 @@
+OS: Microsoft Windows 11 专业版 build 26200
+CPU: AMD Ryzen 7 5800H with Radeon Graphics          (16 logical)
+RAM_GB_total: 28.9  RAM_GB_free: 13.1
+Uptime_hours: 15
+GPU: AMD Radeon(TM) Graphics | driver 31.0.21923.11000 | 2560x1440 @ 60Hz
+AppliedDPI: 96 (= 1x)
+CPU_load_pct_now: 5
+AV_registered: 腾讯电脑管家系统防护, Windows Defender
+WinDefender_service:   QQPCRTP_service: Running
+build_processes: NONE
+=== AMBIENT CPU 30s (1s samples) ===
+7
+4
+8
+6
+10
+2
+2
+13
+14
+5
+3
+6
+2
+14
+34
+49
+30
+53
+38
+4
+7
+6
+38
+5
+2
+28
+58
+10
+13
+10
+=== AMBIENT-END ===
+ATTEMPT 1 ambient n=30 min=0 max=19 P95=15 gate=PASS
+QUIET-GATE-PASS 鈥?batches start
+VISIBLE-ATTEMPT 1 ambient n=30 min=0 max=34 P95=32 gate=FAIL
+VISIBLE-ATTEMPT 2 ambient n=30 min=1 max=14 P95=10 gate=PASS
+VISIBLE-QUIET-GATE-PASS 鈥?batches start
+VERIFY-SAMPLE-FAILED 鈥?batches NOT started
+RETRY-PROBE 1 recovered= at 2026-09-13T23:58:10.1509619+08:00
+RETRY-PROBE 2 recovered= at 2026-09-14T00:01:10.4096883+08:00
+RETRY-PROBE 3 recovered= at 2026-09-14T00:04:10.6387844+08:00
+RETRY-PROBE 4 recovered= at 2026-09-14T00:07:10.8550811+08:00
+RETRY-PROBE 5 recovered= at 2026-09-14T00:10:11.0833718+08:00
+RETRY-PROBE 6 recovered= at 2026-09-14T00:13:11.3062759+08:00
+RETRY-PROBE 7 recovered= at 2026-09-14T00:16:11.5205988+08:00
+RETRY-PROBE 8 recovered= at 2026-09-14T00:19:11.7201800+08:00
+RETRY-PROBE 9 recovered= at 2026-09-14T00:22:11.9321515+08:00
+RETRY-PROBE 10 recovered= at 2026-09-14T00:25:12.1961629+08:00
+RETRY-PROBE 11 recovered= at 2026-09-14T00:28:12.4213373+08:00
+RETRY-PROBE 12 recovered= at 2026-09-14T00:31:12.6421203+08:00
+RETRY-PROBE 13 recovered= at 2026-09-14T00:34:12.8779737+08:00
+RETRY-PROBE 14 recovered= at 2026-09-14T00:37:13.1171862+08:00
+RETRY-PROBE 15 recovered= at 2026-09-14T00:40:13.3359925+08:00
+VULKAN-WEDGE-NOT-RECOVERED in timebox

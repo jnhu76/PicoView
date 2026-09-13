@@ -1,0 +1,500 @@
+{
+  "arm": "A",
+  "benchmark_config_run0": {
+    "arm": "A-winit-only",
+    "clock": "process-local Instant; origin E00_MAIN_ENTRY",
+    "force_scale": 1.0,
+    "gpu": "none (winit only)",
+    "logical_viewport": [
+      720,
+      480
+    ],
+    "target_id": "linux-app"
+  },
+  "config_uniform": {
+    "drift": {},
+    "gpu_policy_variants": 1,
+    "uniform": true
+  },
+  "endpoint_E00_us": {
+    "iqr_us": 1236,
+    "max_us": 11740,
+    "min_us": 9210,
+    "n": 20,
+    "p50_us": 9968,
+    "p95_us": 11412
+  },
+  "endpoint_event": "E199_ARM_ENDPOINT",
+  "event_completion_from_E00_us": {
+    "E00_MAIN_ENTRY": {
+      "iqr_us": 0,
+      "max_us": 0,
+      "min_us": 0,
+      "n": 20,
+      "p50_us": 0,
+      "p95_us": 0
+    },
+    "E10_EVENT_LOOP_BEGIN": {
+      "iqr_us": 8,
+      "max_us": 111,
+      "min_us": 42,
+      "n": 20,
+      "p50_us": 54,
+      "p95_us": 100
+    },
+    "E11_EVENT_LOOP_READY": {
+      "iqr_us": 1134,
+      "max_us": 8992,
+      "min_us": 6698,
+      "n": 20,
+      "p50_us": 7484,
+      "p95_us": 8944
+    },
+    "E130_REQUEST_REDRAW": {
+      "iqr_us": 1232,
+      "max_us": 11649,
+      "min_us": 9152,
+      "n": 20,
+      "p50_us": 9908,
+      "p95_us": 11361
+    },
+    "E131_REDRAW_CALLBACK": {
+      "iqr_us": 1235,
+      "max_us": 11707,
+      "min_us": 9189,
+      "n": 20,
+      "p50_us": 9947,
+      "p95_us": 11394
+    },
+    "E199_ARM_ENDPOINT": {
+      "iqr_us": 1236,
+      "max_us": 11740,
+      "min_us": 9210,
+      "n": 20,
+      "p50_us": 9968,
+      "p95_us": 11412
+    },
+    "E20_WINDOW_CREATE_BEGIN": {
+      "iqr_us": 1134,
+      "max_us": 9022,
+      "min_us": 6729,
+      "n": 20,
+      "p50_us": 7517,
+      "p95_us": 8976
+    },
+    "E21_WINDOW_CREATE_END": {
+      "iqr_us": 1232,
+      "max_us": 11607,
+      "min_us": 9122,
+      "n": 20,
+      "p50_us": 9879,
+      "p95_us": 11336
+    }
+  },
+  "guest_ids": [],
+  "invalid_runs": [],
+  "n_invalid": 0,
+  "n_valid": 20,
+  "stages": {
+    "adapter": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "asset_read": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "blit_ensure": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "device": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "first_tick": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "gpu_instance": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "guest_eval": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "present_call": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "present_encode": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "quickjs": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "redraw_delivery": {
+      "completion_from_E00_us": {
+        "iqr_us": 1235,
+        "max_us": 11707,
+        "min_us": 9189,
+        "n": 20,
+        "p50_us": 9947,
+        "p95_us": 11394
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": 3,
+        "max_us": 61,
+        "min_us": 31,
+        "n": 20,
+        "p50_us": 38,
+        "p95_us": 58
+      }
+    },
+    "render": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "renderer_acquire": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "request_to_present": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "runtime_boot": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "surface_acquire": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "surface_caps": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "surface_config": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "surface_create": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "ui_surface": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "window_create": {
+      "completion_from_E00_us": {
+        "iqr_us": 1232,
+        "max_us": 11607,
+        "min_us": 9122,
+        "n": 20,
+        "p50_us": 9879,
+        "p95_us": 11336
+      },
+      "excluded_end_before_begin": 0,
+      "own_us": {
+        "iqr_us": 135,
+        "max_us": 3123,
+        "min_us": 1954,
+        "n": 20,
+        "p50_us": 2306,
+        "p95_us": 3045
+      }
+    }
+  },
+  "workdir": "C:\\Users\\fred1\\source\\PicoView\\evidence\\tmp\\cross-os-norm-1\\logs\\linux\\A"
+}

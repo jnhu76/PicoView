@@ -1,0 +1,732 @@
+{
+  "arm": "C",
+  "benchmark_config_run0": null,
+  "endpoint_E00_us": {
+    "iqr_us": null,
+    "max_us": null,
+    "min_us": null,
+    "n": 0,
+    "p50_us": null,
+    "p95_us": null
+  },
+  "endpoint_event": "E190_FIRST_USABLE_PRESENT_SUBMITTED",
+  "event_completion_from_E00_us": {},
+  "guest_ids": [],
+  "invalid_runs": [
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "000",
+      "wall": "WALL_SPAWN_EXIT_MS=937,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "001",
+      "wall": "WALL_SPAWN_EXIT_MS=332,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "002",
+      "wall": "WALL_SPAWN_EXIT_MS=316,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "003",
+      "wall": "WALL_SPAWN_EXIT_MS=329,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "004",
+      "wall": "WALL_SPAWN_EXIT_MS=321,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "005",
+      "wall": "WALL_SPAWN_EXIT_MS=334,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "006",
+      "wall": "WALL_SPAWN_EXIT_MS=314,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "007",
+      "wall": "WALL_SPAWN_EXIT_MS=326,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "008",
+      "wall": "WALL_SPAWN_EXIT_MS=342,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "009",
+      "wall": "WALL_SPAWN_EXIT_MS=326,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "010",
+      "wall": "WALL_SPAWN_EXIT_MS=334,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "011",
+      "wall": "WALL_SPAWN_EXIT_MS=333,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "012",
+      "wall": "WALL_SPAWN_EXIT_MS=336,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "013",
+      "wall": "WALL_SPAWN_EXIT_MS=333,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "014",
+      "wall": "WALL_SPAWN_EXIT_MS=331,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "015",
+      "wall": "WALL_SPAWN_EXIT_MS=319,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "016",
+      "wall": "WALL_SPAWN_EXIT_MS=337,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "017",
+      "wall": "WALL_SPAWN_EXIT_MS=315,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "018",
+      "wall": "WALL_SPAWN_EXIT_MS=334,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "019",
+      "wall": "WALL_SPAWN_EXIT_MS=319,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "020",
+      "wall": "WALL_SPAWN_EXIT_MS=348,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "021",
+      "wall": "WALL_SPAWN_EXIT_MS=335,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "022",
+      "wall": "WALL_SPAWN_EXIT_MS=316,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "023",
+      "wall": "WALL_SPAWN_EXIT_MS=320,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "024",
+      "wall": "WALL_SPAWN_EXIT_MS=331,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "025",
+      "wall": "WALL_SPAWN_EXIT_MS=319,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "026",
+      "wall": "WALL_SPAWN_EXIT_MS=334,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "027",
+      "wall": "WALL_SPAWN_EXIT_MS=334,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "028",
+      "wall": "WALL_SPAWN_EXIT_MS=330,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "029",
+      "wall": "WALL_SPAWN_EXIT_MS=317,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "030",
+      "wall": "WALL_SPAWN_EXIT_MS=321,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "031",
+      "wall": "WALL_SPAWN_EXIT_MS=333,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "032",
+      "wall": "WALL_SPAWN_EXIT_MS=316,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "033",
+      "wall": "WALL_SPAWN_EXIT_MS=349,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "034",
+      "wall": "WALL_SPAWN_EXIT_MS=333,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "035",
+      "wall": "WALL_SPAWN_EXIT_MS=337,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "036",
+      "wall": "WALL_SPAWN_EXIT_MS=314,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "037",
+      "wall": "WALL_SPAWN_EXIT_MS=315,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "038",
+      "wall": "WALL_SPAWN_EXIT_MS=316,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "039",
+      "wall": "WALL_SPAWN_EXIT_MS=316,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "040",
+      "wall": "WALL_SPAWN_EXIT_MS=313,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "041",
+      "wall": "WALL_SPAWN_EXIT_MS=317,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "042",
+      "wall": "WALL_SPAWN_EXIT_MS=314,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "043",
+      "wall": "WALL_SPAWN_EXIT_MS=318,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "044",
+      "wall": "WALL_SPAWN_EXIT_MS=312,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "045",
+      "wall": "WALL_SPAWN_EXIT_MS=317,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "046",
+      "wall": "WALL_SPAWN_EXIT_MS=332,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "047",
+      "wall": "WALL_SPAWN_EXIT_MS=317,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "048",
+      "wall": "WALL_SPAWN_EXIT_MS=328,exitcode="
+    },
+    {
+      "reasons": [
+        "no endpoint E190_FIRST_USABLE_PRESENT_SUBMITTED"
+      ],
+      "run": "049",
+      "wall": "WALL_SPAWN_EXIT_MS=327,exitcode="
+    }
+  ],
+  "n_invalid": 50,
+  "n_valid": 0,
+  "stages": {
+    "adapter": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "asset_read": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "blit_ensure": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "device": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "first_tick": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "gpu_instance": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "guest_eval": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "present_call": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "present_encode": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "quickjs": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "redraw_delivery": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "render": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "renderer_acquire": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "runtime_boot": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "surface_acquire": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "surface_caps": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "surface_config": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "surface_create": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "ui_surface": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    },
+    "window_create": {
+      "completion_from_E00_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      },
+      "own_us": {
+        "iqr_us": null,
+        "max_us": null,
+        "min_us": null,
+        "n": 0,
+        "p50_us": null,
+        "p95_us": null
+      }
+    }
+  },
+  "workdir": "C:\\Users\\fred1\\source\\PicoView\\evidence\\tmp\\cross-os-norm-1\\logs\\win\\C"
+}

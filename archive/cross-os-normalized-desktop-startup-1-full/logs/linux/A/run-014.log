@@ -1,0 +1,10 @@
+NORMTRACE,run=14,thread=main,event=E00_MAIN_ENTRY,us=57
+NORMTRACE,run=14,thread=main,event=E10_EVENT_LOOP_BEGIN,us=112
+NORMTRACE,run=14,thread=main,event=E11_EVENT_LOOP_READY,us=7676
+NORMTRACE,run=14,thread=main,event=E20_WINDOW_CREATE_BEGIN,us=7707
+NORMTRACE,run=14,thread=main,event=E21_WINDOW_CREATE_END,us=9949
+NORMTRACE,run=14,thread=main,event=E130_REQUEST_REDRAW,us=9977
+BENCHMARK_CONFIG {"arm":"A-winit-only","clock":"process-local Instant; origin E00_MAIN_ENTRY","force_scale":1.0,"gpu":"none (winit only)","logical_viewport":[720,480],"target_id":"linux-app"}
+NORMTRACE,run=14,thread=main,event=E131_REDRAW_CALLBACK,us=10015
+NORMTRACE,run=14,thread=main,event=E199_ARM_ENDPOINT,us=10036
+WALL_EXIT_RC=0

@@ -1,0 +1,2058 @@
+{
+  "A": {
+    "arm": "A",
+    "benchmark_config_run0": {
+      "arm": "A-winit-only",
+      "clock": "process-local Instant; origin E00_MAIN_ENTRY",
+      "force_scale": 1.0,
+      "gpu": "none (winit only)",
+      "logical_viewport": [
+        720,
+        480
+      ],
+      "target_id": "linux-app"
+    },
+    "config_uniform": {
+      "drift": {},
+      "gpu_policy_variants": 1,
+      "uniform": true
+    },
+    "endpoint_E00_us": {
+      "iqr_us": 1236,
+      "max_us": 11740,
+      "min_us": 9210,
+      "n": 20,
+      "p50_us": 9968,
+      "p95_us": 11412
+    },
+    "endpoint_event": "E199_ARM_ENDPOINT",
+    "event_completion_from_E00_us": {
+      "E00_MAIN_ENTRY": {
+        "iqr_us": 0,
+        "max_us": 0,
+        "min_us": 0,
+        "n": 20,
+        "p50_us": 0,
+        "p95_us": 0
+      },
+      "E10_EVENT_LOOP_BEGIN": {
+        "iqr_us": 8,
+        "max_us": 111,
+        "min_us": 42,
+        "n": 20,
+        "p50_us": 54,
+        "p95_us": 100
+      },
+      "E11_EVENT_LOOP_READY": {
+        "iqr_us": 1134,
+        "max_us": 8992,
+        "min_us": 6698,
+        "n": 20,
+        "p50_us": 7484,
+        "p95_us": 8944
+      },
+      "E130_REQUEST_REDRAW": {
+        "iqr_us": 1232,
+        "max_us": 11649,
+        "min_us": 9152,
+        "n": 20,
+        "p50_us": 9908,
+        "p95_us": 11361
+      },
+      "E131_REDRAW_CALLBACK": {
+        "iqr_us": 1235,
+        "max_us": 11707,
+        "min_us": 9189,
+        "n": 20,
+        "p50_us": 9947,
+        "p95_us": 11394
+      },
+      "E199_ARM_ENDPOINT": {
+        "iqr_us": 1236,
+        "max_us": 11740,
+        "min_us": 9210,
+        "n": 20,
+        "p50_us": 9968,
+        "p95_us": 11412
+      },
+      "E20_WINDOW_CREATE_BEGIN": {
+        "iqr_us": 1134,
+        "max_us": 9022,
+        "min_us": 6729,
+        "n": 20,
+        "p50_us": 7517,
+        "p95_us": 8976
+      },
+      "E21_WINDOW_CREATE_END": {
+        "iqr_us": 1232,
+        "max_us": 11607,
+        "min_us": 9122,
+        "n": 20,
+        "p50_us": 9879,
+        "p95_us": 11336
+      }
+    },
+    "guest_ids": [],
+    "invalid_runs": [],
+    "n_invalid": 0,
+    "n_valid": 20,
+    "stages": {
+      "adapter": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "asset_read": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "blit_ensure": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "device": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "first_tick": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "gpu_instance": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "guest_eval": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "present_call": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "present_encode": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "quickjs": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "redraw_delivery": {
+        "completion_from_E00_us": {
+          "iqr_us": 1235,
+          "max_us": 11707,
+          "min_us": 9189,
+          "n": 20,
+          "p50_us": 9947,
+          "p95_us": 11394
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 3,
+          "max_us": 61,
+          "min_us": 31,
+          "n": 20,
+          "p50_us": 38,
+          "p95_us": 58
+        }
+      },
+      "render": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "renderer_acquire": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "request_to_present": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "runtime_boot": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "surface_acquire": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "surface_caps": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "surface_config": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "surface_create": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "ui_surface": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "window_create": {
+        "completion_from_E00_us": {
+          "iqr_us": 1232,
+          "max_us": 11607,
+          "min_us": 9122,
+          "n": 20,
+          "p50_us": 9879,
+          "p95_us": 11336
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 135,
+          "max_us": 3123,
+          "min_us": 1954,
+          "n": 20,
+          "p50_us": 2306,
+          "p95_us": 3045
+        }
+      }
+    },
+    "workdir": "C:\\Users\\fred1\\source\\PicoView\\evidence\\tmp\\cross-os-norm-1\\logs\\linux\\A"
+  },
+  "B": {
+    "arm": "B",
+    "benchmark_config_run0": {
+      "adapter": "AMD Radeon RX 580 2048SP (RADV POLARIS10)",
+      "adapter_backend": "Vulkan",
+      "alpha_mode": "Auto",
+      "arm": "B-winit-normalized-wgpu",
+      "backend": "Vulkan",
+      "clock": "process-local Instant; origin E00_MAIN_ENTRY",
+      "desired_maximum_frame_latency": 1,
+      "device_type": "DiscreteGpu",
+      "force_fallback_adapter": false,
+      "force_scale": 1.0,
+      "logical_viewport": [
+        720,
+        480
+      ],
+      "memory_hints": "MemoryUsage",
+      "power_preference": "LowPower",
+      "present_mode": "Fifo",
+      "surface_format": "Bgra8Unorm",
+      "target_id": "linux-app"
+    },
+    "config_uniform": {
+      "drift": {},
+      "gpu_policy_variants": 1,
+      "uniform": true
+    },
+    "endpoint_E00_us": {
+      "iqr_us": 3415,
+      "max_us": 80723,
+      "min_us": 62494,
+      "n": 20,
+      "p50_us": 69764,
+      "p95_us": 72203
+    },
+    "endpoint_event": "E190_FIRST_USABLE_PRESENT_SUBMITTED",
+    "event_completion_from_E00_us": {
+      "E00_MAIN_ENTRY": {
+        "iqr_us": 0,
+        "max_us": 0,
+        "min_us": 0,
+        "n": 20,
+        "p50_us": 0,
+        "p95_us": 0
+      },
+      "E10_EVENT_LOOP_BEGIN": {
+        "iqr_us": 7,
+        "max_us": 97,
+        "min_us": 44,
+        "n": 20,
+        "p50_us": 58,
+        "p95_us": 85
+      },
+      "E11_EVENT_LOOP_READY": {
+        "iqr_us": 680,
+        "max_us": 9335,
+        "min_us": 7036,
+        "n": 20,
+        "p50_us": 8772,
+        "p95_us": 9333
+      },
+      "E130_REQUEST_REDRAW": {
+        "iqr_us": 3348,
+        "max_us": 79256,
+        "min_us": 61061,
+        "n": 20,
+        "p50_us": 68146,
+        "p95_us": 70726
+      },
+      "E131_REDRAW_CALLBACK": {
+        "iqr_us": 3351,
+        "max_us": 79300,
+        "min_us": 61099,
+        "n": 20,
+        "p50_us": 68188,
+        "p95_us": 70770
+      },
+      "E140_GET_TEXTURE_BEGIN": {
+        "iqr_us": 3353,
+        "max_us": 79317,
+        "min_us": 61114,
+        "n": 20,
+        "p50_us": 68206,
+        "p95_us": 70788
+      },
+      "E141_GET_TEXTURE_END": {
+        "iqr_us": 3349,
+        "max_us": 79363,
+        "min_us": 61152,
+        "n": 20,
+        "p50_us": 68242,
+        "p95_us": 70822
+      },
+      "E160_PRESENT_ENCODE_BEGIN": {
+        "iqr_us": 3351,
+        "max_us": 79387,
+        "min_us": 61173,
+        "n": 20,
+        "p50_us": 68264,
+        "p95_us": 70846
+      },
+      "E161_PRESENT_ENCODE_END": {
+        "iqr_us": 3381,
+        "max_us": 80084,
+        "min_us": 61874,
+        "n": 20,
+        "p50_us": 69092,
+        "p95_us": 71570
+      },
+      "E162_PRESENT_QUEUE_SUBMIT": {
+        "iqr_us": 3405,
+        "max_us": 80602,
+        "min_us": 62368,
+        "n": 20,
+        "p50_us": 69640,
+        "p95_us": 72075
+      },
+      "E170_PRE_PRESENT_NOTIFY": {
+        "iqr_us": 3407,
+        "max_us": 80633,
+        "min_us": 62397,
+        "n": 20,
+        "p50_us": 69674,
+        "p95_us": 72106
+      },
+      "E180_PRESENT_BEGIN": {
+        "iqr_us": 3408,
+        "max_us": 80650,
+        "min_us": 62412,
+        "n": 20,
+        "p50_us": 69691,
+        "p95_us": 72123
+      },
+      "E181_PRESENT_RETURN": {
+        "iqr_us": 3412,
+        "max_us": 80703,
+        "min_us": 62466,
+        "n": 20,
+        "p50_us": 69745,
+        "p95_us": 72177
+      },
+      "E190_FIRST_USABLE_PRESENT_SUBMITTED": {
+        "iqr_us": 3415,
+        "max_us": 80723,
+        "min_us": 62494,
+        "n": 20,
+        "p50_us": 69764,
+        "p95_us": 72203
+      },
+      "E20_WINDOW_CREATE_BEGIN": {
+        "iqr_us": 680,
+        "max_us": 9369,
+        "min_us": 7066,
+        "n": 20,
+        "p50_us": 8808,
+        "p95_us": 9366
+      },
+      "E21_WINDOW_CREATE_END": {
+        "iqr_us": 820,
+        "max_us": 12231,
+        "min_us": 8812,
+        "n": 20,
+        "p50_us": 11054,
+        "p95_us": 11612
+      },
+      "E30_GPU_INSTANCE_BEGIN": {
+        "iqr_us": 819,
+        "max_us": 12276,
+        "min_us": 8834,
+        "n": 20,
+        "p50_us": 11084,
+        "p95_us": 11642
+      },
+      "E31_GPU_INSTANCE_END": {
+        "iqr_us": 3045,
+        "max_us": 55908,
+        "min_us": 37793,
+        "n": 20,
+        "p50_us": 44906,
+        "p95_us": 47375
+      },
+      "E40_SURFACE_CREATE_BEGIN": {
+        "iqr_us": 3043,
+        "max_us": 55945,
+        "min_us": 37824,
+        "n": 20,
+        "p50_us": 44940,
+        "p95_us": 47411
+      },
+      "E41_SURFACE_CREATE_END": {
+        "iqr_us": 3043,
+        "max_us": 55999,
+        "min_us": 37877,
+        "n": 20,
+        "p50_us": 44994,
+        "p95_us": 47457
+      },
+      "E50_ADAPTER_BEGIN": {
+        "iqr_us": 3042,
+        "max_us": 56017,
+        "min_us": 37893,
+        "n": 20,
+        "p50_us": 45012,
+        "p95_us": 47474
+      },
+      "E51_ADAPTER_END": {
+        "iqr_us": 3023,
+        "max_us": 72797,
+        "min_us": 54113,
+        "n": 20,
+        "p50_us": 61825,
+        "p95_us": 63704
+      },
+      "E60_DEVICE_BEGIN": {
+        "iqr_us": 3023,
+        "max_us": 72829,
+        "min_us": 54142,
+        "n": 20,
+        "p50_us": 61857,
+        "p95_us": 63738
+      },
+      "E61_DEVICE_END": {
+        "iqr_us": 3227,
+        "max_us": 75769,
+        "min_us": 56918,
+        "n": 20,
+        "p50_us": 64770,
+        "p95_us": 67327
+      },
+      "E70_SURFACE_CAPS_BEGIN": {
+        "iqr_us": 3229,
+        "max_us": 75791,
+        "min_us": 56939,
+        "n": 20,
+        "p50_us": 64792,
+        "p95_us": 67350
+      },
+      "E71_SURFACE_CAPS_END": {
+        "iqr_us": 3276,
+        "max_us": 77288,
+        "min_us": 58693,
+        "n": 20,
+        "p50_us": 66176,
+        "p95_us": 68767
+      },
+      "E72_SURFACE_CONFIG_BEGIN": {
+        "iqr_us": 3279,
+        "max_us": 77312,
+        "min_us": 58715,
+        "n": 20,
+        "p50_us": 66200,
+        "p95_us": 68792
+      },
+      "E73_SURFACE_CONFIG_END": {
+        "iqr_us": 3346,
+        "max_us": 79232,
+        "min_us": 61038,
+        "n": 20,
+        "p50_us": 68114,
+        "p95_us": 70701
+      }
+    },
+    "guest_ids": [],
+    "invalid_runs": [],
+    "n_invalid": 0,
+    "n_valid": 20,
+    "stages": {
+      "adapter": {
+        "completion_from_E00_us": {
+          "iqr_us": 3023,
+          "max_us": 72797,
+          "min_us": 54113,
+          "n": 20,
+          "p50_us": 61825,
+          "p95_us": 63704
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 689,
+          "max_us": 17351,
+          "min_us": 15856,
+          "n": 20,
+          "p50_us": 16814,
+          "p95_us": 17211
+        }
+      },
+      "asset_read": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "blit_ensure": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "device": {
+        "completion_from_E00_us": {
+          "iqr_us": 3227,
+          "max_us": 75769,
+          "min_us": 56918,
+          "n": 20,
+          "p50_us": 64770,
+          "p95_us": 67327
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 93,
+          "max_us": 3623,
+          "min_us": 2702,
+          "n": 20,
+          "p50_us": 2928,
+          "p95_us": 3554
+        }
+      },
+      "first_tick": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "gpu_instance": {
+        "completion_from_E00_us": {
+          "iqr_us": 3045,
+          "max_us": 55908,
+          "min_us": 37793,
+          "n": 20,
+          "p50_us": 44906,
+          "p95_us": 47375
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 1552,
+          "max_us": 43632,
+          "min_us": 28959,
+          "n": 20,
+          "p50_us": 33680,
+          "p95_us": 36701
+        }
+      },
+      "guest_eval": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "present_call": {
+        "completion_from_E00_us": {
+          "iqr_us": 3412,
+          "max_us": 80703,
+          "min_us": 62466,
+          "n": 20,
+          "p50_us": 69745,
+          "p95_us": 72177
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 0,
+          "max_us": 65,
+          "min_us": 51,
+          "n": 20,
+          "p50_us": 54,
+          "p95_us": 56
+        }
+      },
+      "present_encode": {
+        "completion_from_E00_us": {
+          "iqr_us": 3381,
+          "max_us": 80084,
+          "min_us": 61874,
+          "n": 20,
+          "p50_us": 69092,
+          "p95_us": 71570
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 25,
+          "max_us": 917,
+          "min_us": 668,
+          "n": 20,
+          "p50_us": 705,
+          "p95_us": 749
+        }
+      },
+      "quickjs": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "redraw_delivery": {
+        "completion_from_E00_us": {
+          "iqr_us": 3351,
+          "max_us": 79300,
+          "min_us": 61099,
+          "n": 20,
+          "p50_us": 68188,
+          "p95_us": 70770
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 1,
+          "max_us": 46,
+          "min_us": 38,
+          "n": 20,
+          "p50_us": 42,
+          "p95_us": 45
+        }
+      },
+      "render": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "renderer_acquire": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "request_to_present": {
+        "completion_from_E00_us": {
+          "iqr_us": 3353,
+          "max_us": 79317,
+          "min_us": 61114,
+          "n": 20,
+          "p50_us": 68206,
+          "p95_us": 70788
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 2,
+          "max_us": 64,
+          "min_us": 53,
+          "n": 20,
+          "p50_us": 60,
+          "p95_us": 62
+        }
+      },
+      "runtime_boot": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "surface_acquire": {
+        "completion_from_E00_us": {
+          "iqr_us": 3349,
+          "max_us": 79363,
+          "min_us": 61152,
+          "n": 20,
+          "p50_us": 68242,
+          "p95_us": 70822
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 6,
+          "max_us": 46,
+          "min_us": 30,
+          "n": 20,
+          "p50_us": 34,
+          "p95_us": 45
+        }
+      },
+      "surface_caps": {
+        "completion_from_E00_us": {
+          "iqr_us": 3276,
+          "max_us": 77288,
+          "min_us": 58693,
+          "n": 20,
+          "p50_us": 66176,
+          "p95_us": 68767
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 48,
+          "max_us": 1760,
+          "min_us": 1350,
+          "n": 20,
+          "p50_us": 1429,
+          "p95_us": 1754
+        }
+      },
+      "surface_config": {
+        "completion_from_E00_us": {
+          "iqr_us": 3346,
+          "max_us": 79232,
+          "min_us": 61038,
+          "n": 20,
+          "p50_us": 68114,
+          "p95_us": 70701
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 56,
+          "max_us": 2355,
+          "min_us": 1826,
+          "n": 20,
+          "p50_us": 1919,
+          "p95_us": 2325
+        }
+      },
+      "surface_create": {
+        "completion_from_E00_us": {
+          "iqr_us": 3043,
+          "max_us": 55999,
+          "min_us": 37877,
+          "n": 20,
+          "p50_us": 44994,
+          "p95_us": 47457
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 2,
+          "max_us": 67,
+          "min_us": 45,
+          "n": 20,
+          "p50_us": 54,
+          "p95_us": 61
+        }
+      },
+      "ui_surface": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "window_create": {
+        "completion_from_E00_us": {
+          "iqr_us": 820,
+          "max_us": 12231,
+          "min_us": 8812,
+          "n": 20,
+          "p50_us": 11054,
+          "p95_us": 11612
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 316,
+          "max_us": 3388,
+          "min_us": 1744,
+          "n": 20,
+          "p50_us": 2232,
+          "p95_us": 2605
+        }
+      }
+    },
+    "workdir": "C:\\Users\\fred1\\source\\PicoView\\evidence\\tmp\\cross-os-norm-1\\logs\\linux\\B"
+  },
+  "C": {
+    "arm": "C",
+    "benchmark_config_run0": {
+      "app": "picoview-a6-main",
+      "arm": "C-full-pocketjs",
+      "clock": "process-local Instant; origin E00_MAIN_ENTRY",
+      "desired_maximum_frame_latency": 1,
+      "force_fallback_adapter": false,
+      "force_scale": 1.0,
+      "gpu": {
+        "adapter": "AMD Radeon RX 580 2048SP (RADV POLARIS10)",
+        "adapter_backend": "Vulkan",
+        "alpha_mode": "Auto",
+        "desired_maximum_frame_latency": 1,
+        "device_type": "DiscreteGpu",
+        "present_mode": "Fifo",
+        "surface_format": "Bgra8Unorm",
+        "surface_size": [
+          720,
+          480
+        ]
+      },
+      "gpu_backend_policy": "(Backends(VULKAN), MemoryUsage)",
+      "guest": "picoview-a6-main|js_bytes=357860|js_fnv=0x506ae38d1739469b|pak_bytes=78576|pak_fnv=0x71f91c52dded33cc",
+      "host_abi": 4,
+      "logical_viewport": [
+        720,
+        480
+      ],
+      "pocket_gpu_backend_env": "VULKAN",
+      "pocketjs_sha": "e15674db1ca9179732c22e5a9a191ba21ebf3e70",
+      "pocketjs_tree": "f09cf9fa116d3fa92d64f49fec7edf1d088d059e",
+      "power_preference": "LowPower",
+      "present_mode": "Fifo",
+      "quit_after_ticks": 30,
+      "raster_density": 1,
+      "target_id": "linux-app"
+    },
+    "config_uniform": {
+      "drift": {},
+      "gpu_policy_variants": 1,
+      "uniform": true
+    },
+    "endpoint_E00_us": {
+      "iqr_us": 3200,
+      "max_us": 87842,
+      "min_us": 68105,
+      "n": 50,
+      "p50_us": 75678,
+      "p95_us": 80581
+    },
+    "endpoint_event": "E190_FIRST_USABLE_PRESENT_SUBMITTED",
+    "event_completion_from_E00_us": {
+      "E00_MAIN_ENTRY": {
+        "iqr_us": 0,
+        "max_us": 0,
+        "min_us": 0,
+        "n": 50,
+        "p50_us": 0,
+        "p95_us": 0
+      },
+      "E100_FIRST_TICK_BEGIN": {
+        "iqr_us": 2975,
+        "max_us": 83972,
+        "min_us": 64307,
+        "n": 50,
+        "p50_us": 71550,
+        "p95_us": 76311
+      },
+      "E101_GUEST_FRAME_DONE": {
+        "iqr_us": 2970,
+        "max_us": 84040,
+        "min_us": 64372,
+        "n": 50,
+        "p50_us": 71615,
+        "p95_us": 76381
+      },
+      "E102_SURFACE_TICK_DONE": {
+        "iqr_us": 2972,
+        "max_us": 84134,
+        "min_us": 64492,
+        "n": 50,
+        "p50_us": 71710,
+        "p95_us": 76481
+      },
+      "E10_EVENT_LOOP_BEGIN": {
+        "iqr_us": 16,
+        "max_us": 157,
+        "min_us": 64,
+        "n": 50,
+        "p50_us": 91,
+        "p95_us": 135
+      },
+      "E110_RENDER_BEGIN": {
+        "iqr_us": 2971,
+        "max_us": 84187,
+        "min_us": 64551,
+        "n": 50,
+        "p50_us": 71764,
+        "p95_us": 76536
+      },
+      "E111_DRAWLIST_READY": {
+        "iqr_us": 2970,
+        "max_us": 84256,
+        "min_us": 64626,
+        "n": 50,
+        "p50_us": 71835,
+        "p95_us": 76609
+      },
+      "E112_RENDER_TARGET_READY": {
+        "iqr_us": 2971,
+        "max_us": 84223,
+        "min_us": 64589,
+        "n": 50,
+        "p50_us": 71800,
+        "p95_us": 76573
+      },
+      "E113_RENDER_QUEUE_SUBMIT": {
+        "iqr_us": 2936,
+        "max_us": 85638,
+        "min_us": 66016,
+        "n": 50,
+        "p50_us": 73198,
+        "p95_us": 78023
+      },
+      "E11_EVENT_LOOP_READY": {
+        "iqr_us": 1182,
+        "max_us": 9420,
+        "min_us": 5943,
+        "n": 50,
+        "p50_us": 8202,
+        "p95_us": 8958
+      },
+      "E120_WAKE_SEND_BEGIN": {
+        "iqr_us": 2936,
+        "max_us": 85665,
+        "min_us": 66044,
+        "n": 50,
+        "p50_us": 73224,
+        "p95_us": 78054
+      },
+      "E121_WAKE_SEND_END": {
+        "iqr_us": 2936,
+        "max_us": 85688,
+        "min_us": 66066,
+        "n": 50,
+        "p50_us": 73248,
+        "p95_us": 78075
+      },
+      "E122_WAKE_RECEIVED": {
+        "iqr_us": 2932,
+        "max_us": 85702,
+        "min_us": 66106,
+        "n": 50,
+        "p50_us": 73262,
+        "p95_us": 78092
+      },
+      "E130_REQUEST_REDRAW": {
+        "iqr_us": 2940,
+        "max_us": 85740,
+        "min_us": 66137,
+        "n": 50,
+        "p50_us": 73298,
+        "p95_us": 78128
+      },
+      "E131_REDRAW_CALLBACK": {
+        "iqr_us": 2982,
+        "max_us": 82392,
+        "min_us": 62866,
+        "n": 50,
+        "p50_us": 70108,
+        "p95_us": 74836
+      },
+      "E140_GET_TEXTURE_BEGIN": {
+        "iqr_us": 2939,
+        "max_us": 85764,
+        "min_us": 66161,
+        "n": 50,
+        "p50_us": 73325,
+        "p95_us": 78154
+      },
+      "E141_GET_TEXTURE_END": {
+        "iqr_us": 2933,
+        "max_us": 85805,
+        "min_us": 66202,
+        "n": 50,
+        "p50_us": 73368,
+        "p95_us": 78197
+      },
+      "E150_BLIT_BEGIN": {
+        "iqr_us": 2931,
+        "max_us": 85828,
+        "min_us": 66225,
+        "n": 50,
+        "p50_us": 73394,
+        "p95_us": 78223
+      },
+      "E151_BLIT_END": {
+        "iqr_us": 3008,
+        "max_us": 86318,
+        "min_us": 66672,
+        "n": 50,
+        "p50_us": 73890,
+        "p95_us": 78753
+      },
+      "E160_PRESENT_ENCODE_BEGIN": {
+        "iqr_us": 3021,
+        "max_us": 86354,
+        "min_us": 66706,
+        "n": 50,
+        "p50_us": 73928,
+        "p95_us": 78791
+      },
+      "E161_PRESENT_ENCODE_END": {
+        "iqr_us": 3136,
+        "max_us": 87213,
+        "min_us": 67524,
+        "n": 50,
+        "p50_us": 75048,
+        "p95_us": 79886
+      },
+      "E162_PRESENT_QUEUE_SUBMIT": {
+        "iqr_us": 3180,
+        "max_us": 87693,
+        "min_us": 67968,
+        "n": 50,
+        "p50_us": 75539,
+        "p95_us": 80414
+      },
+      "E170_PRE_PRESENT_NOTIFY": {
+        "iqr_us": 3186,
+        "max_us": 87736,
+        "min_us": 68002,
+        "n": 50,
+        "p50_us": 75574,
+        "p95_us": 80459
+      },
+      "E180_PRESENT_BEGIN": {
+        "iqr_us": 3192,
+        "max_us": 87758,
+        "min_us": 68024,
+        "n": 50,
+        "p50_us": 75595,
+        "p95_us": 80483
+      },
+      "E181_PRESENT_RETURN": {
+        "iqr_us": 3197,
+        "max_us": 87817,
+        "min_us": 68080,
+        "n": 50,
+        "p50_us": 75654,
+        "p95_us": 80553
+      },
+      "E190_FIRST_USABLE_PRESENT_SUBMITTED": {
+        "iqr_us": 3200,
+        "max_us": 87842,
+        "min_us": 68105,
+        "n": 50,
+        "p50_us": 75678,
+        "p95_us": 80581
+      },
+      "E20_WINDOW_CREATE_BEGIN": {
+        "iqr_us": 1178,
+        "max_us": 9458,
+        "min_us": 5979,
+        "n": 50,
+        "p50_us": 8236,
+        "p95_us": 8994
+      },
+      "E21_WINDOW_CREATE_END": {
+        "iqr_us": 1332,
+        "max_us": 11992,
+        "min_us": 8107,
+        "n": 50,
+        "p50_us": 10455,
+        "p95_us": 11613
+      },
+      "E30_GPU_INSTANCE_BEGIN": {
+        "iqr_us": 1230,
+        "max_us": 9496,
+        "min_us": 6034,
+        "n": 50,
+        "p50_us": 8294,
+        "p95_us": 9144
+      },
+      "E31_GPU_INSTANCE_END": {
+        "iqr_us": 3113,
+        "max_us": 54713,
+        "min_us": 37816,
+        "n": 50,
+        "p50_us": 43174,
+        "p95_us": 46892
+      },
+      "E40_SURFACE_CREATE_BEGIN": {
+        "iqr_us": 3116,
+        "max_us": 54788,
+        "min_us": 37884,
+        "n": 50,
+        "p50_us": 43246,
+        "p95_us": 46990
+      },
+      "E41_SURFACE_CREATE_END": {
+        "iqr_us": 3086,
+        "max_us": 54902,
+        "min_us": 37963,
+        "n": 50,
+        "p50_us": 43376,
+        "p95_us": 47092
+      },
+      "E50_ADAPTER_BEGIN": {
+        "iqr_us": 3059,
+        "max_us": 54936,
+        "min_us": 37987,
+        "n": 50,
+        "p50_us": 43414,
+        "p95_us": 47129
+      },
+      "E51_ADAPTER_END": {
+        "iqr_us": 3148,
+        "max_us": 74540,
+        "min_us": 55807,
+        "n": 50,
+        "p50_us": 62322,
+        "p95_us": 66618
+      },
+      "E60_DEVICE_BEGIN": {
+        "iqr_us": 3150,
+        "max_us": 74603,
+        "min_us": 55861,
+        "n": 50,
+        "p50_us": 62378,
+        "p95_us": 66677
+      },
+      "E61_DEVICE_END": {
+        "iqr_us": 2850,
+        "max_us": 78303,
+        "min_us": 59258,
+        "n": 50,
+        "p50_us": 66212,
+        "p95_us": 70731
+      },
+      "E70_SURFACE_CAPS_BEGIN": {
+        "iqr_us": 2850,
+        "max_us": 78332,
+        "min_us": 59285,
+        "n": 50,
+        "p50_us": 66240,
+        "p95_us": 70762
+      },
+      "E71_SURFACE_CAPS_END": {
+        "iqr_us": 2926,
+        "max_us": 80070,
+        "min_us": 60759,
+        "n": 50,
+        "p50_us": 67842,
+        "p95_us": 72485
+      },
+      "E72_SURFACE_CONFIG_BEGIN": {
+        "iqr_us": 2926,
+        "max_us": 80100,
+        "min_us": 60787,
+        "n": 50,
+        "p50_us": 67876,
+        "p95_us": 72517
+      },
+      "E73_SURFACE_CONFIG_END": {
+        "iqr_us": 2981,
+        "max_us": 82313,
+        "min_us": 62792,
+        "n": 50,
+        "p50_us": 70027,
+        "p95_us": 74752
+      },
+      "E80_RUNTIME_THREAD_BEGIN": {
+        "iqr_us": 1464,
+        "max_us": 15719,
+        "min_us": 9939,
+        "n": 50,
+        "p50_us": 13790,
+        "p95_us": 15114
+      },
+      "E81_ASSET_READ_BEGIN": {
+        "iqr_us": 1440,
+        "max_us": 15786,
+        "min_us": 9969,
+        "n": 50,
+        "p50_us": 13866,
+        "p95_us": 15167
+      },
+      "E82_ASSET_READ_END": {
+        "iqr_us": 1498,
+        "max_us": 17921,
+        "min_us": 11114,
+        "n": 50,
+        "p50_us": 15020,
+        "p95_us": 16667
+      },
+      "E83_UI_SURFACE_BEGIN": {
+        "iqr_us": 1498,
+        "max_us": 17948,
+        "min_us": 11141,
+        "n": 50,
+        "p50_us": 15047,
+        "p95_us": 16700
+      },
+      "E84_UI_SURFACE_END": {
+        "iqr_us": 1502,
+        "max_us": 18004,
+        "min_us": 11203,
+        "n": 50,
+        "p50_us": 15106,
+        "p95_us": 16763
+      },
+      "E85_QUICKJS_BEGIN": {
+        "iqr_us": 1496,
+        "max_us": 18154,
+        "min_us": 11351,
+        "n": 50,
+        "p50_us": 15272,
+        "p95_us": 16924
+      },
+      "E86_QUICKJS_END": {
+        "iqr_us": 1490,
+        "max_us": 18671,
+        "min_us": 11856,
+        "n": 50,
+        "p50_us": 15774,
+        "p95_us": 17447
+      },
+      "E87_GUEST_EVAL_BEGIN": {
+        "iqr_us": 1394,
+        "max_us": 18950,
+        "min_us": 12416,
+        "n": 50,
+        "p50_us": 16536,
+        "p95_us": 18731
+      },
+      "E88_GUEST_EVAL_END": {
+        "iqr_us": 1764,
+        "max_us": 51688,
+        "min_us": 43099,
+        "n": 50,
+        "p50_us": 47780,
+        "p95_us": 49947
+      },
+      "E89_RUNTIME_BOOT_DONE": {
+        "iqr_us": 1759,
+        "max_us": 51770,
+        "min_us": 43172,
+        "n": 50,
+        "p50_us": 47857,
+        "p95_us": 50027
+      },
+      "E90_RENDERER_BEGIN": {
+        "iqr_us": 1764,
+        "max_us": 51790,
+        "min_us": 43192,
+        "n": 50,
+        "p50_us": 47877,
+        "p95_us": 50046
+      },
+      "E91_RENDERER_READY": {
+        "iqr_us": 2976,
+        "max_us": 83847,
+        "min_us": 64190,
+        "n": 50,
+        "p50_us": 71432,
+        "p95_us": 76186
+      }
+    },
+    "guest_ids": [
+      "picoview-a6-main|js_bytes=357860|js_fnv=0x506ae38d1739469b|pak_bytes=78576|pak_fnv=0x71f91c52dded33cc"
+    ],
+    "invalid_runs": [],
+    "n_invalid": 0,
+    "n_valid": 50,
+    "stages": {
+      "adapter": {
+        "completion_from_E00_us": {
+          "iqr_us": 3148,
+          "max_us": 74540,
+          "min_us": 55807,
+          "n": 50,
+          "p50_us": 62322,
+          "p95_us": 66618
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 718,
+          "max_us": 21012,
+          "min_us": 17284,
+          "n": 50,
+          "p50_us": 18954,
+          "p95_us": 19653
+        }
+      },
+      "asset_read": {
+        "completion_from_E00_us": {
+          "iqr_us": 1498,
+          "max_us": 17921,
+          "min_us": 11114,
+          "n": 50,
+          "p50_us": 15020,
+          "p95_us": 16667
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 340,
+          "max_us": 2135,
+          "min_us": 863,
+          "n": 50,
+          "p50_us": 1273,
+          "p95_us": 1770
+        }
+      },
+      "blit_ensure": {
+        "completion_from_E00_us": {
+          "iqr_us": 3008,
+          "max_us": 86318,
+          "min_us": 66672,
+          "n": 50,
+          "p50_us": 73890,
+          "p95_us": 78753
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 30,
+          "max_us": 632,
+          "min_us": 373,
+          "n": 50,
+          "p50_us": 482,
+          "p95_us": 554
+        }
+      },
+      "device": {
+        "completion_from_E00_us": {
+          "iqr_us": 2850,
+          "max_us": 78303,
+          "min_us": 59258,
+          "n": 50,
+          "p50_us": 66212,
+          "p95_us": 70731
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 186,
+          "max_us": 4543,
+          "min_us": 2892,
+          "n": 50,
+          "p50_us": 3774,
+          "p95_us": 4112
+        }
+      },
+      "first_tick": {
+        "completion_from_E00_us": {
+          "iqr_us": 2972,
+          "max_us": 84134,
+          "min_us": 64492,
+          "n": 50,
+          "p50_us": 71710,
+          "p95_us": 76481
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 11,
+          "max_us": 242,
+          "min_us": 150,
+          "n": 50,
+          "p50_us": 164,
+          "p95_us": 203
+        }
+      },
+      "gpu_instance": {
+        "completion_from_E00_us": {
+          "iqr_us": 3113,
+          "max_us": 54713,
+          "min_us": 37816,
+          "n": 50,
+          "p50_us": 43174,
+          "p95_us": 46892
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 2769,
+          "max_us": 46858,
+          "min_us": 31507,
+          "n": 50,
+          "p50_us": 34930,
+          "p95_us": 38044
+        }
+      },
+      "guest_eval": {
+        "completion_from_E00_us": {
+          "iqr_us": 1764,
+          "max_us": 51688,
+          "min_us": 43099,
+          "n": 50,
+          "p50_us": 47780,
+          "p95_us": 49947
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 510,
+          "max_us": 32738,
+          "min_us": 28304,
+          "n": 50,
+          "p50_us": 31236,
+          "p95_us": 31970
+        }
+      },
+      "present_call": {
+        "completion_from_E00_us": {
+          "iqr_us": 3197,
+          "max_us": 87817,
+          "min_us": 68080,
+          "n": 50,
+          "p50_us": 75654,
+          "p95_us": 80553
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 7,
+          "max_us": 76,
+          "min_us": 47,
+          "n": 50,
+          "p50_us": 60,
+          "p95_us": 70
+        }
+      },
+      "present_encode": {
+        "completion_from_E00_us": {
+          "iqr_us": 3136,
+          "max_us": 87213,
+          "min_us": 67524,
+          "n": 50,
+          "p50_us": 75048,
+          "p95_us": 79886
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 54,
+          "max_us": 1386,
+          "min_us": 690,
+          "n": 50,
+          "p50_us": 890,
+          "p95_us": 1039
+        }
+      },
+      "quickjs": {
+        "completion_from_E00_us": {
+          "iqr_us": 1490,
+          "max_us": 18671,
+          "min_us": 11856,
+          "n": 50,
+          "p50_us": 15774,
+          "p95_us": 17447
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 23,
+          "max_us": 549,
+          "min_us": 382,
+          "n": 50,
+          "p50_us": 505,
+          "p95_us": 539
+        }
+      },
+      "redraw_delivery": {
+        "completion_from_E00_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        },
+        "excluded_end_before_begin": 50,
+        "own_us": {
+          "iqr_us": null,
+          "max_us": null,
+          "min_us": null,
+          "n": 0,
+          "p50_us": null,
+          "p95_us": null
+        }
+      },
+      "render": {
+        "completion_from_E00_us": {
+          "iqr_us": 2936,
+          "max_us": 85638,
+          "min_us": 66016,
+          "n": 50,
+          "p50_us": 73198,
+          "p95_us": 78023
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 80,
+          "max_us": 2055,
+          "min_us": 1372,
+          "n": 50,
+          "p50_us": 1466,
+          "p95_us": 1848
+        }
+      },
+      "renderer_acquire": {
+        "completion_from_E00_us": {
+          "iqr_us": 2976,
+          "max_us": 83847,
+          "min_us": 64190,
+          "n": 50,
+          "p50_us": 71432,
+          "p95_us": 76186
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 2542,
+          "max_us": 33524,
+          "min_us": 20056,
+          "n": 50,
+          "p50_us": 23876,
+          "p95_us": 27387
+        }
+      },
+      "request_to_present": {
+        "completion_from_E00_us": {
+          "iqr_us": 2939,
+          "max_us": 85764,
+          "min_us": 66161,
+          "n": 50,
+          "p50_us": 73325,
+          "p95_us": 78154
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 1,
+          "max_us": 45,
+          "min_us": 18,
+          "n": 50,
+          "p50_us": 25,
+          "p95_us": 33
+        }
+      },
+      "runtime_boot": {
+        "completion_from_E00_us": {
+          "iqr_us": 1759,
+          "max_us": 51770,
+          "min_us": 43172,
+          "n": 50,
+          "p50_us": 47857,
+          "p95_us": 50027
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 865,
+          "max_us": 36989,
+          "min_us": 31012,
+          "n": 50,
+          "p50_us": 34068,
+          "p95_us": 35338
+        }
+      },
+      "surface_acquire": {
+        "completion_from_E00_us": {
+          "iqr_us": 2933,
+          "max_us": 85805,
+          "min_us": 66202,
+          "n": 50,
+          "p50_us": 73368,
+          "p95_us": 78197
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 2,
+          "max_us": 76,
+          "min_us": 33,
+          "n": 50,
+          "p50_us": 42,
+          "p95_us": 51
+        }
+      },
+      "surface_caps": {
+        "completion_from_E00_us": {
+          "iqr_us": 2926,
+          "max_us": 80070,
+          "min_us": 60759,
+          "n": 50,
+          "p50_us": 67842,
+          "p95_us": 72485
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 113,
+          "max_us": 1959,
+          "min_us": 1413,
+          "n": 50,
+          "p50_us": 1635,
+          "p95_us": 1832
+        }
+      },
+      "surface_config": {
+        "completion_from_E00_us": {
+          "iqr_us": 2981,
+          "max_us": 82313,
+          "min_us": 62792,
+          "n": 50,
+          "p50_us": 70027,
+          "p95_us": 74752
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 88,
+          "max_us": 2347,
+          "min_us": 1845,
+          "n": 50,
+          "p50_us": 2144,
+          "p95_us": 2250
+        }
+      },
+      "surface_create": {
+        "completion_from_E00_us": {
+          "iqr_us": 3086,
+          "max_us": 54902,
+          "min_us": 37963,
+          "n": 50,
+          "p50_us": 43376,
+          "p95_us": 47092
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 62,
+          "max_us": 246,
+          "min_us": 76,
+          "n": 50,
+          "p50_us": 106,
+          "p95_us": 172
+        }
+      },
+      "ui_surface": {
+        "completion_from_E00_us": {
+          "iqr_us": 1502,
+          "max_us": 18004,
+          "min_us": 11203,
+          "n": 50,
+          "p50_us": 15106,
+          "p95_us": 16763
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 6,
+          "max_us": 68,
+          "min_us": 43,
+          "n": 50,
+          "p50_us": 60,
+          "p95_us": 68
+        }
+      },
+      "window_create": {
+        "completion_from_E00_us": {
+          "iqr_us": 1332,
+          "max_us": 11992,
+          "min_us": 8107,
+          "n": 50,
+          "p50_us": 10455,
+          "p95_us": 11613
+        },
+        "excluded_end_before_begin": 0,
+        "own_us": {
+          "iqr_us": 333,
+          "max_us": 2741,
+          "min_us": 2040,
+          "n": 50,
+          "p50_us": 2454,
+          "p95_us": 2712
+        }
+      }
+    },
+    "workdir": "C:\\Users\\fred1\\source\\PicoView\\evidence\\tmp\\cross-os-norm-1\\logs\\linux\\C"
+  },
+  "experiment": "CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1",
+  "frozen_at_utc": "2026-09-13T15:55:00Z",
+  "platform": "linux",
+  "pocketjs_sha": "e15674db1ca9179732c22e5a9a191ba21ebf3e70",
+  "pocketjs_tree": "f09cf9fa116d3fa92d64f49fec7edf1d088d059e",
+  "rederivation": "REVIEW-1 MAJOR fix: stage-definition correction (redraw_delivery inverted-once semantics excluded; request_to_present added) + per-run config uniformity audit. Raw logs unchanged; endpoint headline unchanged; correction documented in RUNLOG.",
+  "rederived_at_utc": "2026-09-13T16:30:00Z"
+}
