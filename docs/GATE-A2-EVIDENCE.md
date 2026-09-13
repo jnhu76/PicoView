@@ -151,7 +151,7 @@ Three independent fresh-context reviews of this document and the campaign
 artifacts — architecture/scope (**CONFIRM**), benchmark/evidence integrity
 (**CONFIRM**), red-team budget gaming (**CONFIRM**, zero material gaming
 found; two SOFTENING completeness gaps) — with dispositions applied in
-commit `<>` of this branch: all MiB conversions recomputed exactly from
+commit `8a8a493` of this branch: all MiB conversions recomputed exactly from
 raw bytes (§2 table; payload 12.22 MiB; five-process 711.99 MiB private);
 transient row relabeled as carried/derivative evidence with the §0
 session-discipline exception disclosed; window-mode row labeled exploratory
