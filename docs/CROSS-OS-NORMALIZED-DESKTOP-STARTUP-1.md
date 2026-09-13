@@ -3,9 +3,26 @@
 One normalized measurement protocol, Linux first (reference/control), then
 Windows (primary investigation target), to locate which desktop-startup
 stages are materially inflated on Windows. This is NOT an optimization
-campaign. Raw evidence: branch
-`archive/cross-os-normalized-desktop-startup-1-full` (RUNLOG.md is the
-authoritative process log).
+campaign. This document is the compact historical record of a CLOSED
+experiment; the complete raw evidence is packaged as one deterministic
+archive in `docs/cross-os-normalized-desktop-startup-1/raw-evidence.tar.gz`
+(sha256 manifest alongside; see EVIDENCE RETENTION), with the original full
+archive branch retained as Git provenance (RUNLOG.md is the authoritative
+process log).
+
+## FROZEN HISTORICAL VERDICT
+
+**VERDICT: INCONCLUSIVE** (a fixed allowed verdict of the experiment
+protocol).
+
+- Linux normalized reference: COLLECTED / FROZEN / REVIEWED
+- Windows normalized comparison arm: NOT COMPLETED
+- Cross-OS differential: NOT EXECUTABLE
+- Windows root cause: NOT DETERMINED BY THIS EXPERIMENT
+- Production optimization: NOT AUTHORIZED
+- Option 1: NOT AUTHORIZED FROM THIS EXPERIMENT
+
+INCONCLUSIVE is not FAIL, and it is not evidence that Windows is slower.
 
 ## SOURCE IDENTITY
 
@@ -70,9 +87,14 @@ stopped (pre-existing). One quiet window passed (ambient P95 15%) and one
 early observation failed (P95 53%) — the failed window is recorded as
 INVALID_ENVIRONMENT.
 
-**The Windows normalized arm was then BLOCKED by a system-wide AMD Windows
-Vulkan driver wedge** (see WINDOWS A/B/C below). No Windows headline
-numbers exist.
+**The Windows normalized arm was then BLOCKED by a system-wide Windows
+Vulkan surface-path failure** — every Vulkan process on the machine,
+including tooling unrelated to PicoView/PocketJS, failed at the same WSI
+surface step (see WINDOWS A/B/C below). No Windows headline numbers exist.
+The evidence proves the failure is not PicoView/PocketJS-specific; it does
+NOT uniquely identify the failing component (AMD ICD, Vulkan loader,
+implicit layer, WSI, driver userspace state, or another Windows Vulkan
+surface-path component).
 
 ## LINUX A/B/C (n=20/20/50, all samples valid)
 
@@ -89,23 +111,33 @@ display photon latency).
 
 ## WINDOWS A/B/C
 
-**NOT COLLECTED — BLOCKED.** Sequence of evidence (all retained in the
-archive branch):
+- **Arm A (winit-only; no Vulkan dependency): NOT COLLECTED.** The first
+  attempt used a hidden-window harness and also hit a runner argument bug;
+  after both were corrected, the collection orchestration gated the entire
+  Windows run behind a Vulkan verification step, so A was never
+  independently collected.
+- **Arms B/C (normalized wgpu policy = Vulkan): NOT COLLECTED / BLOCKED BY
+  THE WINDOWS VULKAN SURFACE-PATH FAILURE.** Evidence sequence (all
+  retained in the raw-evidence bundle):
 
-1. First batch attempt used hidden windows (`Start-Process -WindowStyle
-   Hidden`): all 50 C samples failed GPU init — wgpu/Vulkan rejects a
-   hidden-HWND surface, and hidden windows suppress RedrawRequested.
-   Archived as `logs/win/C-invalid-hidden/` (INVALID_ENVIRONMENT;
-   methodology artifact).
-2. With visible windows, EVERY Vulkan process — including `vulkaninfo`
-   itself — began failing `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`
-   with ERROR_UNKNOWN (system-wide, tool-independent). The DX12 backend
-   of the SAME binary works. Win+Ctrl+Shift+B driver reset: no effect.
-   Windows Event Log: no display/TDR events (userspace driver-state
-   wedge). AMD service restart requires admin (denied).
-3. 15 spaced recovery probes over 45 minutes: no recovery. Machine reboot
-   / driver reinstall is an operator action (the machine is actively
-   used; other agent sessions were live).
+  1. First C batch attempt used hidden windows (`Start-Process -WindowStyle
+     Hidden`): all 50 C samples failed GPU init. On this Windows host /
+     winit / wgpu / Vulkan measurement path, the hidden-window harness
+     failed to produce a valid benchmark surface and suppressed useful
+     redraw behavior, so hidden launch was invalid for this benchmark.
+     Archived as `logs/win/C-invalid-hidden/` (INVALID_ENVIRONMENT;
+     methodology artifact).
+  2. With visible windows, EVERY Vulkan process — including `vulkaninfo`
+     itself — failed `vkGetPhysicalDeviceSurfaceCapabilitiesKHR` with
+     ERROR_UNKNOWN (system-wide, tool-independent). The DX12 backend of
+     the SAME binary works. Win+Ctrl+Shift+B driver reset: no effect.
+     Windows Event Log: no display/TDR events (rules out a kernel
+     TDR-class event but does not localize the failing component). AMD
+     service restart requires admin (denied).
+  3. 15 spaced recovery probes over 45 minutes: no recovery, re-verified
+     ~1 h after onset (`logs/win/wedge-evidence/`). Machine reboot /
+     driver reinstall is an operator action (the machine is actively
+     used; other agent sessions were live).
 
 ## THREAD DAG (Linux representative sample)
 
@@ -168,63 +200,111 @@ ANOMALY_LOCATED_ROOT_CAUSE_NOT_PROVEN is not reached either — with no
 Windows arm there is no anomalous interval to investigate. The only causal
 statements this experiment licenses are about its own tooling:
 
-- hidden windows invalidate wgpu/Vulkan measurement on Windows
-  (mechanism observed, 50/50 failures, reversal by un-hiding was blocked
-  by the unrelated driver wedge — intervention standard not met);
-- the AMD Windows driver wedge is machine state, not PicoView/PocketJS
-  behavior (`vulkaninfo` fails identically; DX12 in the same binary works).
+- on this Windows host / winit / wgpu / Vulkan measurement path, the
+  hidden-window harness failed to produce a valid benchmark surface and
+  suppressed useful redraw behavior (50/50 failures; the un-hide reversal
+  could not be exercised because collection was then blocked by the
+  unrelated Vulkan surface-path failure — intervention standard not met),
+  so hidden launch was invalid for THIS benchmark; this does not
+  generalize to all hidden-HWND Vulkan usage;
+- the Windows Vulkan surface-path failure is machine/host state, not
+  PicoView/PocketJS behavior (`vulkaninfo` fails identically; DX12 in the
+  same binary works). Its exact cause is NOT DETERMINED BY THIS
+  EXPERIMENT: the evidence does not distinguish AMD ICD, Vulkan loader,
+  implicit layer, WSI, driver userspace state, or another Windows Vulkan
+  surface-path component.
 
 No production code was optimized anywhere in this campaign.
 
 ## LIMITATIONS
 
 1. Windows arm missing: the cross-OS comparison is the point of the
-   experiment and remains undone until the driver wedge is cleared
-   (operator reboot or AMD driver reinstall/re-roll) and the Windows arm
-   is rerun with THIS frozen protocol (scripts in the archive branch; the
-   whole pipeline is one command per arm). The wedge was re-verified as
-   still present ~1 h after onset (`logs/win/wedge-evidence/`).
+   experiment and was never produced. The Vulkan surface-path failure was
+   re-verified as still present ~1 h after onset
+   (`logs/win/wedge-evidence/`). A recovery (operator reboot or AMD
+   driver reinstall/re-roll) plus a rerun under THIS frozen protocol
+   (scripts in the raw-evidence bundle; the whole pipeline is one command
+   per arm) remains possible in principle, but it is NOT part of this
+   closed experiment: future work lives in a separate issue/report and
+   must not modify this document with future findings.
 2. Different hardware across hosts (Xeon E5-2666 v3 + RX 580 dGPU RADV vs
    Ryzen 5800H iGPU): absolute ms differences would be DESCRIPTIVE even
    with data; only stage-shape comparison is meaningful.
-3. Guest pak glyph-density asymmetry (@2x vs @1x, +226 KB) is per-target
-   official artifact content; any future `asset_read` / `runtime_boot`
-   attribution must not credit the OS alone.
+3. Guest pak glyph-density asymmetry is per-target official artifact
+   content: the Windows-target PAK contains target-specific @2x baked
+   glyph content; the Linux PAK contains @1x content (+226 KB). Any
+   future `asset_read` / `runtime_boot` comparison would therefore be
+   target-artifact-confounded and must not credit the OS alone. This did
+   not affect the verdict because no Windows headline data were collected.
 4. Windows AV (QQPCRTP) is a standing environment factor on the target
    machine.
 5. Reviewer-2 runner minors: Windows samples have no `timeout` wrapper
    (in-process safety exits cover this), and the Windows A arm follows a C
-   verification sample (warm-up asymmetry, ≤1 sample at n=20).
+   verification sample in the collector design (warm-up asymmetry, ≤1
+   sample at n=20) — moot, since arm A was never collected.
 6. Ambient CPU gates use the declared derived threshold P95<20% (the
    suggested 5% is not naturally satisfiable on the Windows host); the
    same threshold was applied to Linux.
 
-## EVIDENCE RETENTION
+## EVIDENCE RETENTION (three layers)
 
-- FULL ARCHIVE: branch `archive/cross-os-normalized-desktop-startup-1-full`
-  (commit b8e6f1d) — 239 files, ~1.7 MB: all per-run NORMTRACE logs (Linux
-  A/B/C; Windows invalid-hidden + verify), frozen summaries, machine
-  states, DAG dump, runner/parser scripts, guest bundles + hashes,
-  vulkaninfo/probe record, RUNLOG.md.
-- SLIM (this branch): `docs/CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1.md`,
-  `docs/cross-os-normalized-desktop-startup-1/{stages-summary.csv,
-  source-identity.md}`. The shared parser lives in the archive branch
-  (`parse_norm.py`).
-- Historical reports untouched: #40/#41, GATE-A, GATE-A2. PR #42 remains
-  DRAFT; this report does not merge anything.
+1. MAIN / MERGEABLE RECORD (this branch):
+   - this report;
+   - `docs/cross-os-normalized-desktop-startup-1/source-identity.md`;
+   - `docs/cross-os-normalized-desktop-startup-1/stages-summary.csv`;
+   - `docs/cross-os-normalized-desktop-startup-1/raw-evidence.tar.gz` —
+     the COMPLETE raw evidence, i.e. all 230 files of the
+     experiment-evidence subtree (per-run NORMTRACE logs, frozen
+     summaries, machine states, DAG dump, runner/parser/audit scripts,
+     guest bundles, Windows wedge evidence, RUNLOG.md), packaged as ONE
+     deterministic archive (sorted paths, uid/gid 0, empty uname/gname,
+     mtime 0, gzip mtime 0); raw size 1,263,186 bytes, compressed
+     175,428 bytes;
+   - `docs/cross-os-normalized-desktop-startup-1/raw-evidence.sha256`
+     (sha256 `d4268d27ddb205f6e57dfd7ab84ffcb02f85d0a4735e70093bcf2e712db303f2`);
+   - `docs/cross-os-normalized-desktop-startup-1/raw-evidence-contents.txt`
+     (sorted archive-relative path list, 230 entries).
+
+   After this PR merges, the repository alone contains enough compressed
+   evidence to reconstruct the historical record; host-side retention is
+   not required for reproducibility.
+2. ORIGINAL FULL ARCHIVE BRANCH (Git provenance):
+   `archive/cross-os-normalized-desktop-startup-1-full` @
+   `44319343fe956b1c371adab9149b3cffec77b7f5` — contains the identical
+   230-file evidence subtree (verified byte-for-byte at packaging) and is
+   retained untouched; it is never rewritten or force-pushed.
+3. HOST-SIDE REPLICA (optional): `evidence/tmp/cross-os-norm-1/` on the
+   measurement host — an additional replica only, not part of the record.
+
+Verification recorded at packaging: DETERMINISTIC_ARCHIVE PASS (two
+independent builds produced identical sha256); ROUNDTRIP_BYTE_VERIFICATION
+PASS (230/230 files byte-equal against the archive branch @ the SHA above;
+no path escapes; archive metadata normalized); SECRET AUDIT PASS (no
+credentials, private keys, or token material in the packaged inputs).
 
 ## DISPOSITION
+
+CROSS-OS CAMPAIGN STATUS: **CLOSED_AS_INCONCLUSIVE** (Windows normalized
+arm incomplete). Linux is HISTORICAL REFERENCE ONLY: no further cross-OS
+causal attribution is authorized from this experiment.
 
 - Linux normalized reference: DELIVERED, frozen, and adversarially
   reviewed. Reviews: Reviewer-1 (clock/measurement) REVISE → fixed
   (stage-definition re-derivation, recorded); Reviewer-2 (cross-platform
   equivalence) PASS; Reviewer-3 (causality) REVISE → fixed (evidence
   captures completed; wording corrections; CSV concern was a stale read —
-  verified current). Full review trail: RUNLOG.md in the archive branch.
-- Windows normalized arm: BLOCKED by machine/driver state, with
-  executable evidence and a precise recovery path.
+  verified current). Full review trail: RUNLOG.md in the raw-evidence
+  bundle / archive branch.
+- Windows normalized arm: NOT COLLECTED (arm A never independently
+  collected; arms B/C blocked by the Windows Vulkan surface-path
+  failure), with executable evidence and a documented recovery path.
 - Cross-OS verdict: **INCONCLUSIVE** (one of the allowed verdicts; no
   stage anomaly can be located without the Windows arm).
 - Not authorized from this experiment: any production optimization, any
   suspect-stage claim about Windows, any merge of PR #42 or of this
   report's PR.
+- Future work: a separate Windows-only startup call-path audit (e.g.
+  WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1) in its own issue/report.
+  THIS document is the historical record of the closed cross-OS campaign
+  and is immutable after merge except for factual errata; future Windows
+  findings must NOT be folded into it.
