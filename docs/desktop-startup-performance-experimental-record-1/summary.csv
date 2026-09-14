@@ -1,0 +1,65 @@
+campaign,host,backend,arm,metric,measurement_class,n,p50_ms,p95_ms,delta_ms,authority,notes
+linux-control,linux-xeon-e5-2666v3-rx580,vulkan,winit-only,endpoint_spawn_to_READY,headline_clean,20,11,12,,LINUX-DESKTOP-STARTUP-CONTROL-1,Wayland bufferless; nearest-rank
+linux-control,linux-xeon-e5-2666v3-rx580,vulkan,winit+wgpu,endpoint_spawn_to_READY,headline_clean,20,107,112,,LINUX-DESKTOP-STARTUP-CONTROL-1,serial instance+adapter+device+surface+first present
+linux-control,linux-xeon-e5-2666v3-rx580,vulkan,C-full-pocketjs,endpoint_spawn_to_READY,headline_clean,55,127,141,,LINUX-DESKTOP-STARTUP-CONTROL-1,gate batch B verified quiescent
+linux-control,linux-xeon-e5-2666v3-rx580,vulkan,C-full-pocketjs,endpoint_spawn_to_READY,headline_clean,50,123,141,,LINUX-DESKTOP-STARTUP-CONTROL-1,gate batch C post-oracle clean rebuild
+cross-os-normalized,linux-xeon-e5-2666v3-rx580,vulkan,A-winit-only,endpoint_E00_to_first_redraw,headline_clean,20,9.968,11.412,,CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1,frozen protocol; linear interpolation on us
+cross-os-normalized,linux-xeon-e5-2666v3-rx580,vulkan,B-winit+wgpu,endpoint_E00_to_E190,headline_clean,20,69.764,72.203,,CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1,min 62.494 max 80.723 IQR 3.415
+cross-os-normalized,linux-xeon-e5-2666v3-rx580,vulkan,C-full-pocketjs,endpoint_E00_to_E190,headline_clean,50,75.678,80.581,,CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1,min 68.105 max 87.842 IQR 3.200
+cross-os-normalized,windows-ryzen7-5800h-igpu,vulkan-normalized,windows-arms,not_collected,not_collected,0,,,,CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1,"arm A never independently collected; B/C blocked by system-wide Vulkan surface-path failure; verdict INCONCLUSIVE"
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,A-winit-only,endpoint_E00_to_E199,headline_clean,20,132.112,144.654,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,min 121.554 max 270.823
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,B-winit+wgpu,endpoint_E00_to_E190,headline_clean,20,560.916,598.283,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,B-A not additive
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,endpoint_E00_to_E190,headline_clean,50,585.813,600.554,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,endpoint = first usable present submitted proxy
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,A-winit-only,stage_window_create_E20_E21,headline_clean,20,68.554,70.648,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,arm A own duration
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,stage_window_create_E20_E21,headline_clean,50,73.806,78.75,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,min 68.397 max 81.834
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,stage_adapter_E50_E51,headline_clean,50,338.002,351.527,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,dominant stage 58% of endpoint
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,stage_device_E60_E61,headline_clean,50,40.156,41.63,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,stage_runtime_boot,headline_clean,50,52.508,55.528,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,overlapped; guest_eval n=48 of 50
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,stage_gpu_instance,headline_clean,50,42.721,46.857,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,side thread overlapped
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,stage_present_call_first,headline_clean,50,13.342,14.645,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,B-instrumented,stage_request_adapter_span,instrumented,12,352.06,,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,n=12 pooled (n=8 + n=4); not headline
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,B-instrumented,substage_dxgi_enum,instrumented,12,6.06,,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,B-instrumented,probe0_D3D12CreateDevice_AMD_luid_0-e1e6,instrumented,12,164.9,,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,selected adapter
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,B-instrumented,probe1_D3D12CreateDevice_AMD_luid_0-1a8f2,instrumented,12,141.63,,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,never selected
+windows-dx12-callpath,windows-ryzen7-5800h-igpu,dx12,B-instrumented,probe2_D3D12CreateDevice_MBRD,instrumented,12,6.06,,,WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1,
+windows-etw,windows-ryzen7-5800h-igpu,dx12,A-winit-only,endpoint_E00_to_E199,headline_clean,10,91.5,129.6,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,rebaseline; prior A was 132.1
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-winit+wgpu,endpoint_E00_to_E190,headline_clean,10,554.2,850.6,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,one 860 tail outlier; prior 560.9
+windows-etw,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,endpoint_E00_to_E190,headline_clean,20,580,664,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,prior 585.8
+windows-etw,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,stage_window_create_E20_E21,headline_clean,20,51.6,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,prior 73.8; load-sensitive stage
+windows-etw,windows-ryzen7-5800h-igpu,dx12,A-winit-only,stage_window_create_E20_E21,headline_clean,10,46.2,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,range 44.3-94.4
+windows-etw,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,stage_adapter_E50_E51,headline_clean,20,364.6,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,63% of endpoint
+windows-etw,windows-ryzen7-5800h-igpu,dx12,C-full-pocketjs,stage_device_E60_E61,headline_clean,20,42.7,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,
+windows-etw,windows-ryzen7-5800h-igpu,dx12,A-winit-only,window_create_states_wall,etw_traced,5,59.1,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,trace-relative; per-column medians
+windows-etw,windows-ryzen7-5800h-igpu,dx12,A-winit-only,window_create_states_RUNNING,etw_traced,5,40.3,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,
+windows-etw,windows-ryzen7-5800h-igpu,dx12,A-winit-only,window_create_states_READY,etw_traced,5,1.9,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,
+windows-etw,windows-ryzen7-5800h-igpu,dx12,A-winit-only,window_create_states_WAITING,etw_traced,5,16.3,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,no single main-thread wait >0.79 ms
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-etw,probe0_wall,etw_traced,5,172.2,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,instrumented build under ETW
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-etw,probe0_RUNNING,etw_traced,5,168,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,97-98% RUNNING in 9/10; B0 95.6% outlier
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-etw,probe0_WAITING,etw_traced,5,3.9,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-etw,probe1_wall,etw_traced,5,148.6,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-etw,probe1_RUNNING,etw_traced,5,146.5,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-etw,probe1_WAITING,etw_traced,5,2.2,,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-intervene,adapter_E50_E51_pristine,instrumented_no_etw,20,358,369.7,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,exact-LUID intervention pristine arm
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-intervene,adapter_E50_E51_patched_skip_0-1a8f2,instrumented_no_etw,20,206,216.2,-152,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,SECOND_PROBE_CAUSAL_OVERHEAD_CONFIRMED
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-intervene,probe0_pristine,instrumented_no_etw,20,168.9,177.5,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,selected LUID 0-e1e6
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-intervene,probe0_patched,instrumented_no_etw,20,170.8,177.8,1.9,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,unchanged as required
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-intervene,probe1_slot_pristine,instrumented_no_etw,20,144.5,155.3,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,AMD 0-1a8f2
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-intervene,probe1_slot_patched,instrumented_no_etw,20,6.3,7.3,-138.2,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,becomes MBRD probe
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-intervene,endpoint_E00_to_E190_pristine,instrumented_no_etw,20,569.1,583,,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,
+windows-etw,windows-ryzen7-5800h-igpu,dx12,B-intervene,endpoint_E00_to_E190_patched,instrumented_no_etw,20,419.5,467.8,-149.6,WINDOWS-STARTUP-ETW-REALITY-AUDIT-1,one 747.4 outlier disclosed
+windows-t1-anchor,windows-ryzen7-5800h-igpu,vulkan-product,in-process,main_entry_to_present_done_S_noisy,instrumented,24,199,,,WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1,degraded evening session; exploratory per BENCHMARK
+windows-t1-anchor,windows-ryzen7-5800h-igpu,vulkan-product,in-process,main_entry_to_present_done_quiet_band,instrumented_bounded,,,,,WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1,band 125-153 ms not a point; quiet pre-main not measured in place
+windows-t1-anchor,windows-ryzen7-5800h-igpu,vulkan-product,pre-main,hello_world_kernel_create_to_main,measurement,8,124,,,WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1,join3 persisted; range 114-130
+windows-t1-anchor,windows-ryzen7-5800h-igpu,vulkan-product,pre-main,cmd_echo_spawn_to_output,measurement,8,151,,,WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1,join3; 86-90 in earlier quieter window
+windows-t1-anchor,windows-ryzen7-5800h-igpu,vulkan-product,E4,adapter_device_overlap_T2_delta,paired_intervention,8,192,,-12.1,WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1,p50 arm pristine; paired mean -12.1 8/8 positive; patched 180
+windows-t1-anchor,windows-ryzen7-5800h-igpu,vulkan-product,E5,early_device_release_T2_delta,paired_intervention,8,,,-5,WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1,clean re-run e5r median; TRIVIAL/SMALL
+windows-t1-anchor,windows-ryzen7-5800h-igpu,vulkan-product,warm-second-window,stage_window_create,instrumented,6,13.2,,,WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1,range 12.5-14.8; median 13.17 linear/13.16 nearest-rank; hidden warm probe confound
+windows-audit-1,windows-ryzen7-5800h-igpu,vulkan-product,image-mode,endpoint_T0_to_IMGREADY,headline,55,293,339,,STARTUP-LAST-MILE-REALITY-AUDIT-1,C1 official session; spawn-anchored
+windows-audit-1,windows-ryzen7-5800h-igpu,vulkan-product,image-mode,endpoint_T0_to_IMGREADY,headline,55,364,390,,STARTUP-LAST-MILE-REALITY-AUDIT-1,GATE-A2 session; spawn-anchored
+windows-audit-1,windows-ryzen7-5800h-igpu,vulkan-product,window-mode,endpoint_T0_to_READY,headline,55,247,,,STARTUP-LAST-MILE-REALITY-AUDIT-1,C1 official; spawn-anchored
+windows-audit-1,windows-ryzen7-5800h-igpu,vulkan-product,window-mode,endpoint_T0_to_READY,headline,55,260,,,STARTUP-LAST-MILE-REALITY-AUDIT-1,quiet re-probe 18:35
+windows-audit-1,windows-ryzen7-5800h-igpu,vulkan-product,window-mode,endpoint_T0_to_READY,headline,20,261,,,STARTUP-LAST-MILE-REALITY-AUDIT-1,GATE-A2 14:38
+windows-audit-1,windows-ryzen7-5800h-igpu,vulkan-product,window-mode,endpoint_T0_to_READY,headline,55,307,,,STARTUP-LAST-MILE-REALITY-AUDIT-1,busy state
+windows-audit-1,windows-ryzen7-5800h-igpu,vulkan-product,load-intervention,image_mode_P50_12_workers_block,instrumented,12,619,,,STARTUP-LAST-MILE-REALITY-AUDIT-1,ABA 0/12/0 workers; blocks 334/619/317; +285 at ~61% machine load; full recovery
+windows-audit-1,windows-ryzen7-5800h-igpu,vulkan-product,load-intervention,image_mode_P50_3_workers_block,instrumented,12,442,,,STARTUP-LAST-MILE-REALITY-AUDIT-1,ABA 0/3/0 workers; blocks 358/442/347; +84 at ~25% load; block B not steady-state
+windows-audit-1,windows-ryzen7-5800h-igpu,vulkan-product,backend-DX12,image_mode_P50,headline,8,760,,,STARTUP-LAST-MILE-REALITY-AUDIT-1,disqualified as mitigation; Vulkan control 382 same window
