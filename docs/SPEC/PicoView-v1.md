@@ -71,6 +71,8 @@ Only after GATE-A passes does **Product Phase B** implement BrowseSession, final
 
 Finally **GATE-B** reruns the physical budgets against the complete v1 product.
 
+> **Resolution (2026-09-14).** This phase split was executed as written. The architecture campaign and the GATE-A/GATE-A2 verdicts are frozen history (`docs/history/README.md`); the startup investigation closed as `CLOSED_FOR_NOW` / `MEASUREMENT_SUFFICIENT_FOR_CURRENT_PRODUCT_BUILD` (PR #44) — a documented closeout, **not** a retroactive PASS. Product implementation is authorized by the owner decision `POCKETJS_ACCEPTED_FOR_PRODUCT_DEVELOPMENT`, with unresolved startup-performance questions deferred until a real product workload exists (`docs/ROADMAP.md`). The statements in this section (above and below) that conditioned Product Phase B on GATE-A are historical plan semantics, consumed by this decision.
+
 ---
 
 ## Architecture reality and source identity
@@ -289,6 +291,8 @@ GitHub issues are the executable tracker.
 ```
 
 Only #13 is initially `ready-for-agent`. Downstream issues are `blocked` until their declared blockers complete.
+
+(The architecture graph above is historical: the campaign it tracks ran to completion — see `docs/history/README.md`. Current execution follows `docs/ROADMAP.md`.)
 
 ### Product Phase B
 

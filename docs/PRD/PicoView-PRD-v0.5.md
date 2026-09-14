@@ -23,8 +23,8 @@
 - Target: **Windows 11 desktop**
 - Runtime/UI substrate: **PocketJS — frozen**
 - Guest profile: **Octane-first**
-- Current phase: **Architecture Phase A**
-- Product Phase B: **blocked until GATE-A passes**
+- Current phase: **PRODUCT IMPLEMENTATION — VIEWER BASELINE**
+- Product implementation: **authorized** — owner decision `POCKETJS_ACCEPTED_FOR_PRODUCT_DEVELOPMENT` (2026-09-14; see `CONTEXT.md` and `docs/history/README.md`)
 
 v0.5 corrects five architecture-governance defects found in the v0.4 adversarial review:
 
@@ -34,9 +34,9 @@ v0.5 corrects five architecture-governance defects found in the v0.4 adversarial
 4. PocketJS source identity and benchmark semantics are frozen and reproducible.
 5. Browse natural ordering and eligibility now have a testable oracle rather than an informal “Windows-aware” phrase.
 
-The next goal is not “finish PicoView.” It is:
+The architecture campaign behind this PRD has run and is closed as frozen history (see `docs/history/README.md`). The next goal is the first real viewer vertical slice:
 
-> **Prove or reject the PocketJS Windows architecture under PicoView's physical budgets.**
+> **V1 — Open One Image** (`docs/ROADMAP.md`), with performance work deferred until a real product workload exists.
 
 ---
 
@@ -375,7 +375,7 @@ A **minimal real viewer-path DPI proof belongs before GATE-A**. Full UI Automati
 
 # 11. BrowseSession
 
-BrowseSession is Product Phase B work and is blocked until GATE-A passes.
+BrowseSession is Product Phase B work; it is sequenced as roadmap slice V3 (`docs/ROADMAP.md`).
 
 It builds a compact immutable navigation generation containing only filename/sort identity, path/compact identity, and minimal capability eligibility.
 
@@ -650,6 +650,8 @@ A FAIL blocks Product Phase B.
 
 A PASS explicitly authorizes Product Phase B.
 
+> **Resolution (2026-09-14).** The GATE-A campaign was executed as specified (`docs/GATE-A-EVIDENCE.md`, `docs/GATE-A2-EVIDENCE.md`; see also `docs/history/README.md`). Startup budgets did not meet the original lines while the other evidence lines passed. The follow-up startup investigation was closed as `CLOSED_FOR_NOW` / `MEASUREMENT_SUFFICIENT_FOR_CURRENT_PRODUCT_BUILD` (PR #44) — this is a documented closeout, **not** a retroactive PASS. Product implementation is authorized by the owner decision `POCKETJS_ACCEPTED_FOR_PRODUCT_DEVELOPMENT`; unresolved startup-performance questions are deferred until a real product workload exists (`docs/ROADMAP.md`).
+
 ## Phase B — Product implementation
 
 Only after GATE-A passes:
@@ -694,12 +696,13 @@ When sources disagree:
 
 1. `docs/PRD/PicoView-PRD-v0.5.md` — product boundary, budgets, non-goals, gate policy;
 2. `docs/SPEC/PicoView-v1.md` — cross-cutting system behavior/execution decisions;
-3. `docs/BENCHMARK.md` — measurement semantics;
-4. accepted ADR — evidence-backed durable implementation choices;
+3. accepted ADR — evidence-backed durable implementation choices;
+4. `docs/ARCHITECTURE.md` — frozen PocketJS/PicoView ownership boundaries;
 5. `CONTEXT.md` — current state and working facts;
-6. current execution ticket — bounded slice only.
+6. `docs/ROADMAP.md` — slice sequencing;
+7. current execution ticket — bounded slice only.
 
-`docs/POCKETJS-BASELINE.md` freezes the external source identity used by the current architecture campaign.
+`POCKETJS.lock` is the dependency authority for the PocketJS source identity. `docs/BENCHMARK.md` is the measurement-semantics authority for any measurement claim; it is not a current execution gate. Historical evidence documents remain evidence authority for their historical claims only.
 
 No lower authority silently weakens a higher one.
 
@@ -743,7 +746,7 @@ Frozen:
 - benchmark contract authority;
 - no telemetry/network/resident updater;
 - v1 feature cuts;
-- **Architecture GATE-A before Product Phase B**;
+- **architecture admission executed and closed before product implementation** (owner decision `POCKETJS_ACCEPTED_FOR_PRODUCT_DEVELOPMENT`, 2026-09-14; `docs/history/README.md`);
 - final GATE-B release re-verification.
 
 Not yet earned:
@@ -756,6 +759,6 @@ Not yet earned:
 - true HDR;
 - Filmstrip/Print/Share/Slideshow.
 
-**PicoView v0.5 is READY FOR ARCHITECTURE PHASE A ONLY.**
+**PicoView v0.5 is READY FOR PRODUCT IMPLEMENTATION.**
 
-The only initial execution frontier is the baseline/benchmark freeze ticket. Product Phase B remains blocked until GATE-A explicitly passes.
+The architecture campaign is closed frozen history (`docs/history/README.md`). Execution proceeds by roadmap slice; the next executable slice is V1 — Open One Image (`docs/ROADMAP.md`).
