@@ -2,11 +2,22 @@
 
 ## Current phase
 
-PicoView is in **Architecture Phase A — PocketJS Windows admission**.
+PicoView is in **PRODUCT IMPLEMENTATION — VIEWER BASELINE**.
 
-The product definition is already narrow enough. The current task is to prove that PocketJS can land on Windows and satisfy PicoView's physical budgets **before** broad product implementation begins.
+PocketJS has been accepted as PicoView's Windows UI/runtime/view foundation
+(owner decision `POCKETJS_ACCEPTED_FOR_PRODUCT_DEVELOPMENT`, 2026-09-14).
+Product implementation is authorized.
 
-Product Phase B is blocked until **GATE-A** passes.
+The historical admission/startup campaign is closed with sufficient evidence
+to proceed with product implementation. Unresolved startup-performance
+questions are deferred until a real product workload exists. No historical
+GATE-A budget is retroactively claimed as PASS; the campaign record (PR #44,
+`CLOSED_FOR_NOW` / `MEASUREMENT_SUFFICIENT_FOR_CURRENT_PRODUCT_BUILD`) and
+all earlier evidence are frozen history, indexed in `docs/history/README.md`.
+
+Execution proceeds by the sequential roadmap slices in `docs/ROADMAP.md`
+(V0 Product Shell → V1 Open One Image → V2 View Interaction → V3
+BrowseSession → V4 Handle + Inspect → V5 Real Viewer Baseline).
 
 ## Product thesis
 
@@ -24,113 +35,38 @@ Release-level goals:
 
 - Product name: **PicoView**.
 - Target: Windows 11 desktop.
-- Runtime/UI substrate: **PocketJS**.
+- Runtime/UI substrate: **PocketJS**, consumed at the exact revision pinned in `POCKETJS.lock`.
 - PocketJS is not in a framework bake-off.
-- Architecture Phase A guest profile: **Octane-first**.
+- Guest profile: **Octane** (TSX/QuickJS control plane).
 - QuickJS is a **control plane**, not a decoded-pixel transport.
 - Large image decode, native image-resource ownership, GPU/resource lifetime, cancellation, and source-handle lifetime stay native.
 - WIC is the baseline decoder substrate.
-- libjpeg-turbo is benchmark-gated.
+- Third-party decoders (libjpeg-turbo, Rust PNG decoders, …) remain benchmark-gated and **deferred** (`docs/ARCHITECTURE.md`, DEFERRED list).
 - Exact browse order uses a completed compact navigation generation; no speculative Next/Previous.
 - Per-Monitor DPI Awareness V2 is required.
 - No telemetry, resident updater/service, startup network dependency, media database, plugin system, Filmstrip, Slideshow, Print, or Share in v1.
-- Architecture GATE-A precedes Product Phase B.
 
 ## Authoritative development environment
 
-Architecture Phase A Windows evidence is now produced on **native Windows**, not inside WSL.
+Product development and all Windows evidence are produced on **native Windows**, not inside WSL.
 
-Current Rust campaign toolchain:
+WSL remains acceptable for reading, note-taking, repository inspection, and non-Windows helper scripts, but it is not authoritative evidence for Windows host behavior, winit/wgpu presentation, WIC, DPI, process memory, startup/idle metrics, or packaging.
 
-```text
-stable-x86_64-pc-windows-msvc
-rustc 1.98.1
-```
+Any report that records a measurement also records the exact `rustc -Vv` / Cargo identity and machine/GPU identity used.
 
-WSL remains acceptable for reading, note-taking, repository inspection, and non-Windows helper scripts, but it is not authoritative evidence for Windows stock-target behavior, winit/wgpu presentation, WIC, DPI, Windows startup/memory/idle metrics, or packaging.
+## PocketJS dependency
 
-The exact `rustc -Vv` / Cargo identity used by a gate report is recorded with the report.
+PicoView consumes `jnhu76/pocketjs` at the exact revision pinned in `POCKETJS.lock`. The revision is authority; the branch name is informational only. Do not silently follow a moving branch tip.
 
-## PocketJS campaign baseline
-
-Architecture Phase A is planned against:
-
-- repository: `https://github.com/pocket-stack/pocketjs`
-- base SHA: `a5a85356e172db8a32aefa983ee1259f60406f69`
-
-See `docs/POCKETJS-BASELINE.md`.
-
-Do not silently follow a moving PocketJS `main` during the campaign.
-
-Every runtime-dependent report records the PicoView SHA, campaign base SHA, effective PocketJS SHA/patch series, and native Windows toolchain identity.
-
-## Important PocketJS reality
-
-The frozen PocketJS baseline already has a portable desktop architecture using winit/wgpu, QuickJS/runtime-worker semantics, DrawList rendering, retained GPU targets, and presentation handoff.
-
-But it is **not already a Windows desktop host**:
-
-- stock target profiles cover macOS/Linux desktop apps;
-- `hosts/desktop/src/plan.rs` explicitly accepts macOS/Linux and compile-errors other host OS values.
-
-Therefore the first Windows task is:
-
-> **extend the existing PocketJS desktop architecture to Windows, rather than inventing an unrelated PicoView-only host.**
-
-## Largest architecture unknown
-
-The most important missing seam is not WIC itself.
-
-PocketJS currently exposes a JS-facing texture-upload contract intended for small uploaded textures. PicoView requires multi-megapixel decoded images to remain native.
-
-Architecture Phase A must prove:
-
-```text
-native-owned large image resource
-        ↓
-PocketJS image/resource handle
-        ↓
-DrawList composition/presentation
-```
-
-without O(image-bytes) traffic through QuickJS.
-
-This proof is intentionally separate from JPEG/WIC decode so the failure mechanism remains identifiable.
-
-## Architecture execution frontier
-
-The tracker is deliberately staged.
-
-Initial frontier:
-
-- **#13 `[ARCH-A0]`** — freeze PocketJS baseline, workspace topology, native-Windows toolchain identity, and benchmark contract.
-
-Downstream Architecture Phase A:
-
-- #2 `[ARCH-A1]` — extend desktop architecture to a Windows stock target;
-- #14 `[ARCH-A2]` — native large-image composition seam;
-- #3 `[ARCH-A3]` — first JPEG/WIC;
-- #4 `[ARCH-A4]` — large JPEG / Fit / 100% / zoom / pan proof;
-- #7 `[ARCH-A5]` — generation cancellation / hostile-resource proof;
-- #9 `[ARCH-A6]` — minimal Per-Monitor DPI proof;
-- #15 `[ARCH-A7]` — startup/package/idle/five-process footprint;
-- #11 `[GATE-A]` — admit or reject the architecture.
-
-Product Phase B remains blocked behind #11:
-
-- #5 Open/refresh/source lifetime;
-- #6 BrowseSession;
-- #8 Handle;
-- #10 format/animation;
-- #17 final viewer chrome/Inspect;
-- #16 bounded Windows UI Automation;
-- #18 GATE-B release verification.
-
-Only issues actually labeled `ready-for-agent` are executable frontier work. `blocked` means do not start.
+- No git submodule, no vendoring, no copying PocketJS source into PicoView.
+- The default topology is a PicoView checkout plus a sibling PocketJS checkout/worktree pinned to the locked revision.
+- Runtime-generic capability work happens in `jnhu76/pocketjs` first, merges there, and only then advances `POCKETJS.lock`.
+- The `archive/picoview-20260914/*` refs on the fork are museum/history only.
+- Historical campaign baselines (e.g. `pocket-stack/pocketjs` `a5a8535…`, `docs/POCKETJS-BASELINE.md`) are research history.
 
 ## Benchmark authority
 
-`docs/BENCHMARK.md` defines:
+`docs/BENCHMARK.md` defines how any performance/memory/package claim is measured:
 
 - source/build/machine identity required for evidence;
 - minimum 50 iterations for P50/P95 gate claims;
@@ -140,11 +76,9 @@ Only issues actually labeled `ready-for-agent` are executable frontier work. `bl
 - static-idle CPU normalization;
 - package/install size accounting.
 
-A benchmark number that changes definitions to obtain PASS is not valid gate evidence.
+A benchmark number that changes definitions to obtain PASS is not valid evidence. No microbenchmark is authorized before `PICOVIEW-REAL-WORKLOAD-PERFORMANCE-1` (after ROADMAP V5).
 
 ## Browse ordering working truth
-
-Product Phase B natural ordering is no longer an informal “Explorer-like” statement.
 
 The PRD freezes PicoView Natural Order v1:
 
@@ -159,45 +93,38 @@ Browse eligibility is established cheaply through extension/capability knowledge
 
 1. `docs/PRD/PicoView-PRD-v0.5.md`
 2. `docs/SPEC/PicoView-v1.md`
-3. `docs/BENCHMARK.md`
-4. accepted PicoView ADRs
+3. accepted PicoView ADRs
+4. `docs/ARCHITECTURE.md`
 5. `CONTEXT.md`
-6. current GitHub execution ticket
+6. `docs/ROADMAP.md`
+7. current GitHub execution ticket
 
-`docs/POCKETJS-BASELINE.md` freezes the external source identity and authoritative native-Windows campaign host used by Architecture Phase A.
+`POCKETJS.lock` is the dependency authority for the PocketJS source identity. `docs/BENCHMARK.md` is the measurement-semantics authority whenever a measurement claim is made. Historical evidence documents remain evidence authority for their historical claims only — they are not current product execution gates.
 
 A lower-authority source must not silently override a higher one.
-
-## Current highest-value test seam
-
-Architecture Phase A prefers the largest real seam practical:
-
-> **real Windows PocketJS guest → bounded semantic image request → native image resource → PocketJS composition → present submission / observable state**
-
-The native-resource proof comes before WIC so we do not conflate decoder integration with renderer/resource-contract failure.
 
 ## Stop-the-line rules
 
 Stop and investigate when:
 
-- PocketJS/host physical cost fails a defining PRD budget;
-- a multi-megapixel pixel plane crosses QuickJS;
+- a multi-megapixel pixel plane or encoded file crosses QuickJS;
 - a native image resource cannot be retired independently of JS GC;
 - stale generations can publish;
 - a static image requires a PicoView-owned continuous render loop;
-- Windows support is implemented as an unrelated PicoView-only runtime fork without earned evidence;
+- Windows support drifts toward an unrelated PicoView-only runtime fork instead of the PocketJS seam;
 - a dependency enters without recorded user pain and budget cost;
-- a `blocked` Product Phase B ticket is started before GATE-A;
-- a `/goal` or other autonomous run attempts to continue past the assigned ticket, silently weakens a gate, changes the PocketJS baseline, or starts a downstream blocked issue.
+- work silently weakens a PRD/SPEC gate or boundary in `docs/ARCHITECTURE.md`;
+- work proceeds on a roadmap slice other than the assigned one;
+- a `/goal` or other autonomous run attempts to continue past the assigned ticket, change the `POCKETJS.lock` identity without the cross-repo process, or start downstream work without an explicit unblock.
 
 For autonomous runs, **stopping with a concrete blocker is success of the control system, not failure of the project**.
 
 ## Near-term outcome
 
-The first meaningful milestone is not “PicoView v1 complete.”
+The next meaningful milestone is not "PicoView v1 complete."
 
 It is:
 
-> **PocketJS Windows + native image-resource architecture admitted or rejected by GATE-A using reproducible evidence.**
+> **V1 — Open One Image: a real file decoded natively via WIC and presented through PocketJS composition, with no image bytes through QuickJS.**
 
-Only after that decision does ordinary product implementation become executable.
+Sequencing and subsequent slices live in `docs/ROADMAP.md`.

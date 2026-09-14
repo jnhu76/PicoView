@@ -1,0 +1,21 @@
+# PicoView → PocketJS dependency pin
+#
+# `revision` is the dependency authority. `branch_hint` is informational only
+# and may drift; the revision never does. Verify before bumping:
+#
+#   git ls-remote https://github.com/jnhu76/pocketjs.git refs/heads/feat/windows-desktop-parity
+
+repository = https://github.com/jnhu76/pocketjs.git
+revision = 6e631f463016a258e63fc9a5f922117b94d4f89f
+branch_hint = feat/windows-desktop-parity
+purpose = PicoView Windows UI/runtime foundation
+
+# Policy
+# - PicoView consumes PocketJS at exactly this revision.
+# - No git submodule, no vendoring, no copying PocketJS source into PicoView.
+# - Runtime-generic capability work is implemented in jnhu76/pocketjs first,
+#   reviewed/merged there, and only then is this lock advanced deliberately.
+# - The archive/picoview-20260914/* refs on jnhu76/pocketjs are museum/history
+#   only and must never be used as an active dependency.
+# - Historical campaign baselines (e.g. pocket-stack/pocketjs a5a8535…) are
+#   research history; see docs/history/README.md.
