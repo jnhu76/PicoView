@@ -57,7 +57,9 @@ export default function App() {
   const item = useRef<CurrentItemState>({ generation: 0, status: "idle" });
   const revision = useRef(0);
   const [, setRevision] = useState(0);
-  const registered = useRef(new Set<number>());
+  // Generation whose ready handle is bound under TEXTURE_KEY. One slot, not a
+  // growing set: rebinding on a newer generation implicitly supersedes the old.
+  const registeredGeneration = useRef(0);
 
   useFrame(() => {
     const ops = getOps();
@@ -77,15 +79,18 @@ export default function App() {
         } catch {
           continue;
         }
+        if (!v || typeof v !== "object") continue;
         if (v.t === "current-item") {
+          // A stale event generation may never publish over a newer one.
+          if (typeof v.g === "number" && v.g < item.current.generation) continue;
           if (
             v.status === "ready" &&
             typeof v.handle === "number" &&
             typeof v.g === "number" &&
-            !registered.current.has(v.g)
+            registeredGeneration.current !== v.g
           ) {
             registerTexture(TEXTURE_KEY, v.handle);
-            registered.current.add(v.g);
+            registeredGeneration.current = v.g;
           }
           const status =
             v.status === "ready" || v.status === "loading" || v.status === "error"

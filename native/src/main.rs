@@ -300,7 +300,19 @@ struct Host {
     title: String,
     viewport: (u32, u32),
     failure: Option<String>,
+    /// Presentation bootstrap self-heal: for a short window after startup we
+    /// re-present the retained target at a low cadence. The very first present
+    /// can race the swapchain/DWM handoff on some drivers and land on a surface
+    /// that never reaches the screen; because a static frame is hash-gated and
+    /// never re-renders, the window would stay blank until an external resize.
+    /// Re-presenting only blits the existing GPU target — no re-record, no UI
+    /// tick — and the window goes fully quiet (ControlFlow::Wait) afterwards,
+    /// so static idle still owns no continuous loop.
+    heal_until: Option<Instant>,
 }
+
+const PRESENT_HEAL_WINDOW: Duration = Duration::from_millis(2500);
+const PRESENT_HEAL_CADENCE: Duration = Duration::from_millis(200);
 
 impl Host {
     fn present(&mut self) -> Result<()> {
@@ -383,6 +395,18 @@ impl ApplicationHandler<Wake> for Host {
         }
     }
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(until) = self.heal_until {
+            if Instant::now() < until {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+                event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
+                    Instant::now() + PRESENT_HEAL_CADENCE,
+                ));
+                return;
+            }
+            self.heal_until = None;
+        }
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
     }
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: winit::event::WindowEvent) {
@@ -430,6 +454,7 @@ fn main() -> Result<()> {
         title: args.title.clone(),
         viewport: args.viewport,
         failure: None,
+        heal_until: Some(Instant::now() + PRESENT_HEAL_WINDOW),
     };
     host.startup = Some(RuntimeStartup {
         args,

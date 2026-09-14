@@ -25,6 +25,21 @@ const TEXTURE_KEY_HINT: &str = "picoview-current";
 const MAX_TEXTURE_DIM: u32 = pocketjs_core::spec::TEX_MAX_DIM;
 /// svc is a bounded-semantic channel; error strings are capped.
 const MAX_ERROR_CHARS: usize = 200;
+/// Decode allocation guard: a container may declare absurd frame dimensions
+/// (up to 65535x65535 for JPEG) before any pixel is validated; allocating
+/// w*h*4 for those would abort the process on OOM instead of failing bounded.
+/// 80 megapixels comfortably covers real photographs.
+const MAX_DECODE_PIXELS: u64 = 80_000_000;
+
+/// Pure allocation guard for a decoded frame: the byte length a WIC RGBA
+/// conversion needs, or a bounded decode error.
+fn decode_alloc_len(width: u32, height: u32) -> Result<usize, OpenError> {
+    let pixels = width as u64 * height as u64;
+    if pixels > MAX_DECODE_PIXELS {
+        return Err(OpenError::Decode("image dimensions are too large".into()));
+    }
+    Ok(pixels as usize * 4)
+}
 
 /// Full-resolution WIC decode output. Lifetime is fully native: it exists only
 /// between decode and texture upload, inside `CurrentItem::open`.
@@ -290,7 +305,7 @@ pub fn presentation_texture(src: &DecodedImage) -> PresentTexture {
 
 #[cfg(windows)]
 mod wic {
-    use super::{bounded, DecodedImage, OpenError};
+    use super::{bounded, decode_alloc_len, DecodedImage, OpenError};
     use windows::Win32::Graphics::Imaging::{
         CLSID_WICImagingFactory, GUID_WICPixelFormat32bppRGBA, IWICImagingFactory,
         WICBitmapDitherTypeNone, WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
@@ -333,7 +348,7 @@ mod wic {
                     WICBitmapPaletteTypeCustom,
                 )
                 .map_err(|_| OpenError::Decode("no 32-bit RGBA conversion for this image".into()))?;
-            let mut rgba = vec![0u8; width as usize * height as usize * 4];
+            let mut rgba = vec![0u8; decode_alloc_len(width, height)?];
             let stride = width as usize * 4;
             converter
                 .CopyPixels(std::ptr::null(), stride as u32, &mut rgba)
@@ -556,26 +571,59 @@ mod tests {
         surface.with_ui(|ui| assert!(ui.texture(first).is_none()));
         surface.with_ui(|ui| assert!(ui.texture(second).is_some()));
 
-        // svc carried loading+ready per generation; events are pushed to the
-        // guest queue (svc_in), never drained host-side.
+        // The event shapes are pure constructors carrying the generation
+        // field; the actual svc_in queue is guest-drained only, so wire
+        // behavior rests on the manual presentation evidence.
         for generation in [1u64, 2] {
             let ready = ready_event(generation, "x.jpg", 0, 1, 1, 1, 1);
             assert_eq!(ready["g"], generation);
         }
 
-        item.retire(&surface);
-        assert_eq!(item.live_handle(), None);
-        surface.with_ui(|ui| assert!(ui.texture(second).is_none()));
-
-        // Error path: a corrupt file fails bounded, keeps the shell alive,
-        // and leaves no live resource.
+        // Error-after-success: the corrupt open must retire the previously
+        // live texture itself, leaving no resource and nothing drawable.
         let jpg_bad = std::env::temp_dir().join("picoview-current-item-bad.jpg");
         std::fs::write(&jpg_bad, [0u8; 64]).unwrap();
         item.open(&surface, &jpg_bad);
         assert_eq!(item.live_handle(), None);
+        surface.with_ui(|ui| assert!(ui.texture(second).is_none()));
+
+        // A directory path fails as NotAFile, not MissingPath or a panic.
+        let dir = std::env::temp_dir();
+        item.open(&surface, &dir);
+        assert_eq!(item.live_handle(), None);
+
+        // Success after error, then the explicit retire path.
+        item.open(&surface, &jpg_a);
+        let third = item.live_handle().expect("open succeeds after a failed open");
+        item.retire(&surface);
+        assert_eq!(item.live_handle(), None);
+        surface.with_ui(|ui| assert!(ui.texture(third).is_none()));
 
         let _ = std::fs::remove_file(&jpg_a);
         let _ = std::fs::remove_file(&jpg_b);
         let _ = std::fs::remove_file(&jpg_bad);
+    }
+
+    #[test]
+    fn decode_dimensions_are_capped_before_allocation() {
+        assert!(decode_alloc_len(65535, 65535).is_err());
+        assert!(decode_alloc_len(1, 1).is_ok());
+        // Just inside the cap is accepted (80 Mpx RGBA = 320 MB).
+        assert_eq!(
+            decode_alloc_len(10000, 8000).unwrap(),
+            10000usize * 8000usize * 4
+        );
+    }
+
+    #[test]
+    fn guest_texture_key_matches_host_hint() {
+        // The host hint and the guest's registerTexture key are one wire
+        // contract kept as literals on both sides; this locks them together.
+        let guest = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../guest/app.octane.tsx"
+        ))
+        .expect("guest source readable from the workspace");
+        assert!(guest.contains(&format!("const TEXTURE_KEY = \"{TEXTURE_KEY_HINT}\";")));
     }
 }
