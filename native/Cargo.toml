@@ -1,0 +1,34 @@
+[package]
+name = "picoview"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "PicoView native host: Current Item authority, WIC baseline decode, PocketJS presentation"
+
+[[bin]]
+name = "picoview"
+path = "src/main.rs"
+
+# PocketJS is consumed at the exact revision pinned by PicoView's POCKETJS.lock.
+# No submodule, no vendoring, no path/`..` dependency.
+[dependencies]
+pocketjs-core = { git = "https://github.com/jnhu76/pocketjs.git", rev = "6e631f463016a258e63fc9a5f922117b94d4f89f", features = ["std"] }
+pocket-mod = { git = "https://github.com/jnhu76/pocketjs.git", rev = "6e631f463016a258e63fc9a5f922117b94d4f89f" }
+pocket-ui-surface = { git = "https://github.com/jnhu76/pocketjs.git", rev = "6e631f463016a258e63fc9a5f922117b94d4f89f" }
+pocket-text = { git = "https://github.com/jnhu76/pocketjs.git", rev = "6e631f463016a258e63fc9a5f922117b94d4f89f" }
+pocket-ui-wgpu = { git = "https://github.com/jnhu76/pocketjs.git", rev = "6e631f463016a258e63fc9a5f922117b94d4f89f" }
+pocket3d = { git = "https://github.com/jnhu76/pocketjs.git", rev = "6e631f463016a258e63fc9a5f922117b94d4f89f", default-features = false }
+wgpu = "25"
+winit = "0.30"
+anyhow = "1"
+log = "0.4"
+env_logger = "0.11"
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Graphics_Imaging",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+] }
