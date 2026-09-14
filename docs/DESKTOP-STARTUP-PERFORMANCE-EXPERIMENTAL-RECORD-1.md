@@ -165,7 +165,7 @@ CPU split exists anywhere in the Windows evidence.
 | Campaign | Report path | Lives on | SHA |
 |---|---|---|---|
 | AUDIT-1 | `docs/STARTUP-LAST-MILE-REALITY-AUDIT-1.md` | `main` (`ee04801`) | — |
-| Linux control (reconciled) | `docs/LINUX-DESKTOP-STARTUP-CONTROL-1.md` | `docs/linux-desktop-startup-control-1-closeout` | `c8dcc75` (branch tip); full evidence `982914b` on `archive/linux-desktop-startup-control-1-full` |
+| Linux control (reconciled) | `docs/LINUX-DESKTOP-STARTUP-CONTROL-1.md` | `docs/linux-desktop-startup-control-1-closeout` (PR #42 closed unmerged) | `c7faed4` (final reconciled tip); full evidence `982914b` on `archive/linux-desktop-startup-control-1-full` |
 | Cross-OS normalized | `docs/CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1.md` | `main` (`ee04801`, PR #43) | archive tip `4431934` on `archive/cross-os-normalized-desktop-startup-1-full` |
 | #40 T1-anchor | `docs/WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1.md` | `main` (`ee04801`) | — |
 | Callpath | `docs/WINDOWS-STARTUP-CALLPATH-REALITY-AUDIT-1.md` | `audit/windows-startup-callpath-1` | `e8dd437` |
