@@ -13,7 +13,7 @@ thread requires a separate owner decision.
 |---|---|---|
 | **wgpu / wgpu-hal** — DX12 adapter enumeration / capability probing | **READY_FOR_UPSTREAM_DISCUSSION** | Full call-path proof (nested markers + source), scheduler-level state of the expensive windows, and a causal intervention with preserved invariants; host-specificity is clearly bounded and stated |
 | **winit / Win32** — first-window creation | **NOT_YET_UPSTREAM_READY** | Measurements are host/load-specific (46–74 ms across sessions); no upstream-actionable mechanism isolated; no bounded product corrective exists |
-| **AMD / Windows / DXGI** — duplicate-LUID origin | **NOT_YET_UPSTREAM_READY_AS_ROOT_CAUSE** | The duplicate enumeration is reproduced and quantified, but its origin (driver, virtualization/GPU-PV, display topology) is OPEN; Hyper-V presence is correlation only |
+| **AMD / Windows / DXGI** — origin of the second DXGI entry (duplicate enumeration) | **NOT_YET_UPSTREAM_READY_AS_ROOT_CAUSE** | The duplicate enumeration is reproduced and quantified, but its origin (driver, virtualization/GPU-PV, display topology) is OPEN; Hyper-V presence is correlation only |
 
 ## 2. Proposed problem statement (facts only)
 
@@ -104,8 +104,9 @@ thread requires a separate owner decision.
   other software on the machine (only that wgpu never selects it here).
 - Not a claim that other Windows systems exhibit duplicate enumeration or
   pay this cost.
-- Not a root-cause statement about why DXGI exposes the duplicate (origin
-  OPEN; Hyper-V/VBS presence is correlation, no mechanism evidence found).
+- Not a root-cause statement about why DXGI returns the second entry
+  (origin OPEN; Hyper-V/VBS presence is correlation, no mechanism evidence
+  found).
 
 ## 3. Questions for upstream
 
@@ -113,7 +114,8 @@ thread requires a separate owner decision.
    intentional/required during `enumerate_adapters`, or could
    selection/filtering happen before full capability probing?
 2. Is there an existing mechanism in wgpu/wgpu-hal for alias or duplicate
-   DXGI adapters (same physical device under multiple LUIDs)?
+   DXGI adapters (e.g. two same-name/same-VendorId/DeviceId entries with
+   distinct LUIDs, as observed on this host)?
 3. What identity semantics are considered safe for adapter identity —
    LUID, `IDXGIAdapter` pointer identity, DXGI 1.6 `IDXGIAdapter4` /
    `DXGI_ADAPTER_DESC3`, or driver-reported physical-adapter identity?

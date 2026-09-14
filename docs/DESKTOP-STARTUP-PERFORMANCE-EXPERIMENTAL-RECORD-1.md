@@ -46,8 +46,9 @@ historical gate evidence). The path of evidence was:
    and located the dominant stage: `request_adapter` (P50 338.0 of 585.8 ms
    E00→E190, arm C). Nested instrumentation proved wgpu-hal's DX12 adapter
    enumeration calls `D3D12CreateDevice` for **every** enumerated adapter;
-   on this host DXGI exposes the single AMD iGPU under **two distinct
-   LUIDs**, so the expensive AMD driver init is paid twice, serially.
+   on this host DXGI returns two same-name, same-VendorId/DeviceId AMD
+   adapter entries with distinct LUIDs, so two expensive
+   `D3D12CreateDevice` capability probes are paid serially.
 5. **An elevated ETW scheduler analysis**
    (WINDOWS-STARTUP-ETW-REALITY-AUDIT-1) decomposed the two costly probe
    windows with CSwitch/ReadyThread records and wait stacks: the probes are
@@ -68,9 +69,12 @@ historical gate evidence). The path of evidence was:
 
 **Current top-level conclusions.** On this one Windows host, the dominant,
 reproducible, causally-proven startup cost is wgpu-hal's DX12
-probe-every-adapter behavior paying the AMD driver-init cost twice for one
-physical GPU exposed under two LUIDs (~150 ms of a ~570 ms process-entry →
-first-present path). The Linux control and the normalized Linux arm show the
+probe-every-adapter behavior paying two expensive `D3D12CreateDevice`
+capability probes serially: the host inventory exposes one AMD display
+device, while DXGI returns two same-name, same-VendorId/DeviceId AMD
+adapter entries with distinct LUIDs (~150 ms of a ~570 ms process-entry →
+first-present path). Whether the two DXGI entries are the same physical
+adapter under Windows/DXGI identity semantics is NOT proven. The Linux control and the normalized Linux arm show the
 same general startup DAG executes in far less time on much older hardware,
 but the matched cross-OS comparison **does not exist** — the Windows
 normalized arm was never collected — so no cross-OS causal verdict is
@@ -88,7 +92,7 @@ The investigation, across its campaigns, asked:
 |---|---|---|
 | Q1 | Why did the same binary measure P50 ≈ 293 ms in one session and ≈ 364 ms in another (and window mode 247 vs 307)? | **ANSWERED** — ENVIRONMENT_BOUND: measurement-host background CPU load, proven by intervention (AUDIT-1). No code corrective. |
 | Q2 | Is the Windows startup cost a PocketJS portable-desktop tax, or Windows-execution-environment-specific? | **NOT DECIDED by matched data.** The Linux control suggests Windows-specific; the normalized cross-OS experiment that would decide this is INCONCLUSIVE (Windows arm blocked). |
-| Q3 | Where does the Windows startup time actually go? | **ANSWERED (this host, DX12).** Dominant: `request_adapter` (338.0 P50 of 585.8 ms, arm C); within it, two serial `D3D12CreateDevice` probes (~163 + ~140 ms) caused by a duplicate-LUID AMD adapter enumeration. |
+| Q3 | Where does the Windows startup time actually go? | **ANSWERED (this host, DX12).** Dominant: `request_adapter` (338.0 P50 of 585.8 ms, arm C); within it, two serial `D3D12CreateDevice` capability probes (~163 + ~140 ms) over two same-name/same-VID/DID AMD entries with distinct LUIDs. |
 | Q4 | Is the second (never-selected) adapter probe causal overhead? | **CAUSALLY PROVEN** — exact-LUID skip intervention: adapter −152.0 ms, endpoint −149.6 ms (n=20+20), selected adapter unchanged 40/40. |
 | Q5 | Are the expensive probes off-CPU (blocked in the driver)? | **REFUTED in the off-CPU sense** — 97–98 % RUNNING (on-CPU) in 9/10 probe windows (B0 probe#0 95.6 % disclosed outlier). Kernel-vs-user split: NOT COLLECTED (SampledProfile unavailable on this host). |
 | Q6 | What is the Windows window-creation cost, and is it one giant wait? | **MEASURED, NOT ONE WAIT** — clean 46.2 ms (arm A, n=10) / 51.6 ms (arm C, n=20) current-session P50; historically 68–74 ms; ≈2/3 RUNNING, ≈1/3 dense sub-ms waits whose dominant signature is the cross-process win32k user lock; no single main-thread wait > 0.79 ms. Load-sensitive. |
@@ -384,8 +388,10 @@ epoch: one Instant origin, E00 main entry                     0.0 ms   [headline
 ├─ E40→E41  surface create                                5.6 ms    [main]
 ├─ E50→E51  request_adapter (wgpu request_adapter)       338 ms    [main; CRITICAL — DOMINANT]
 │   ├─ EnumAdapters1                                      6 ms
-│   ├─ probe AMD LUID 0-e1e6  (D3D12CreateDevice)       ~163 ms    [AMD user-mode driver init]
-│   ├─ probe AMD LUID 0-1a8f2 (D3D12CreateDevice)       ~140 ms    [same machine, never selected]
+│   ├─ probe AMD LUID 0-e1e6  (D3D12CreateDevice)       ~163 ms    [D3D12CreateDevice capability probe; CPU-heavy
+│   │                                                                on calling thread; user/kernel mode unresolved]
+│   ├─ probe AMD LUID 0-1a8f2 (D3D12CreateDevice)       ~140 ms    [D3D12CreateDevice capability probe; never
+│   │                                                                selected in the measured runs]
 │   └─ probe MBRD + queries                               ~8 ms
 │   ║  worker thread E80→E89 runtime boot 52.5 ms — done at 176 ms, then blocked on GPU ≈364 ms
 ├─ E60→E61  request_device (chosen AMD adapter)            40 ms    [main]
@@ -442,7 +448,11 @@ runs, the ETW campaign's 5 captures, and 20 pristine intervention runs:
 | 1 | AMD Radeon(TM) Graphics | 0x1002:0x1638 | **0-1a8f2** |
 | 2 | Microsoft Basic Render Driver | 0x1414:0x8c | 0-f7f1 |
 
-**The single physical AMD iGPU is enumerated under two distinct LUIDs.**
+**The host inventory exposes one AMD display device, while DXGI returns two
+same-name, same-VendorId/DeviceId AMD adapter entries with distinct LUIDs.**
+The evidence does not establish that the two DXGI entries are the same
+physical adapter under Windows/DXGI identity semantics, nor that the second
+entry is invalid.
 The selected adapter is LUID **0-e1e6**, proven per run via the
 selected-LUID carry on the adapter driver string (40/40 intervention runs).
 The second AMD entry (0-1a8f2) is probed with a full `D3D12CreateDevice`
@@ -472,8 +482,8 @@ never quoted as a headline number.
 **Interpretation boundary:** the same VID/DID/name under two LUIDs proves a
 duplicate *enumeration*; it does not prove the two entries are the same
 physical adapter in every sense (they may legitimately differ in LUID-scoped
-state). The evidence proves *cost*: two full driver-init probes are paid
-serially, and only one entry is ever selected.
+state). The evidence proves *cost*: two full `D3D12CreateDevice` capability
+probes are paid serially, and only one entry is ever selected.
 
 ---
 
@@ -683,8 +693,10 @@ binaries were identical); that attribution is inference, not a measurement.
   AMD kernel-mode driver remains possible. The correct statement is:
   *the expensive D3D12CreateDevice spans are CPU-heavy on the calling
   thread; kernel-vs-user CPU attribution remains unresolved on this host.*
-- **Why the duplicate LUID exists.** DXGI enumerates one physical iGPU
-  under two LUIDs here; the origin is **OPEN** (see §16, §18).
+- **Why the second DXGI entry exists.** The host inventory exposes one AMD
+  display device while DXGI returns two same-name/same-VID/DID AMD adapter
+  entries with distinct LUIDs; the origin of the second DXGI entry is
+  **OPEN** (see §16, §18).
 - **Generality.** Whether other Windows systems (other GPUs, other driver
   versions, other virtualization states) exhibit duplicate enumeration, and
   what it costs there, is unmeasured. Single-host evidence.
@@ -778,9 +790,11 @@ mechanism + intervention/semantics where applicable) at the stated scope:
 3. **The Windows arm-C critical path decomposition** (§8/§9): adapter 338.0
    of 585.8 ms P50, with all other stages single-to-tens of ms and the
    guest boot fully overlapped.
-4. **DXGI exposes the single AMD iGPU under two LUIDs** (0-e1e6 selected,
-   0-1a8f2 never selected) on this host; wgpu-hal probes every enumerated
-   adapter with a real `D3D12CreateDevice` (nested markers + source).
+4. **The host inventory exposes one AMD display device while DXGI returns
+   two same-name, same-VendorId/DeviceId AMD adapter entries with distinct
+   LUIDs** (0-e1e6 selected, 0-1a8f2 never selected) on this host;
+   wgpu-hal probes every enumerated adapter with a real `D3D12CreateDevice`
+   (nested markers + source).
 5. **The second, never-selected probe costs ≈150 ms**, causally proven by
    the exact-LUID intervention (−152.0 ms adapter, −149.6 ms endpoint,
    invariants 40/40).
@@ -806,7 +820,7 @@ mechanism + intervention/semantics where applicable) at the stated scope:
 
 | # | Open item | Why it matters | What would close it |
 |---|---|---|---|
-| O-1 | **Origin of the duplicate LUID** | Determines whether the ~150 ms is fixable at the app layer or is environmental | Driver/hypervisor-level investigation; a second host observation; GPU-PV/indirect-display mechanism evidence (none found) |
+| O-1 | **Origin of the second DXGI entry (duplicate enumeration)** | Determines whether the ~150 ms is fixable at the app layer or is environmental | Driver/hypervisor-level investigation; a second host observation; GPU-PV/indirect-display mechanism evidence (none found) |
 | O-2 | **Kernel-vs-user CPU split of the probes** | Distinguishes "AMD user-mode CPU" from "driver kernel spin/poll" (different upstream fixes) | Re-run the validated capture (`tooling/win-etw-elevated-rerun.ps1`, unchanged) on a host where `SampledProfile` works, or clear the resident kernel-logger conflict (0xb7/0x3ec) on this one |
 | O-3 | **Cross-OS matched comparison** | The only way to re-adjudicate the "tax" question | A Windows normalized run under the frozen protocol after the Vulkan surface-path failure is cleared (operator action) |
 | O-4 | **T1-anchor ruling + machine-state spec** | Determines what the ≤150 ms window budget actually measures and which runs are admissible | Owner/authority decision (carried by #40; requested by AUDIT-1) |
@@ -857,7 +871,7 @@ Full draft: `docs/desktop-startup-performance-experimental-record-1/upstream-not
 |---|---|---|
 | **wgpu / wgpu-hal** — DX12 adapter enumeration / capability probing | **READY_FOR_UPSTREAM_DISCUSSION** | Full call-path proof + scheduler state + a causal intervention with invariants; host-specificity clearly bounded |
 | **winit / Win32** — first-window creation | **NOT_YET_UPSTREAM_READY** | Host/load-specific measurements; no bounded product corrective; no upstream-actionable mechanism isolated |
-| **AMD / Windows / DXGI** — duplicate-LUID origin | **NOT_YET_UPSTREAM_READY_AS_ROOT_CAUSE** | Reproduction/origin still open; Hyper-V presence is correlation only (no mechanism evidence) |
+| **AMD / Windows / DXGI** — origin of the second DXGI entry (duplicate enumeration) | **NOT_YET_UPSTREAM_READY_AS_ROOT_CAUSE** | Reproduction/origin still open; Hyper-V presence is correlation only (no mechanism evidence) |
 
 Proposed upstream problem statement (facts only; no accusation):
 
@@ -977,8 +991,8 @@ faithfully copied from the reviewed ETW report.
   never collected). Linux is historical reference only; no further cross-OS
   causal attribution authorized from it.
 - **Windows-only investigation:** the dominant startup cost on this host is
-  found, causally bounded to wgpu-hal's DX12 per-adapter probing of a
-  duplicate-LUID AMD adapter enumeration, and quantified
+  found, causally bounded to wgpu-hal's DX12 per-adapter probing of two
+  same-name/same-VID/DID AMD entries with distinct LUIDs, and quantified
   (`SECOND_PROBE_CAUSAL_OVERHEAD_CONFIRMED`, −152.0 ms /
   −149.6 ms). The probe-internal mechanism is CPU_HEAVY with
   kernel-vs-user unresolved.
@@ -990,6 +1004,35 @@ faithfully copied from the reviewed ETW report.
 - **This record:** documentation only. It adds no measured claim, rewrites
   no historical report, merges no audit branch, and submits nothing
   upstream.
+
+### 22.1 Current project disposition (added 2026-09-14)
+
+The startup-performance investigation is **closed for now**
+(`MEASUREMENT_SUFFICIENT_FOR_CURRENT_PRODUCT_BUILD`). The campaign has
+produced enough evidence to guide product development:
+
+- Windows startup structure is understood to the stage/mechanism level
+  needed for current engineering decisions;
+- the non-selected DX12 adapter probe is causally confirmed as ~150 ms
+  startup overhead on the measured host;
+- its generality and the origin of the second DXGI entry remain open;
+- no production workaround is authorized from the current single-host data.
+
+No further PicoView performance experiments are scheduled. The project now
+returns to product implementation using PocketJS as the Windows UI/view
+foundation. Performance work should resume only after a meaningful viewer
+exists and real user-visible paths can be measured — for example
+open→first pixels, next-image latency, directory browse, zoom/pan frame
+pacing, large-image handling, cold/warm open, memory behavior — as a NEW
+campaign based on the real product path (e.g.
+`PICOVIEW-REAL-WORKLOAD-PERFORMANCE-1`), not as an extension of this
+historical startup campaign. This disposition does NOT claim that
+performance is solved or that the current architecture is proven optimal.
+
+A second-host (Intel) adapter-validation matrix (DX12 None / LowPower /
+HighPerformance, Vulkan, current-wgpu min-repro) was considered during the
+campaign and is recorded here only as a possible future validation idea;
+it is NOT scheduled work and no issue tracks it.
 
 STOP. Do not implement production optimizations. Do not submit upstream
 issues. Do not modify historical reports.

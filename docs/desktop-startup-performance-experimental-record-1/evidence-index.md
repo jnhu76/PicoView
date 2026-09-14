@@ -2,7 +2,8 @@
 
 Provenance for every campaign behind
 `docs/DESKTOP-STARTUP-PERFORMANCE-EXPERIMENTAL-RECORD-1.md`. All refs were
-fetched and verified on 2026-09-14; SHAs are the exact verified values
+verified on 2026-09-14 against fetched remote refs and retained local
+refs/worktrees; SHAs are the exact verified values
 (`git rev-parse <ref>`). Full raw evidence is retained on the branches and
 worktrees named here — the consolidated record deliberately does NOT copy
 hundreds of raw files, it records where they live.
@@ -83,7 +84,10 @@ availability):
 
 ## 5. Verification notes
 
-- All refs re-fetched 2026-09-14 (`git fetch --all --prune`); main advanced
+- All remote refs re-fetched 2026-09-14 (`git fetch --all --prune`);
+  local-only refs (the two Windows audit branches, the PocketJS audit
+  series in its clone, the Linux closeout local tip — see §1 and §5) were
+  verified in place at the recorded SHAs; main advanced
   from `491d0a5` to `ee04801` (PR #43 merge) during the session; the
   consolidated record's docs branch was created from `origin/main` @
   `ee04801631a3e083e7f8b7205666d5061303ec89`.
@@ -95,7 +99,10 @@ availability):
     `audit/windows-startup-callpath-1`;
   - the Linux closeout branch is `docs/linux-desktop-startup-control-1-closeout`
     (remote tip `c7faed4`, local tip `c8dcc75`).
-- No historical report was modified. #42/#43 were not merged or altered.
+- No historical report was modified. PR #43 was already merged into main
+  (the frozen INCONCLUSIVE historical cross-OS record, in `main` @
+  `ee04801`); this record does not rewrite it. #42 remains separate and is
+  not modified.
 - This record itself was adversarially reviewed before its final commit:
   two fresh-context reviewers (measurement/history; upstream/causality)
   with access to the source reports, raw evidence and this archive. Their
