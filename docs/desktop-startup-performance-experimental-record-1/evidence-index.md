@@ -93,7 +93,7 @@ is otherwise frozen; this erratum stands in place of a rebuild.
 
 - All remote refs re-fetched 2026-09-14 (`git fetch --all --prune`);
   local-only refs (the two Windows audit branches, the PocketJS audit
-  series in its clone, the Linux closeout local tip — see §1 and §5) were
+  series in its clone — see §1 and §5) were
   verified in place at the recorded SHAs; main advanced
   from `491d0a5` to `ee04801` (PR #43 merge) during the session; the
   consolidated record's docs branch was created from `origin/main` @
