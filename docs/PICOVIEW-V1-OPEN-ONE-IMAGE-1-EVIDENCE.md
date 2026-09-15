@@ -257,9 +257,9 @@ inconclusive. A bounded stock-host canary
 (`experiments/v1-corrective-1/matrix/canary/`) polls every ~90 s and auto-runs six
 interleaved G/no-G cold-launch pairs the moment the bad state returns; until it
 fires, the mitigation is justified by mechanism + adjacent-window matrices, not by a
-same-window A/B. First canary window (committed `canary/canary.jsonl`): 7 probes over
-~10 minutes, all good state, no trigger — the A/B stays pending the next bad-state
-occurrence.
+same-window A/B. First canary window (committed `canary/canary.jsonl`): the full
+18-probe run (~28 minutes) stayed in the good state, no trigger — the A/B stays
+pending the next bad-state occurrence.
 
 ### 7.5 Delete conditions
 

@@ -10,3 +10,27 @@ C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96:
   px = list(small.getdata())
 C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
   px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
+C:\Users\fred1\source\PicoView\experiments\v1-corrective-1\launch_capture.py:96: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(small.getdata())
