@@ -4,30 +4,31 @@ PicoView is a fast, small, focused Windows 11 local image viewer built on Pocket
 
 Responsibility chain: **Open → View → Inspect → Browse → Handle**. It is not an editor, photo library, cloud product, file manager, media database, or general-purpose asset platform.
 
-## Current phase: PRODUCT IMPLEMENTATION
+## Current phase: Viewer Architecture Reset
 
-PocketJS has been accepted as PicoView's Windows UI/runtime/composition
-foundation (owner decision `POCKETJS_ACCEPTED_FOR_PRODUCT_DEVELOPMENT`,
-2026-09-14). Product implementation is authorized and underway.
+PicoView has already proved a real Windows path from local image decode to PocketJS presentation. The current work freezes the architecture that future product work must follow before additional architecture-sensitive implementation proceeds.
 
-- PocketJS dependency: pinned in [`POCKETJS.lock`](POCKETJS.lock) — the exact
-  revision is the authority; branch names are informational.
-- Architecture boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-- Execution plan: [`docs/ROADMAP.md`](docs/ROADMAP.md) — next slice
-  **V1 — Open One Image** (V0 product shell skeleton is in place under
-  [`guest/`](guest/)).
-- History: the Architecture Phase A admission campaign and the
-  startup-performance investigations are **frozen history**; their verdicts
-  are immutable and indexed in
-  [`docs/history/README.md`](docs/history/README.md). The startup campaign
-  closed as `CLOSED_FOR_NOW` /
-  `MEASUREMENT_SUFFICIENT_FOR_CURRENT_PRODUCT_BUILD` (PR #44) — performance
-  work resumes only after a real viewer workload exists
-  (`PICOVIEW-REAL-WORKLOAD-PERFORMANCE-1`, after ROADMAP V5).
+Current reset:
 
-Not claimed: performance solved, architecture optimal, or a final decoder
-choice. WIC is the baseline decoder; all decoder/memory/GPU optimization is
-deferred until real workload evidence exists.
+- control issue: **#50**;
+- documentation/authority PR: **#51**;
+- branch: `architecture/viewer-semantics-reset-1`.
 
-Project authority lives in `docs/PRD/`, `docs/SPEC/`, accepted ADRs,
-`docs/ARCHITECTURE.md`, `CONTEXT.md`, `docs/ROADMAP.md`, and `AGENTS.md`.
+## Current authority
+
+- Product: [`docs/PRD/PicoView-PRD-v0.6.md`](docs/PRD/PicoView-PRD-v0.6.md)
+- Architecture decision: [`docs/ADR/ADR-0001-viewer-image-rendering-authority.md`](docs/ADR/ADR-0001-viewer-image-rendering-authority.md)
+- Detailed architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Execution contract: [`docs/SPEC/PicoView-v1.1.md`](docs/SPEC/PicoView-v1.1.md)
+- Current state: [`CONTEXT.md`](CONTEXT.md)
+- Operational sequencing: [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- Agent rules: [`AGENTS.md`](AGENTS.md)
+- PocketJS source identity: [`POCKETJS.lock`](POCKETJS.lock)
+
+Older authority documents and architecture/startup campaigns are frozen under [`docs/history/`](docs/history/) and are evidence/history only.
+
+## Architecture in one sentence
+
+> **PicoView decides which image, what the image means, and how the user wants to view it; PocketJS decides how an opaque image resource is rendered on the current graphics backend; large pixel data has one owner at a time, and every O(N pixels) movement must have a physical or semantic reason.**
+
+The graphics path is GPU-first but not GPU-required: prefer a compatible low-power GPU where appropriate, fall back to a compatible discrete GPU, then to software rendering when necessary for correctness.

@@ -1,73 +1,62 @@
-# PicoView History — Architecture Phase A & Startup-Performance Evidence
+# PicoView History — Frozen Evidence and Superseded Authority
 
-This file is an **index and boundary document**. It separates:
+This directory contains **historical evidence and superseded authority**. Nothing here governs current implementation unless a current authority document explicitly re-adopts a fact.
 
-- **HISTORICAL EVIDENCE** — the frozen record of the PocketJS Windows
-  architecture campaign and the startup-performance investigations. Their
-  verdicts, numbers, and wording are **immutable**; they are never edited to
-  match later events.
-- **ACTIVE PRODUCT AUTHORITY** — `docs/PRD/`, `docs/SPEC/`, accepted ADRs,
-  `docs/ARCHITECTURE.md`, `CONTEXT.md`, `docs/ROADMAP.md`, `POCKETJS.lock`,
-  and the current execution issue. Only these govern current work.
+Current authority lives outside `docs/history/`:
 
-## What is historical
+- Product: `docs/PRD/PicoView-PRD-v0.6.md`
+- Architecture: `docs/ADR/` + `docs/ARCHITECTURE.md`
+- Execution: `docs/SPEC/PicoView-v1.1.md`
+- Operational state: `AGENTS.md`, `CONTEXT.md`, `docs/ROADMAP.md`
+- PocketJS source identity: `POCKETJS.lock`
 
-- **Architecture Phase A (ARCH-A0 … ARCH-A7)** — the PocketJS Windows
-  admission campaign: Windows stock target, native image-resource seam,
-  JPEG/WIC path, zoom/pan proof, cancellation/resource bounds, Per-Monitor
-  DPI V2, startup/package/memory/idle footprint. Complete.
-- **GATE-A / GATE-A2** — the architecture admission gates. Their recorded
-  verdicts (startup budgets not met; other lines passing) stand as written.
-  This is **not** retroactively rewritten into a PASS.
-- **Startup-performance campaigns and audits (C1 … C6, startup audits,
-  cross-OS control, ETW/callpath work)** — the investigation that followed
-  the GATE-A startup FAIL.
-- **PR #44 / `docs/DESKTOP-STARTUP-PERFORMANCE-EXPERIMENTAL-RECORD-1.md`**
-  — the **consolidated startup umbrella record**. Its final disposition is
-  the historical closeout: `CLOSED_FOR_NOW` /
-  `MEASUREMENT_SUFFICIENT_FOR_CURRENT_PRODUCT_BUILD`; no further PicoView
-  startup experiments were scheduled.
+## Authority reset archive — 2026-09-15
 
-## Owner decision recorded here for context
+`authority-reset-20260915/` freezes the documents that were active immediately before the Viewer / Image / Rendering architecture reset in #50 / PR #51:
 
-`POCKETJS_ACCEPTED_FOR_PRODUCT_DEVELOPMENT` (2026-09-14): the historical
-admission/startup campaign is **closed with sufficient evidence to proceed
-with product implementation**. PocketJS remains PicoView's Windows
-UI/runtime/view foundation. Unresolved startup-performance questions are
-**deferred until a real product workload exists**; they do not block product
-implementation, and no historical GATE-A budget is retroactively claimed as
-PASS.
+- previous PRD v0.5;
+- previous SPEC v1;
+- previous `ARCHITECTURE.md`;
+- previous `AGENTS.md`;
+- previous `CONTEXT.md`;
+- previous V0–V5 `ROADMAP.md`.
 
-## Evidence index (all paths under `docs/` unless noted)
+They are retained for provenance and comparison only. Do not use them to decide current boundaries merely because current code still resembles them.
 
-| Artifact | What it is |
+## Architecture Phase A and startup-performance evidence
+
+The following remain frozen historical evidence:
+
+- **ARCH-A0 … ARCH-A7** — PocketJS Windows admission campaign;
+- **GATE-A / GATE-A2** — historical architecture gate records;
+- **CORRECTIVE-C1 … C6** and startup audits — post-gate investigation;
+- **PR #44 / `DESKTOP-STARTUP-PERFORMANCE-EXPERIMENTAL-RECORD-1.md`** — historical startup closeout;
+- associated raw evidence directories and experiment guests.
+
+Historical verdicts are not rewritten to fit later architecture decisions.
+
+## Evidence index
+
+| Artifact | Historical role |
 | --- | --- |
-| `ARCH-A0-EVIDENCE.md` … `ARCH-A7-EVIDENCE.md` | Per-ticket Architecture Phase A evidence |
-| `GATE-A-EVIDENCE.md` | First GATE-A execution record |
-| `GATE-A2-EVIDENCE.md` | GATE-A re-execution record |
-| `CORRECTIVE-C1-EVIDENCE.md` … `CORRECTIVE-C6-EVIDENCE.md` | Post-GATE-A corrective/performance campaign evidence |
-| `DESKTOP-STARTUP-PERFORMANCE-EXPERIMENTAL-RECORD-1.md` | Consolidated startup umbrella record (PR #44) |
-| `CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1.md` | Cross-OS startup control experiment |
+| `authority-reset-20260915/` | Superseded authority immediately before #50/#51 reset |
+| `ARCH-A0-EVIDENCE.md` … `ARCH-A7-EVIDENCE.md` | Architecture Phase A evidence |
+| `GATE-A-EVIDENCE.md` | First GATE-A record |
+| `GATE-A2-EVIDENCE.md` | GATE-A re-execution |
+| `CORRECTIVE-C1-EVIDENCE.md` … `CORRECTIVE-C6-EVIDENCE.md` | Corrective/performance campaign evidence |
+| `DESKTOP-STARTUP-PERFORMANCE-EXPERIMENTAL-RECORD-1.md` | Consolidated startup record |
+| `CROSS-OS-NORMALIZED-DESKTOP-STARTUP-1.md` | Cross-OS control experiment |
 | `STARTUP-LAST-MILE-REALITY-AUDIT-1.md` | Windows startup last-mile audit |
 | `WINDOW-STARTUP-CRITICAL-PATH-REALITY-AUDIT-1.md` | Windows startup critical-path audit |
-| `POCKETJS-BASELINE.md` | Frozen PocketJS **campaign** baseline (`pocket-stack/pocketjs` `a5a8535…`) — historical source identity |
-| `BENCHMARK.md` | Measurement-semantics contract — retained as the authority for **any future measurement claim** (e.g. `PICOVIEW-REAL-WORKLOAD-PERFORMANCE-1`, GATE-B); not a current execution gate |
-| `a2/`, `cross-os-normalized-desktop-startup-1/`, `desktop-startup-performance-experimental-record-1/`, `linux-startup-control-1-raw/` | Raw/bundled evidence attached to the reports above |
-| `../experiments/phase-a-guest/` | Retired Phase-A experiment guest source (moved mechanically from `guest/`) |
+| `POCKETJS-BASELINE.md` | Historical campaign PocketJS source identity |
+| `../BENCHMARK.md` | Current measurement-semantics authority; not historical architecture authority |
+| `../experiments/phase-a-guest/` | Retired Phase-A experiment guest |
 | `../evidence/` | Historical benchmark working material |
-
-## PocketJS source history
-
-`jnhu76/pocketjs` carries `archive/picoview-20260914/*` refs preserving the
-historical campaign patch series. These are **museum/history only** — never
-an active dependency. The active dependency is pinned in `../POCKETJS.lock`.
 
 ## Rules
 
-1. Historical evidence files are evidence, **not** current implementation
-   authority. Do not consult them for "what should we build now" — use
-   `docs/ROADMAP.md`.
-2. Do not rewrite, re-derive, or "improve" historical verdicts, including
-   the GATE-A startup FAIL and the `CLOSED_FOR_NOW` startup disposition.
-3. New evidence documents are created only when a ticket's contract requires
-   measurement, and then they follow `docs/BENCHMARK.md`.
+1. `docs/history/` is not current Product, Architecture, Execution or Operational authority.
+2. Do not silently revive superseded assumptions from archived PRD/SPEC/architecture documents.
+3. Historical evidence may support factual claims about what happened, but not automatically prescribe what should be built now.
+4. Current architecture differentials are adjudicated against current ADR/ARCHITECTURE, not against archived implementation assumptions.
+5. Historical verdicts remain immutable as historical records.
