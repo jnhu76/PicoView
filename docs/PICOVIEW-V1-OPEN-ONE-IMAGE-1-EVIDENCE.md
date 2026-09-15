@@ -25,7 +25,7 @@ investigation report is posted at jnhu76/PicoView#46 (comment 5673780953).
 | Item | Value |
 | --- | --- |
 | PicoView base SHA | `e109ce6` (main, product baseline reset) |
-| PicoView evidence-capture/code HEAD | `68a03ae` (full corrective code/evidence capture before docs-only attribution/truthfulness edits); final PR HEAD is later docs-only history |
+| PicoView evidence-capture/code HEAD | `1e04ecb` (color-canonical corrective: canonical PSM_8888 RGBA bytes, verbatim normal path, pruned evidence; manual captures in §4 taken at this head); final PR HEAD is later docs/prune-only history |
 | Branch | `product/v1-open-one-image` |
 | PocketJS locked revision | `df869a51225df5e310b84612c9195030c058b6d9` (`POCKETJS.lock`, branch_hint `feat/windows-desktop-parity`); advanced from `6e631f46` through jnhu76/pocketjs#1 (adversarially reviewed: APPROVE, MINORs closed in `57745b1`) |
 | PocketJS consumption | Cargo git deps pinned to the locked revision (`native/Cargo.toml`); sibling checkout `C:\Users\fred1\source\pocketjs` detached at the same SHA; guest toolchain invoked from the sibling checkout; **no `..` references, no submodule, no vendoring in committed files** |
@@ -240,10 +240,16 @@ reproduces at 100%. All records committed under `experiments/v1-corrective-1/mat
 | `stock-now.jsonl` | stock host, ~40 min later | 4 | 4 CONTENT (state had fled) |
 | `exp-g2.jsonl` / `exp-nog.jsonl` | interleaved G/no-G A/B | 8 + 8 | all CONTENT (good-state window) |
 
+Representative committed captures (one per semantic; the repetitive per-launch PNGs
+were pruned — the JSONLs carry every launch's classification): WHITE — `dbg2-before.png`;
+CONTENT — `exp-g-1.png`; broken composite — `dbg2-now.png`; capture control —
+`notepad-probe.png`.
+
 Mechanism findings:
 
 1. **Presentation calls succeed, but the submitted frame is not observed in the window.**
-   Timelines (`sync-*.log`): window created ~52 ms → surface created+configured ~657 ms
+   Timelines (committed representative `sync-1.log`; the repeated runs agree): window
+   created ~52 ms → surface created+configured ~657 ms
    → first present ~758 ms `submitted true` → screen stays white; a second natural
    WM_PAINT present ~+45 ms also submits while the window stays white. The available
    evidence therefore rules out a simple "first image was never submitted" explanation,
