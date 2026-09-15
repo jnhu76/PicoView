@@ -118,6 +118,14 @@ pub struct Presentation {
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     blits: Vec<(std::sync::Weak<Target>, Blit)>,
+    /// AMD Vulkan driver 25.8.1 (this machine) has a state-dependent defect
+    /// where the first swapchain created on a freshly shown window reports
+    /// presents as submitted while DWM never composites them — the window
+    /// stays blank and nothing (present result, OUT_OF_DATE, SUBOPTIMAL)
+    /// reports the failure. Recreating the swapchain recovers. One-shot
+    /// reconfigure immediately before the first present; event-shaped, no
+    /// timers. See docs/PICOVIEW-V1-OPEN-ONE-IMAGE-1-EVIDENCE.md §7.
+    reconfigure_before_first_present: bool,
 }
 impl Presentation {
     pub fn new(window: Arc<winit::window::Window>) -> Result<Self> {
@@ -166,12 +174,18 @@ impl Presentation {
             surface,
             config,
             blits: Vec::new(),
+            reconfigure_before_first_present: true,
         })
     }
     pub fn present(&mut self, window: &winit::window::Window, target: &Arc<Target>) -> Result<bool> {
         let size = window.inner_size();
         if size.width == 0 || size.height == 0 {
             return Ok(false);
+        }
+        if self.reconfigure_before_first_present {
+            self.reconfigure_before_first_present = false;
+            crate::tlog("first-present recovery: reconfigure swapchain");
+            self.surface.configure(&self.gpu.device, &self.config);
         }
         if (self.config.width, self.config.height) != (size.width, size.height) {
             crate::tlog(&format!(

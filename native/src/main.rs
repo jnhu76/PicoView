@@ -329,31 +329,6 @@ impl Host {
         Ok(())
     }
 
-    /// Re-present the retained GPU frame when the window (re)enters an
-    /// attention state. This is the presentation-lifecycle recovery path:
-    /// a present that raced the swapchain/DWM handoff (recorded on this
-    /// machine's AMD Vulkan driver, PR-era evidence) leaves a blank window
-    /// that a static hash gate would never retry. Focus, un-occlusion, and
-    /// resize are exactly the events that historically recovered it — each
-    /// re-presents the EXISTING frame: one blit, no re-record, no UI tick,
-    /// and the static steady state stays fully event-quiet. No timers.
-    fn republish_on_attention(&mut self, event: &winit::event::WindowEvent) {
-        match event {
-            winit::event::WindowEvent::Focused(true) => {
-                tlog("attention: focused -> re-present retained frame");
-                if let Some(window) = &self.window {
-                    window.request_redraw();
-                }
-            }
-            winit::event::WindowEvent::Occluded(false) => {
-                tlog("attention: unoccluded -> re-present retained frame");
-                if let Some(window) = &self.window {
-                    window.request_redraw();
-                }
-            }
-            _ => {}
-        }
-    }
 }
 
 impl ApplicationHandler<Wake> for Host {
@@ -432,7 +407,6 @@ impl ApplicationHandler<Wake> for Host {
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
     }
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: winit::event::WindowEvent) {
-        self.republish_on_attention(&event);
         match event {
             winit::event::WindowEvent::CloseRequested => {
                 self.tx.try_send(Input::Quit).ok();

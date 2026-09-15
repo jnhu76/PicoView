@@ -10,14 +10,18 @@ original PASS was withdrawn and re-earned. Two regressions/risks were found and 
 (a) the production path destructively downsampled every image into the JS-facing pow2
 ≤512 envelope — fixed by consuming the native large-image resource seam upstreamed to
 PocketJS (jnhu76/pocketjs#1); (b) the 2.5 s polling presentation "self-heal" was
-investigated to root cause and replaced by an event-driven recovery path.
+investigated to root cause: the AMD Vulkan first-frame white window later reproduced
+deterministically in a distinct machine state, was attributed to the driver's
+first-swapchain/DWM handoff (not to any of the three codebases), and is now met by a
+one-shot swapchain reconfigure before the first present (§7). The full investigation
+report is posted at jnhu76/PicoView#46 (comment 5673780953).
 
 ## 1. Identity
 
 | Item | Value |
 | --- | --- |
 | PicoView base SHA | `e109ce6` (main, product baseline reset) |
-| PicoView head SHA | `9308a2a` + corrective commits `0b38c0b` (image seam), `b9adbcf` (Vulkan investigation) |
+| PicoView head SHA | `9308a2a` + corrective commits `0b38c0b` (image seam), `b9adbcf` (Vulkan investigation), `4826cf7` (evidence), plus the live-repro round commit that is this branch's HEAD at review time (exact hash pinned in the PR description and updated below after push) |
 | Branch | `product/v1-open-one-image` |
 | PocketJS locked revision | `df869a51225df5e310b84612c9195030c058b6d9` (`POCKETJS.lock`, branch_hint `feat/windows-desktop-parity`); advanced from `6e631f46` through jnhu76/pocketjs#1 (adversarially reviewed: APPROVE, MINORs closed in `57745b1`) |
 | PocketJS consumption | Cargo git deps pinned to the locked revision (`native/Cargo.toml`); sibling checkout `C:\Users\fred1\source\pocketjs` detached at the same SHA; guest toolchain invoked from the sibling checkout; **no `..` references, no submodule, no vendoring in committed files** |
@@ -56,9 +60,14 @@ Corrective round:
    guest-side crop composition are **deleted**. svc ready events carry width/height
    only (resource dims == source dims; envelope fields gone). Guest fit scales the real
    resource directly; the footer reports true source dimensions.
-7. `b9adbcf` — AMD Vulkan first-frame investigation (§7): lifecycle instrumentation,
-   98-launch reproduction matrix, and replacement of the polling heal with an
-   event-driven recovery path (Focused/Occluded re-present).
+7. `b9adbcf` — AMD Vulkan first-frame investigation round 1 (§7.1): lifecycle
+   instrumentation, 98-launch reproduction matrix (0 white), replacement of the
+   polling heal with an event-driven recovery path (Focused/Occluded re-present).
+8. Live-repro round (this commit set) — the machine later entered a distinct state in
+   which the white window reproduces deterministically (§7.2): root cause attributed to
+   the AMD driver's first-swapchain/DWM handoff (§7.3); the recovery is finalized as a
+   one-shot swapchain reconfigure before the first present and the attention
+   re-present handlers are removed (§7.4).
 
 ## 3. Reproduction
 
@@ -125,6 +134,21 @@ findings were addressed in `067693c` or recorded here:
   behavior rests on the manual captures; a transient blank frame between retire and
   the next ready event is accepted design (core renders freed handles as nothing).
 
+Corrective-round review (two fresh-context reviewers):
+
+- Reviewer A (architecture / cross-repo): **APPROVE**. MINOR (stray `__pycache__`
+  bytecode committed) fixed by removing the files and ignoring the directory.
+- Reviewer B (graphics / presentation lifecycle): **REVISE**, all findings
+  evidentiary-honesty items, all addressed in this round: [MAJOR] launch-count claims
+  exceeded the committed record → §7.2 now cites only committed per-launch JSONLs with
+  exact counts (superseded round-1 table kept with an explicit probe-binary-delta
+  footnote); [MINOR] the Focused-re-present justification was wrong (the event fires
+  pre-frame, a no-op) → the Focused/Occluded handlers are removed entirely and §7
+  rewritten around the one-shot reconfigure; [MINOR] the `Occluded` arm is dead on
+  Windows (winit 0.30.13 never delivers it) → removed with the same handlers; [NIT]
+  duplicate §7 heading → scope section renumbered §8; [NIT] residual-mode phrasing →
+  stated explicitly in §7.4.
+
 ## 6. Known limitations (recorded, not gates)
 
 - **Images above 8192 px per axis are admission-fitted** into the PocketJS native-seam
@@ -133,77 +157,116 @@ findings were addressed in `067693c` or recorded here:
   tiled rendering stays deferred (`docs/ARCHITECTURE.md`, DEFERRED).
 - **EXIF orientation** is not applied (PRD §9 lists it; it is not in #46's acceptance).
 - **JPEG only** in V1; format breadth is #10.
-- **Presentation recovery is event-driven** (see §7): focus / un-occlusion / resize
-  re-present the retained frame. There is no polling and no timer; whether this class
-  of recovery covers every driver-level first-present loss is unprovable on a machine
-  where the loss no longer reproduces (§7) — the detection harness
-  (`experiments/v1-corrective-1/`) is committed so a recurrence is measurable.
+- **Presentation recovery is a one-shot swapchain reconfigure before the first
+  present** (see §7): targeted at the recorded driver defect, event-shaped, no timers.
+  Its sufficiency inside the bad machine state is supported by the captured G matrices
+  but the interleaved same-window A/B against a no-recovery binary has not yet been
+  captured (the state fled mid-investigation); the committed canary
+  (`experiments/v1-corrective-1/matrix/canary/`) closes that gap automatically on the
+  next recurrence.
 - **No performance claims.** No startup, latency, memory, or idle numbers are asserted
   by this ticket; any such claim requires `docs/BENCHMARK.md` rigor in its own ticket.
 
 ## 7. AMD Vulkan first-frame investigation (corrective round)
 
-Symptom (PR-era, machine-observed, intermittent): the first present could lose a race
-against the swapchain/DWM handoff; the static hash gate then never re-presents, so the
-window stayed blank until an external resize. `067693c` papered over it with a 2.5 s @
-200 ms retained-target re-present loop.
+Symptom: on cold launch the window's client area stays white while every present
+reports `submitted true` — no `Outdated`, no `Suboptimal`, no error, no TDR event.
+Measured via `PrintWindow`(PW_RENDERFULLCONTENT) capture + 64×64 thumbnail statistics
+(WHITE: mean_rgb ≈ 248, unique colors 45–65; CONTENT: mean_rgb ≈ 140, unique ≥ 600).
+The harness (`experiments/v1-corrective-1/launch_capture.py`, ctypes-only,
+ShellExecuteW launch, WM_CLOSE teardown) and every per-launch JSON record referenced
+below are committed.
 
-Instrumentation: process-start monotonic base; both threads log window created, surface
-configured, runtime booted, render submit, frame ready, present begin/end (with submit
-result), resize and attention events. Raw timelines: `experiments/v1-corrective-1/matrix/`.
+### 7.1 Round 1 (`b9adbcf`): 0/98 repro → heal deleted, attention recovery added
 
-Reproduction matrix (98 cold launches, all classified by pixel statistics of
-`PrintWindow` captures; harness committed):
+The PR-era 2.5 s @ 200 ms re-present heal had no reproducible target: 98 instrumented
+cold launches (heal on/off, first-present-sync, idle-cold, 4-instance burst, PR-era
+binary, stock host) produced 0 white windows. The heal failed the no-magic-timer bar
+and was deleted in favor of a Focused/Occluded re-present. Footnote (probe delta):
+the "warm rapid, shipped heal" row ran the PR-era binary whose heal was env-gated
+(`PICOVIEW_HEAL`); that env knob does not exist in HEAD. Round 1's "does not
+reproduce" conclusion is **superseded by round 2**.
 
-| Protocol | Builds | Launches | White |
+### 7.2 Round 2 (this round): the bad state exists and is deterministic
+
+The same machine later entered a distinct state in which the defect reproduces at
+100%. All records committed under `experiments/v1-corrective-1/matrix/`:
+
+| matrix (committed JSONL) | binary | launches | result |
 | --- | --- | --- | --- |
-| warm rapid, heal on | new binary | 12 | 0 |
-| warm rapid, heal off | new binary | 12 | 0 |
-| first-present-sync (capture ≤120 ms after `present end`) | new binary, heal off | 12 | 0 |
-| idle-cold (45 s GPU silence before launch) | new binary, heal off | 6 | 0 |
-| 4-instance burst × 3 rounds | new binary, heal off | 12 | 0 |
-| warm rapid (shipped 2.5 s heal) | PR-era binary `9308a2a`, old 512-path | 12 | 0 |
-| stock `pocket-desktop-host` @ `df869a5`, same bundle | PocketJS host | 10 | 0 |
-| warm rapid, final event-driven build | new binary | 10 | 0 |
+| `final-warm.jsonl` | PicoView, no recovery path | 12 | **12 WHITE** |
+| `final-idle.jsonl` | PicoView, no recovery path | 6 | **6 WHITE** |
+| `final-stock.jsonl` | **stock PocketJS host** `pocket-desktop-host` @ `df869a5` | 10 | **10 WHITE** |
+| `final-old.jsonl` | PR-era binary with the 2.5 s heal | 12 | 12 CONTENT (heal masks it) |
+| `exp-g.jsonl` | final binary (one-shot first-present reconfigure) | 12 | 12 CONTENT |
+| `stock-now.jsonl` | stock host, ~40 min later | 4 | 4 CONTENT (state had fled) |
+| `exp-g2.jsonl` / `exp-nog.jsonl` | interleaved G/no-G A/B | 8 + 8 | all CONTENT (good-state window) |
 
 Mechanism findings:
 
-1. **Timeline** (typical): window created ~55 ms; surface configured ~600–700 ms (GPU
-   adapter init dominates); runtime boot + WIC decode + registration +first render
-   ~750 ms; first present ~750–810 ms. The first present lands long after the window is
-   compositor-visible, which structurally avoids the classic "present before exposure"
-   race on this machine today.
-2. **The window-show sequence fires `Focused(true)` and three `Resized` events** before
-   the first frame exists (their redraws are no-ops then, but the events exist).
-3. **The OS delivers a second `WM_PAINT` ~45 ms after the first present** (no
-   application `request_redraw` involved); the retained-frame host answers it with a
-   free re-present. Two presents therefore occur inside the risky window by default.
-4. Recovery class of the historically observed fix: any event that re-presents the
-   retained target (the PR-era evidence says manual resize recovered it).
+1. **Presents succeed; DWM never composites.** Timelines (`sync-*.log`): window
+   created ~52 ms → surface created+configured ~657 ms → first present ~758 ms
+   `submitted true` → screen stays white; a second natural-WM_PAINT present ~+45 ms
+   also submits while the window stays white. This is not "uninitialized first image".
+2. **A resize does not recover.** `dbg2.log` + `dbg2-now.png`: after presents and a
+   `SetWindowPos` resize, the capture shows a broken composite (black clear-color band
+   + white region) — a partially composited buffer.
+3. **The capture channel is healthy.** A notepad probe captures real content
+   (`notepad-probe.png`); no TDR events in the system log.
+4. **Machine-state dependence.** The same binaries flip good⇄bad with zero code
+   change (98-launch good campaign; 100% white bad matrices; good again ~1 h later).
 
-Verdict on the 2.5 s heal: with 0 reproductions across 98 instrumented launches
-(including the PR-era binary and the stock PocketJS host), the polling loop protects
-against nothing measurable on this machine and fails the no-magic-timer quality bar.
-It is replaced by an **event-driven recovery**: `Focused(true)` and `Occluded(false)`
-re-present the retained GPU frame (one blit; no re-record, no UI tick, hash gate
-untouched), plus the resize path that was always there. `Focused(true)` fires inside
-the startup race window (finding 2), so the risky window gains an extra semantically
-justified present without any timer. Verified: quiet-3s log growth 0 bytes after
-settle (static idle is truly idle), minimize/restore correct, 0×0 resize no-op guard
-intact.
+### 7.3 Ownership verdict: AMD driver, not any of the three codebases
 
-Honest limits: the original race's driver-level trigger was never re-established, so
-event-driven recovery cannot be proven sufficient against it — only that it is the
-same recovery class that empirically fixed it, costs ~nothing, and stays fully quiet.
-If the white window recurs, the committed harness measures it (§6).
+1. The stock PocketJS host — a separate presentation implementation with zero PicoView
+   code — reproduces 10/10 WHITE in the same state: exonerates PicoView product code.
+2. Binaries unchanged across state flips: exonerates PicoView, PocketJS, and wgpu
+   code from regression.
+3. All presents return success within the Vulkan/wgpu contract (wgpu 25.0.2,
+   winit 0.30.13); create surface → configure → present is standard legal usage, and
+   the application has no failure signal to react to.
+4. Defect locus: **AMD proprietary Vulkan driver 25.8.1** first-swapchain/DWM handoff
+   on this machine state; destroying and recreating the swapchain is the only observed
+   effective recovery.
 
-Cross-repo ownership verdict: the recorded symptom is a generic desktop presentation
-lifecycle issue (the stock host shares the design), but it does not reproduce on the
-stock host either; no PocketJS change is currently justifiable, and none was made for
-presentation in this round. If it recurs on the stock host, raise it upstream through
-the cross-repo process with the committed harness.
+Cross-repo consequence: PicoView's product presentation path is PicoView-owned
+(`native/src/gpu.rs` `Presentation`); the stock host is a reproduction vehicle only
+and is not consumed by PicoView product. **No PocketJS change is justifiable or made
+for presentation in this round.** Upstream references (wgpu/winit/AMD): the
+existing-issue search is pending (search API quota resets 2026-09-24); none are
+fabricated here. Full report: jnhu76/PicoView#46 (comment 5673780953).
 
-## 7. Scope discipline
+### 7.4 Mitigation (final design)
+
+`Presentation` reconfigures the surface once immediately before its first present
+(`reconfigure_before_first_present`, `native/src/gpu.rs`) — recreating the swapchain,
+which is the observed effective recovery. Event-shaped: no timers, no polling, no
+magic durations; static idle remains `ControlFlow::Wait` (verified truly idle in
+round 1). Removed in this round: the (already deleted) heal's replacement
+Focused/Occluded re-present handlers — recorded runs show they contributed no
+protection (Focused fires pre-frame; re-presents alone did not recover `dbg2`), so
+the final design carries exactly one recovery mechanism. Residual mode without the
+recovery: the window stays white until the process is restarted or an external
+presentation event happens to land (observed: the heal-era binary recovered via its
+polling loop; the un-recovered binary stayed white across ≥ 2 presents and a resize).
+
+Honest status: the G matrices above ran inside captured bad-state windows adjacent in
+time to the 12/12-WHITE no-recovery matrices, but the strictly interleaved same-window
+A/B against the no-recovery binary fell in a good-state window and is by itself
+inconclusive. A bounded stock-host canary
+(`experiments/v1-corrective-1/matrix/canary/`) polls every ~90 s and auto-runs six
+interleaved G/no-G cold-launch pairs the moment the bad state returns; until it
+fires, the mitigation is justified by mechanism + adjacent-window matrices, not by a
+same-window A/B.
+
+### 7.5 Delete conditions
+
+Remove the one-shot reconfigure when a driver update (> 25.8.1) — or an upstream fix
+— verifies 0 white across N ≥ 50 cold launches in a previously-bad machine state
+(detection via the committed canary, since the state is machine-dependent, not
+build-dependent).
+
+## 8. Scope discipline
 
 Not implemented (explicitly out of scope): zoom/pan/Fit/100% semantics (V2), rotation,
 BrowseSession/folder enumeration/next-prev ordering (V3), Open dialog and drag-drop (#5),
