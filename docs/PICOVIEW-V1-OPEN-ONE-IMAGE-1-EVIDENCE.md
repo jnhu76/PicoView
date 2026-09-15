@@ -56,9 +56,8 @@ Corrective round:
    ABI change, no dependency. Patch → tests → adversarial review (APPROVE) → merge →
    then this repo's lock advanced.
 6. `0b38c0b` — production path rewritten onto the seam: the full-resolution WIC decode
-   is word-order converted (RGBA8888 → PSM_8888) and registered via
-   `register_native_texture(FLAG_LINEAR)`. Images within the seam's admission ceiling
-   (8192/axis) pass through **pixel-exact at full source resolution**; only giant
+   is registered via `register_native_texture(FLAG_LINEAR)`. Images within the seam's
+   admission ceiling (8192/axis) pass through at full source resolution; only giant
    images above the ceiling are box-fitted into it (bounded, documented; viewport
    paging stays deferred). The pow2 ≤512 envelope, its transparent padding, and the
    guest-side crop composition are **deleted**. svc ready events carry width/height
@@ -74,6 +73,15 @@ Corrective round:
    the AMD driver from wgpu's Vulkan/WSI integration (§7.3). The V1 compatibility
    mitigation is finalized as a one-shot swapchain reconfigure before the first present;
    the attention re-present handlers are removed (§7.4).
+9. Final subtraction round (`PICOVIEW-PR49-COLOR-CANONICAL-AND-EVIDENCE-PRUNE-1`) —
+   found an incorrect local assumption that PSM_8888 required RGBA→BGRA byte swapping.
+   PocketJS authority shows canonical PSM_8888 memory bytes are RGBA (the pak compiler
+   registers WIC-identical RGBA bytes verbatim; the wgpu backend's `to_rgba8` copies
+   them without a channel swap); the conversion was deleted and the normal image path
+   now registers WIC RGBA bytes verbatim, eliminating the per-pixel box resample that
+   ran even at 1:1 scale. Giant-image box-fit output stays in R,G,B,A order; a dead
+   `LiveResource` width/height pair was removed; evidence assets were pruned to the
+   minimal reviewable set.
 
 ## 3. Reproduction
 
@@ -90,26 +98,40 @@ native\target\release\picoview.exe --js dist\picoview.js --pak dist\picoview.pak
 ```
 
 `cargo test` (native): **9 passed, 0 failed** — WIC JPEG roundtrip, garbage/missing
-rejection, decode-dimension cap, **resource-dimension oracle (1153×1198 stays
-1153×1198; pixels word-order-exact)**, **high-frequency oracle (1024×1024 1px
-checkerboard survives per-pixel exact — the old path averaged every 2×2 block into
-mush on its way into the 512 envelope)**, **admission-fit oracle (>8192 giant image
-bounded to the ceiling)**, bounded svc scalar events, error-message cap, and the
-real-surface lifecycle test (open → replace retires the first handle without GC;
-corrupt open retires the live handle itself; NotAFile; success after error; explicit
-retire; host/guest texture-key contract lock) — now exercising `register_native_texture`
-on the actual open path.
+rejection, decode-dimension cap, **resource oracle (1153×1198 stays 1153×1198; resource
+bytes == canonical decoded RGBA bytes, whole-buffer verbatim)**, **asymmetric channel
+oracle (red/blue/green/magenta asserted per channel — a B,G,R,A emission cannot pass)**,
+**high-frequency oracle (1024×1024 1px checkerboard: dimensions and bytes unchanged —
+the old path averaged every 2×2 block into mush on its way into the 512 envelope)**,
+**admission-fit oracle (>8192 giant image bounded to the ceiling; channel-asymmetric
+fill proves fitted output stays R,G,B,A)**, bounded svc scalar events, error-message
+cap, and the real-surface lifecycle test (open → replace retires the first handle
+without GC; corrupt open retires the live handle itself; NotAFile; success after error;
+explicit retire; host/guest texture-key contract lock) — now exercising
+`register_native_texture` on the actual open path.
 
 ## 4. Manual proof on real Windows (this machine, this toolchain)
 
+Captured at the color-canonical corrective head (§2 item 9); the earlier capture came
+from the pre-fix binary and is superseded.
+
 - `docs/v1-open-one-image-1/present-real-jpeg.png` — `picoview.exe` opened
   `test-media\real-screenshot.jpg` (1153×1198 Windows screenshot re-encoded as JPEG q90,
-  190,268 bytes; runtime log: `generation=1 handle=Some(0)`). Window shows the presented
-  page image, header filename, footer `Ready 1153 x 1198` — the **true source
-  dimensions**, which now equal the native resource dimensions. The displayed image is
-  fit-to-window GPU minification of the full-resolution resource: page text is sharp,
-  with no envelope resample. Capture method: Win32 `PrintWindow`
-  (PW_RENDERFULLCONTENT) on the live window, first cold launch, no interaction.
+  190,268 bytes). Window shows the presented page image, header filename, footer
+  `Ready 1153 x 1198` — the **true source dimensions**, which equal the native resource
+  dimensions. The displayed image is fit-to-window GPU minification of the
+  full-resolution resource: page text is sharp, with no envelope resample. Capture
+  method: Win32 `PrintWindow` (PW_RENDERFULLCONTENT) on the live window, cold launch,
+  no interaction. This screenshot proves the image was visibly presented; it does not
+  by itself prove channel order — color correctness is pinned by the asymmetric unit
+  oracle (§3) and the color fixture below.
+- `docs/v1-open-one-image-1/present-color-fixture.png` — the deterministic asymmetric
+  color fixture (`test-media\color-fixture.jpg`, 256×128, generated by
+  `experiments/v1-corrective-1/color_fixture.ps1`: RED|BLUE / GREEN|MAGENTA /
+  YELLOW|CYAN). Under the deleted B,G,R,A emission red rendered blue and blue rendered
+  red; the capture shows red as red, blue as blue, green/magenta/yellow/cyan correct,
+  footer `Ready 256 x 128`. Purpose is exactly R/B-swap detection — this is not a
+  color-management claim.
 - `docs/v1-open-one-image-1/error-missing-file.png` — same binary launched with a
   nonexistent path: bounded red message `image path does not exist`, footer `Error`,
   shell fully rendered and usable, no crash, no retry loop, no live resource
@@ -159,6 +181,9 @@ Corrective-round review (two fresh-context reviewers):
   AMD driver, and the PR body still described the superseded ≤512 / 6e631f46 / 2.5 s
   heal design. §7 now limits attribution to what the evidence proves; the PR body is
   rewritten to match the current full-resolution seam and compatibility mitigation.
+- Final subtraction review found the incorrect local PSM_8888 byte-order assumption and
+  its pointlessly resampled normal path (§2 item 9); all fixes and re-validations are in
+  that round.
 
 ## 6. Known limitations (recorded, not gates)
 
@@ -266,8 +291,10 @@ follow-up; none are fabricated here. Full report: jnhu76/PicoView#46 (comment
 (`reconfigure_before_first_present`, `native/src/gpu.rs`) — recreating the swapchain,
 which is the observed effective recovery. This is a bounded **compatibility mitigation**,
 not a claim that the exact lower-layer defect owner has been proven. Event-shaped: no
-timers, no polling, no magic durations; static idle remains `ControlFlow::Wait`
-(verified truly idle in round 1). Removed in this round: the (already deleted) heal's
+timers, no polling, no magic durations; static idle keeps the window
+presentation/event loop idle (`ControlFlow::Wait`) while the runtime worker still
+follows the existing 60 Hz PocketJS tick model — recalibrating that model is not this
+ticket's scope. Removed in this round: the (already deleted) heal's
 replacement Focused/Occluded re-present handlers — recorded runs show they contributed
 no protection (Focused fires pre-frame; re-presents alone did not recover `dbg2`), so
 the final design carries exactly one recovery mechanism. Residual mode without the

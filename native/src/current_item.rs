@@ -57,12 +57,14 @@ pub struct DecodedImage {
 }
 
 /// The native image resource body handed to `register_native_texture`.
-/// For ordinary images (both axes <= MAX_RESOURCE_DIM) this is a pure
-/// RGBA8888 → PSM_8888 word-order pass-through of the full decode: content
-/// resolution is the source resolution, full stop. Only giant images above
-/// the seam's admission ceiling are box-fitted down into it.
+/// For ordinary images (both axes <= MAX_RESOURCE_DIM) this is the canonical
+/// WIC RGBA decode verbatim: PSM_8888 memory bytes ARE R,G,B,A order (the
+/// PocketJS pak compiler is authority — "RGBA byte order IS the ABGR u32 LE
+/// layout"), so content resolution is the source resolution and content bytes
+/// are the decoded bytes, full stop. Only giant images above the seam's
+/// admission ceiling are box-fitted down into it.
 pub struct NativeResource {
-    /// PSM_8888 (little-endian BGRA word order), `width * height * 4` bytes.
+    /// Canonical PSM_8888 bytes (R,G,B,A per pixel), `width * height * 4`.
     pub pixels: Vec<u8>,
     pub width: u32,
     pub height: u32,
@@ -95,10 +97,6 @@ impl OpenError {
 
 struct LiveResource {
     handle: i32,
-    #[allow(dead_code)]
-    width: u32,
-    #[allow(dead_code)]
-    height: u32,
 }
 
 /// Native-side Current Item truth. The guest observes it through svc events
@@ -163,11 +161,7 @@ impl CurrentItem {
             );
             return;
         }
-        self.live = Some(LiveResource {
-            handle,
-            width: res.width,
-            height: res.height,
-        });
+        self.live = Some(LiveResource { handle });
         self.push(
             surface,
             ready_event(generation, &name, handle, res.width, res.height),
@@ -228,19 +222,24 @@ fn bounded(s: &str) -> String {
     out
 }
 
-/// Convert the full decode into the native resource body: RGBA8888 →
-/// PSM_8888 (little-endian BGRA words). Images at or below the seam's
-/// admission ceiling pass through at full source resolution: the sample
-/// window of every output pixel is exactly one input pixel, so pixel count
-/// and every pixel value are preserved — a pure word-order conversion.
-/// Only images above MAX_RESOURCE_DIM on either axis are box-fitted down
-/// into the ceiling (documented bounded degradation for giant images;
-/// viewport paging is a later-slice concern).
+/// Convert the full decode into the native resource body. An ordinary image
+/// (both axes within the seam's admission ceiling) registers the canonical
+/// WIC RGBA bytes verbatim — no conversion, no resample: the resource IS the
+/// decode. Only images above MAX_RESOURCE_DIM on either axis are box-fitted
+/// down into the ceiling (documented bounded degradation for giant images;
+/// viewport paging is a later-slice concern), and the box-fit output stays
+/// in canonical R,G,B,A byte order.
 pub fn native_resource(src: &DecodedImage) -> Result<NativeResource, OpenError> {
+    if src.width <= MAX_RESOURCE_DIM && src.height <= MAX_RESOURCE_DIM {
+        return Ok(NativeResource {
+            pixels: src.rgba.clone(),
+            width: src.width,
+            height: src.height,
+        });
+    }
     let (w, h) = (src.width.max(1), src.height.max(1));
     let scale = (MAX_RESOURCE_DIM as f64 / w as f64)
-        .min(MAX_RESOURCE_DIM as f64 / h as f64)
-        .min(1.0);
+        .min(MAX_RESOURCE_DIM as f64 / h as f64);
     let (cw, ch) = (
         ((w as f64 * scale).round() as u32).clamp(1, MAX_RESOURCE_DIM),
         ((h as f64 * scale).round() as u32).clamp(1, MAX_RESOURCE_DIM),
@@ -266,9 +265,9 @@ pub fn native_resource(src: &DecodedImage) -> Result<NativeResource, OpenError> 
                 }
             }
             let out = (cy * cw + cx) as usize * 4;
-            pixels[out] = (b / n) as u8;
+            pixels[out] = (r / n) as u8;
             pixels[out + 1] = (g / n) as u8;
-            pixels[out + 2] = (r / n) as u8;
+            pixels[out + 2] = (b / n) as u8;
             pixels[out + 3] = (a / n) as u8;
         }
     }
@@ -387,8 +386,8 @@ mod tests {
 
     #[test]
     fn native_resource_preserves_source_resolution_and_pixels() {
-        // Resource dimension oracle: the exact image from the corrective
-        // brief. The registered native resource must carry the FULL source
+        // Dimension + byte oracle: the exact image from the corrective brief.
+        // The registered native resource must carry the FULL source
         // resolution — the old path box-shrank it into a 512x512 pow2
         // envelope (1153x1198 -> 493x512), destroying detail before display.
         let (w, h) = (1153u32, 1198u32);
@@ -411,27 +410,40 @@ mod tests {
         assert_eq!(res.width, w, "resource width must equal source width");
         assert_eq!(res.height, h, "resource height must equal source height");
         assert_eq!(res.pixels.len(), (w * h * 4) as usize);
+        // Strongest ordinary-path oracle: canonical PSM_8888 bytes ARE RGBA,
+        // so the resource must equal the decode byte for byte — no swap, no
+        // resample. (The old path emitted B,G,R,A toward a misread BGRA
+        // convention; asymmetric colors make any channel swap impossible to
+        // miss.)
+        assert_eq!(res.pixels, rgba, "ordinary image bytes must be verbatim");
 
-        // Pixel oracle: RGBA8888 -> PSM_8888 is a pure word-order swap. Sample
-        // corners and a striped interior where the pattern is exact.
-        let sample = |x: u32, y: u32| {
-            let src = ((y * w + x) * 4) as usize;
-            let dst = ((y * w + x) * 4) as usize;
-            (
-                res.pixels[dst] == rgba[src + 2],
-                res.pixels[dst + 1] == rgba[src + 1],
-                res.pixels[dst + 2] == rgba[src],
-                res.pixels[dst + 3] == rgba[src + 3],
-            )
-        };
-        for (x, y) in [(0u32, 0u32), (w - 1, h - 1), (500, 501), (1152, 0)] {
-            let (b, g, r, a) = sample(x, y);
-            assert!(b && g && r && a, "pixel ({x},{y}) must survive word-order swap");
+        // Explicit asymmetric channel oracle: red / blue / green / magenta,
+        // asserted per channel so a failure names the swapped channel.
+        let mut asymmetric = Vec::new();
+        for color in [[255u8, 0, 0, 255], [0, 0, 255, 255], [0, 255, 0, 255], [255, 0, 255, 255]] {
+            asymmetric.extend_from_slice(&color);
         }
+        let res2 = native_resource(&DecodedImage {
+            width: 4,
+            height: 1,
+            rgba: asymmetric.clone(),
+        })
+        .expect("asymmetric oracle passes through");
+        let [red, blue, green, magenta] = [
+            &res2.pixels[0..4],
+            &res2.pixels[4..8],
+            &res2.pixels[8..12],
+            &res2.pixels[12..16],
+        ];
+        assert_eq!(red, &[255, 0, 0, 255], "red must stay R,G,B,A");
+        assert_eq!(blue, &[0, 0, 255, 255], "blue must keep blue in byte 2");
+        assert_eq!(green, &[0, 255, 0, 255], "green must keep green in byte 1");
+        assert_eq!(magenta, &[255, 0, 255, 255], "magenta must keep R and B distinct");
+        assert_eq!(res2.pixels, asymmetric);
 
-        // High-frequency oracle: a 1px checkerboard at 1024x1024. The old
-        // path averaged every 2x2 block into uniform mush on its way into the
-        // 512 envelope; the new path must keep every alternating pixel exact.
+        // High-frequency oracle: a 1px checkerboard at 1024x1024. An ordinary
+        // image must keep its dimensions AND its bytes — the old path averaged
+        // every 2x2 block into uniform mush on its way into the 512 envelope.
         let (cw, chh) = (1024u32, 1024u32);
         let mut check = vec![0u8; (cw * chh * 4) as usize];
         for y in 0..chh {
@@ -444,21 +456,15 @@ mod tests {
                 check[at + 3] = 255;
             }
         }
-        let res2 = native_resource(&DecodedImage {
+        let res3 = native_resource(&DecodedImage {
             width: cw,
             height: chh,
-            rgba: check,
+            rgba: check.clone(),
         })
         .expect("checkerboard passes through");
-        assert_eq!(res2.width, cw);
-        assert_eq!(res2.height, chh);
-        for y in 0..chh {
-            for x in 0..cw {
-                let at = ((y * cw + x) * 4) as usize;
-                let v = if (x + y) % 2 == 0 { 0u8 } else { 255u8 };
-                assert_eq!(res2.pixels[at], v, "checkerboard must stay exact at ({x},{y})");
-            }
-        }
+        assert_eq!(res3.width, cw);
+        assert_eq!(res3.height, chh);
+        assert_eq!(res3.pixels, check, "checkerboard bytes must be verbatim");
     }
 
     #[test]
@@ -466,9 +472,14 @@ mod tests {
         // One axis above the seam's ceiling (8192): the resource is
         // box-fitted into the admission limit, bounded, never rejected, and
         // still large enough that fit-to-window display is GPU minification
-        // of real pixels.
+        // of real pixels. The fill is channel-asymmetric so the oracle also
+        // pins the output byte order: every fitted pixel must come out
+        // R,G,B,A — a B,G,R,A emission would read as swapped constants.
         let (w, h) = (20000u32, 100u32);
-        let rgba = vec![90u8; (w * h * 4) as usize];
+        let mut rgba = vec![0u8; (w * h * 4) as usize];
+        for px in rgba.chunks_exact_mut(4) {
+            px.copy_from_slice(&[17, 34, 51, 255]);
+        }
         let res = native_resource(&DecodedImage {
             width: w,
             height: h,
@@ -479,6 +490,9 @@ mod tests {
         assert_eq!(res.height, (100 * 8192 + w / 2) / w);
         assert!(res.width <= pocketjs_core::NATIVE_TEX_MAX_DIM);
         assert_eq!(res.pixels.len(), (res.width * res.height * 4) as usize);
+        for px in res.pixels.chunks_exact(4) {
+            assert_eq!(px, &[17, 34, 51, 255], "box-fit output must stay R,G,B,A");
+        }
     }
 
     #[cfg(windows)]
