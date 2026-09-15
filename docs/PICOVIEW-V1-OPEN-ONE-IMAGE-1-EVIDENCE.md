@@ -1,27 +1,31 @@
 # PICOVIEW-V1-OPEN-ONE-IMAGE-1 — Evidence
 
-Status: READY_FOR_REVIEW. Branch `product/v1-open-one-image`, base `e109ce6` (main).
-Ticket: jnhu76/PicoView#46 (executing the V1 slice of #1). No PRD/SPEC gate budgets are
-involved; this slice makes one explicit local JPEG visibly presented through the formal
-product architecture and records bounded error paths.
+Status: READY_FOR_REVIEW. Verdict: **PASS_WITH_KNOWN_COMPATIBILITY_MITIGATION**.
+Branch `product/v1-open-one-image`, base `e109ce6` (main). Ticket: jnhu76/PicoView#46
+(executing the V1 slice of #1). No PRD/SPEC gate budgets are involved; this slice makes
+one explicit local JPEG visibly presented through the formal product architecture and
+records bounded error paths.
 
 **Corrective round** (`PICOVIEW-V1-IMAGE-QUALITY-AND-AMD-VULKAN-CORRECTIVE-1`): the
 original PASS was withdrawn and re-earned. Two regressions/risks were found and worked:
 (a) the production path destructively downsampled every image into the JS-facing pow2
 ≤512 envelope — fixed by consuming the native large-image resource seam upstreamed to
 PocketJS (jnhu76/pocketjs#1); (b) the 2.5 s polling presentation "self-heal" was
-investigated to root cause: the AMD Vulkan first-frame white window later reproduced
-deterministically in a distinct machine state, was attributed to the driver's
-first-swapchain/DWM handoff (not to any of the three codebases), and is now met by a
-one-shot swapchain reconfigure before the first present (§7). The full investigation
-report is posted at jnhu76/PicoView#46 (comment 5673780953).
+removed after investigation. The first-frame white window later reproduced
+deterministically in a distinct machine state, including in the stock PocketJS desktop
+host. That excludes a PicoView-specific image/presentation cause and localizes the
+problem to the shared AMD Vulkan / Windows WSI-DWM presentation stack; the specific
+lower-layer owner (AMD driver versus wgpu/Vulkan WSI integration) is **not uniquely
+proven** by the current evidence. PicoView carries a bounded one-shot swapchain
+reconfigure before the first present as a compatibility mitigation (§7). The full
+investigation report is posted at jnhu76/PicoView#46 (comment 5673780953).
 
 ## 1. Identity
 
 | Item | Value |
 | --- | --- |
 | PicoView base SHA | `e109ce6` (main, product baseline reset) |
-| PicoView head SHA | `9308a2a` + corrective commits `0b38c0b` (image seam), `b9adbcf` (Vulkan investigation), `4826cf7` (evidence), `a7f829a` (live-repro round: one-shot reconfigure, evidence rewrite) |
+| PicoView evidence-capture/code HEAD | `68a03ae` (full corrective chain before this docs-only attribution/truthfulness edit); the final PR HEAD may be a later docs-only commit |
 | Branch | `product/v1-open-one-image` |
 | PocketJS locked revision | `df869a51225df5e310b84612c9195030c058b6d9` (`POCKETJS.lock`, branch_hint `feat/windows-desktop-parity`); advanced from `6e631f46` through jnhu76/pocketjs#1 (adversarially reviewed: APPROVE, MINORs closed in `57745b1`) |
 | PocketJS consumption | Cargo git deps pinned to the locked revision (`native/Cargo.toml`); sibling checkout `C:\Users\fred1\source\pocketjs` detached at the same SHA; guest toolchain invoked from the sibling checkout; **no `..` references, no submodule, no vendoring in committed files** |
@@ -64,10 +68,12 @@ Corrective round:
    instrumentation, 98-launch reproduction matrix (0 white), replacement of the
    polling heal with an event-driven recovery path (Focused/Occluded re-present).
 8. Live-repro round (this commit set) — the machine later entered a distinct state in
-   which the white window reproduces deterministically (§7.2): root cause attributed to
-   the AMD driver's first-swapchain/DWM handoff (§7.3); the recovery is finalized as a
-   one-shot swapchain reconfigure before the first present and the attention
-   re-present handlers are removed (§7.4).
+   which the white window reproduces deterministically (§7.2), including in the stock
+   PocketJS host. The evidence excludes PicoView-specific product code and points most
+   strongly at the AMD Vulkan / Windows WSI-DWM boundary, while not uniquely separating
+   the AMD driver from wgpu's Vulkan/WSI integration (§7.3). The V1 compatibility
+   mitigation is finalized as a one-shot swapchain reconfigure before the first present;
+   the attention re-present handlers are removed (§7.4).
 
 ## 3. Reproduction
 
@@ -148,6 +154,11 @@ Corrective-round review (two fresh-context reviewers):
   Windows (winit 0.30.13 never delivers it) → removed with the same handlers; [NIT]
   duplicate §7 heading → scope section renumbered §8; [NIT] residual-mode phrasing →
   stated explicitly in §7.4.
+- Post-corrective review found two documentation truthfulness issues, both fixed in this
+  edit: the PR/evidence language over-attributed the lower-layer fault uniquely to the
+  AMD driver, and the PR body still described the superseded ≤512 / 6e631f46 / 2.5 s
+  heal design. §7 now limits attribution to what the evidence proves; the PR body is
+  rewritten to match the current full-resolution seam and compatibility mitigation.
 
 ## 6. Known limitations (recorded, not gates)
 
@@ -157,9 +168,11 @@ Corrective-round review (two fresh-context reviewers):
   tiled rendering stays deferred (`docs/ARCHITECTURE.md`, DEFERRED).
 - **EXIF orientation** is not applied (PRD §9 lists it; it is not in #46's acceptance).
 - **JPEG only** in V1; format breadth is #10.
-- **Presentation recovery is a one-shot swapchain reconfigure before the first
-  present** (see §7): targeted at the recorded driver defect, event-shaped, no timers.
-  Its sufficiency inside the bad machine state is supported by the captured G matrices
+- **Presentation compatibility mitigation is a one-shot swapchain reconfigure before
+  the first present** (see §7): targeted at the recorded AMD Vulkan / Windows WSI-DWM
+  failure mode, event-shaped, no timers. The current evidence does not uniquely separate
+  an AMD driver defect from the wgpu Vulkan/WSI layer. Its sufficiency inside the bad
+  machine state is supported by the captured G matrices
   but the interleaved same-window A/B against a no-recovery binary has not yet been
   captured (the state fled mid-investigation); the committed canary
   (`experiments/v1-corrective-1/matrix/canary/`) closes that gap automatically on the
@@ -216,33 +229,43 @@ Mechanism findings:
 4. **Machine-state dependence.** The same binaries flip good⇄bad with zero code
    change (98-launch good campaign; 100% white bad matrices; good again ~1 h later).
 
-### 7.3 Ownership verdict: AMD driver, not any of the three codebases
+### 7.3 Attribution verdict: PicoView-specific cause excluded; lower-layer owner unresolved
 
 1. The stock PocketJS host — a separate presentation implementation with zero PicoView
-   code — reproduces 10/10 WHITE in the same state: exonerates PicoView product code.
-2. Binaries unchanged across state flips: exonerates PicoView, PocketJS, and wgpu
-   code from regression.
+   product code — reproduces 10/10 WHITE in the same bad machine state. This strongly
+   excludes PicoView's JPEG path, Current Item logic, guest binding, and PicoView-only
+   presentation policy as the cause.
+2. The same binaries flip good⇄bad with zero code change. This proves the symptom is
+   machine/graphics-state dependent rather than a source-code revision regression; it
+   does **not** by itself exclude a state-dependent race or WSI lifecycle defect in a
+   shared lower layer.
 3. All presents return success within the Vulkan/wgpu contract (wgpu 25.0.2,
    winit 0.30.13); create surface → configure → present is standard legal usage, and
-   the application has no failure signal to react to.
-4. Defect locus: **AMD proprietary Vulkan driver 25.8.1** first-swapchain/DWM handoff
-   on this machine state; destroying and recreating the swapchain is the only observed
-   effective recovery.
+   the application receives no OUT_OF_DATE/SUBOPTIMAL/error signal. This establishes
+   that PicoView has no direct failure callback to react to, but it does not uniquely
+   identify which lower layer failed to make the frame visible.
+4. The strongest current locus is the **AMD Vulkan / Windows WSI-DWM presentation
+   boundary** on AMD proprietary driver 25.8.1. Recreating the swapchain is the only
+   observed effective recovery. The present evidence does **not uniquely distinguish**
+   an AMD driver defect from wgpu's Vulkan/WSI integration or another shared WSI/DWM
+   interaction; a lower-level minimal reproduction, upstream confirmation, or driver
+   A/B would be required for that stronger attribution.
 
 Cross-repo consequence: PicoView's product presentation path is PicoView-owned
 (`native/src/gpu.rs` `Presentation`); the stock host is a reproduction vehicle only
-and is not consumed by PicoView product. **No PocketJS change is justifiable or made
-for presentation in this round.** Upstream references (wgpu/winit/AMD): the
-existing-issue search is pending (search API quota resets 2026-09-24); none are
-fabricated here. Full report: jnhu76/PicoView#46 (comment 5673780953).
+and is not consumed by PicoView product. The evidence therefore justifies no PocketJS
+presentation change in this round. Upstream references (wgpu/winit/AMD) remain a
+follow-up; none are fabricated here. Full report: jnhu76/PicoView#46 (comment
+5673780953).
 
-### 7.4 Mitigation (final design)
+### 7.4 Compatibility mitigation (final V1 design)
 
 `Presentation` reconfigures the surface once immediately before its first present
 (`reconfigure_before_first_present`, `native/src/gpu.rs`) — recreating the swapchain,
-which is the observed effective recovery. Event-shaped: no timers, no polling, no
-magic durations; static idle remains `ControlFlow::Wait` (verified truly idle in
-round 1). Removed in this round: the (already deleted) heal's replacement
+which is the observed effective recovery. This is a bounded **compatibility mitigation**,
+not a claim that the exact lower-layer defect owner has been proven. Event-shaped: no
+timers, no polling, no magic durations; static idle remains `ControlFlow::Wait`
+(verified truly idle in round 1). Removed in this round: the (already deleted) heal's replacement
 Focused/Occluded re-present handlers — recorded runs show they contributed no
 protection (Focused fires pre-frame; re-presents alone did not recover `dbg2`), so
 the final design carries exactly one recovery mechanism. Residual mode without the
@@ -257,9 +280,9 @@ inconclusive. A bounded stock-host canary
 (`experiments/v1-corrective-1/matrix/canary/`) polls every ~90 s and auto-runs six
 interleaved G/no-G cold-launch pairs the moment the bad state returns; until it
 fires, the mitigation is justified by mechanism + adjacent-window matrices, not by a
-same-window A/B. First canary window (committed `canary/canary.jsonl`): the full
-18-probe run (~28 minutes) stayed in the good state, no trigger — the A/B stays
-pending the next bad-state occurrence.
+same-window A/B. First canary window (committed `canary/canary.jsonl`): 7 probes over
+~10 minutes, all good state, no trigger — the A/B stays pending the next bad-state
+occurrence.
 
 ### 7.5 Delete conditions
 
