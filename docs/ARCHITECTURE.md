@@ -14,28 +14,10 @@ Superseded authority is archived under `docs/history/authority-reset-20260915/`.
 
 PicoView uses **domain authority**, not one total document ranking.
 
-### Product authority
-
-`docs/PRD/PicoView-PRD-v0.6.md`
-
-Owns user-visible jobs, commands, promises, and non-goals.
-
-### Architecture authority
-
-1. accepted ADRs in `docs/ADR/`;
-2. this document.
-
-Owns semantic boundaries, coordinate semantics, ownership, lifetime, rendering contracts, and physical invariants.
-
-### Execution authority
-
-`docs/SPEC/PicoView-v1.1.md`
-
-Turns Product + Architecture authority into executable contracts. It may narrow a slice; it may not redefine either authority.
-
-### Operational authority
-
-`AGENTS.md`, `CONTEXT.md`, `docs/ROADMAP.md`, and GitHub issues own workflow/current state/sequencing only.
+- **Product authority** — `docs/PRD/PicoView-PRD-v0.6.md`: user-visible jobs, commands, promises, and non-goals.
+- **Architecture authority** — accepted ADRs + this document: semantic boundaries, coordinate semantics, ownership, lifetime, rendering contracts, and physical invariants.
+- **Execution authority** — `docs/SPEC/PicoView-v1.1.md`: executable contracts satisfying Product + Architecture authority.
+- **Operational authority** — `AGENTS.md`, `CONTEXT.md`, `docs/ROADMAP.md`, GitHub issues: workflow/current state/sequencing only.
 
 If Product and Architecture authority genuinely conflict, implementation stops until authority is repaired explicitly.
 
@@ -43,178 +25,201 @@ If Product and Architecture authority genuinely conflict, implementation stops u
 
 ---
 
-# 1. Three semantic authorities
+# 1. Boundary map
 
-## 1.1 Product semantics — PicoView
+The architecture has three semantic domains, with Rendering split into a logical contract and a physical backend realization.
 
-> **What did the user ask for, and what logical item/view state is current?**
-
-PicoView owns Open, CurrentItem, BrowseSession, Previous/Next, Fit, Actual Size/100%, Zoom, Pan, Rotate View, Flip View, Reset View, Fullscreen, Refresh/revalidation, last-good policy, product-visible capability, and product-visible error.
-
-These are product facts. PocketJS may carry/render them but must not redefine them.
-
-## 1.2 Image semantics — PicoView native
-
-> **What does this encoded source mean as an image?**
-
-PicoView native owns product format policy, source I/O and decoder orchestration, source dimensions, frame/page structure, intrinsic orientation, alpha semantics, bit depth/precision, color description/ICC, HDR/source characteristics, animation timing/composition semantics, source-fidelity requirements, and decoder/image-semantic error origin.
-
-Decoder implementation is replaceable behind this authority.
-
-## 1.3 Rendering semantics — PocketJS graphics/runtime
-
-> **Given a generic image resource and view intent, how is it physically rendered and presented on the active backend/output?**
-
-PocketJS owns generic resource identity/lifetime, resource revision, DrawList/image draw contract, backend selection, backend-native physical storage/residency, sampling, transforms, clipping, blending, display adaptation, surface lifecycle, presentation, and software rendering where provided.
-
-### Fundamental rule
+| Layer | Owns | Does not own |
+|---|---|---|
+| **PicoView Product** | current item, navigation, Fit/100%, Zoom/Pan, user Rotate/Flip, fullscreen, refresh/last-good, product capability/errors | codec mechanics, resource lifetime, shaders, texture storage, GPU selection |
+| **PicoView Image** | format policy, decode orchestration, intrinsic orientation, source dimensions, alpha/precision/color/HDR/frame meaning | view policy, PocketJS revision counters, backend texture/device representation |
+| **PocketJS Core** | opaque logical resource identity/lifetime, stale-handle protection, `content_revision`, DrawList/generic draw contract, backend-independent capabilities | JPEG/PNG/WIC semantics, PicoView Fit policy, physical GPU residency |
+| **Graphics Backend** | physical texture/bitmap/storage, residency/eviction, in-flight leases, sampler/matrix/shader realization, output adaptation, presentation | product meaning, source-format meaning, publication policy |
 
 > **One fact has one authority.**
 
-A downstream layer may consume a fact. It may not create a competing meaning for that fact.
+A downstream layer may consume a fact. It may not create a competing meaning for it.
 
 ---
 
-# 2. Execution model: CPU control + selected graphics backend
+# 2. CPU/GPU are execution locations, not authority layers
 
-Do not confuse **where semantics are decided** with **where pixels are rasterized**.
+Do not infer semantic ownership from where instructions execute.
 
-## 2.1 CPU control / image-preparation plane
+## 2.1 Normally CPU-side control
 
-CPU-side control work includes:
+Current control work is normally CPU-side:
 
-- PicoView product state;
-- source access;
-- decode and image interpretation;
-- metadata interpretation required for correct presentation;
-- PocketJS component tree;
+- Product state and publication decisions;
+- component/UI state;
 - layout;
-- input/focus/gesture handling;
-- user view-state calculation;
+- input/focus/gesture processing;
+- view-state calculation;
+- decode orchestration;
+- resource create/update/release requests;
 - DrawList generation.
 
-UI state/layout/input are therefore CPU-side facts.
+This does **not** mean all image processing or all UI pixels must be computed on CPU.
 
-## 2.2 Graphics realization plane
+## 2.2 Decode execution is not frozen to CPU
 
-Final pixels are produced by the **selected graphics backend**.
+PicoView Image owns **what decode means and which semantic result is required**. It does not own a rule saying the decoder must execute on CPU.
 
-### GPU backend
+A decode implementation may use:
 
-When an eligible GPU backend is active, it is the primary path for:
+- CPU software decode;
+- Windows/platform codecs;
+- dedicated media/image hardware;
+- GPU/accelerator decode;
+- another implementation hidden behind the same image-semantic contract.
 
-- backend-native image residency;
-- sampling/scaling;
-- image transforms;
-- clipping/blending;
-- display/color adaptation;
+If an accelerator path can preserve the required source semantics and produce storage directly consumable/importable by the active graphics path, it may avoid:
+
+```text
+full CPU pixel plane
+→ CPU-side normalization copy
+→ CPU→GPU full upload
+```
+
+and instead use a path conceptually like:
+
+```text
+encoded source
+→ accelerator decode
+→ backend-consumable/native image storage
+→ PocketJS logical resource
+→ rendering
+```
+
+This is preferred **when evidence shows it actually reduces O(N pixels) materialization/transfer without introducing a worse interop or cross-adapter copy**.
+
+Hardware/GPU decode is therefore permitted and desirable where suitable, but is not mandatory and must not leak backend-specific objects or codec nouns into Product/TSX contracts.
+
+## 2.3 UI rasterization is backend realization
+
+UI state/policy/layout remain CPU-side control facts.
+
+Final UI pixels are **not semantically assigned to CPU or GPU**:
+
+- current wgpu backend may rasterize/composite UI and image primitives together on GPU;
+- software backend may rasterize UI and image primitives on CPU.
+
+Do not create a separate CPU UI bitmap pipeline merely because UI semantics are CPU-side; on a GPU backend that can introduce needless per-frame bitmap upload.
+
+---
+
+# 3. Three semantic authorities
+
+## 3.1 Product semantics — PicoView
+
+> **What did the user ask for, and what logical item/view state is current?**
+
+Product owns:
+
+- Open / CurrentItem / BrowseSession;
+- Previous / Next;
+- Fit;
+- Actual Size / 100%;
+- Zoom / Pan;
+- user Rotate View / Flip View / Reset View;
+- Fullscreen;
+- Refresh / revalidation;
+- last-good publication policy;
+- product-visible capability and errors.
+
+Product owns **view intent**: it decides the requested view state and derived product geometry. It does not own physical sampler/shader/matrix implementation.
+
+## 3.2 Image semantics — PicoView native
+
+> **What does this encoded source mean as an image?**
+
+Image owns:
+
+- product format policy;
+- source access and decoder orchestration;
+- source dimensions / frame/page structure;
+- intrinsic orientation;
+- alpha semantics;
+- bit depth / precision;
+- color description / ICC;
+- HDR/source characteristics;
+- animation timing/composition semantics;
+- source-fidelity requirements;
+- decoder/image-semantic error origin.
+
+Decoder implementation and execution location are replaceable behind this boundary.
+
+## 3.3 Rendering semantics — PocketJS
+
+> **Given generic image facts and Product view intent, how is a logical resource represented by generic draw commands and physically realized on the active backend/output?**
+
+Rendering authority is deliberately split:
+
+### PocketJS Core contract
+
+Core owns:
+
+- opaque logical resource identity;
+- logical lifetime / stale-handle protection;
+- `content_revision` generation and update semantics;
+- generic render-image admission/update contract;
+- DrawList/image draw contract;
+- backend-independent rendering capabilities;
+- graphics backend selection policy.
+
+### Graphics Backend realization
+
+Backend owns:
+
+- physical texture/bitmap/surface representation;
+- residency / eviction / recreation;
+- in-flight GPU/software leases;
+- sampler/matrix/shader realization of generic draw parameters;
+- clipping/blending implementation;
+- output color/HDR adaptation implementation;
+- surface lifecycle;
 - final presentation.
 
-The same backend **may** rasterize/composite UI primitives as well. The current PocketJS wgpu renderer does this naturally because the DrawList already contains UI and image primitives.
+---
 
-### Software backend
+# 4. View intent vs transform realization
 
-A software backend may rasterize both UI and image content on the CPU and present the resulting frame through an appropriate software-capable presentation path.
+The word “transform” must not hide multiple authorities.
 
-### What is not frozen
-
-The architecture does **not** say:
+The fixed ownership chain is:
 
 ```text
-UI pixels MUST be produced on CPU
+intrinsic source orientation          → PicoView Image
+user Fit/100%/Zoom/Pan/Rotate/Flip   → PicoView Product
+bounded generic draw parameters       → PocketJS Core contract
+physical sampler/matrix/shader work   → Graphics Backend
 ```
 
-and does **not** say:
+PocketJS must not invent PicoView's Fit or 100% policy. PicoView must not directly select shader matrices, texture samplers, or backend resource representation.
 
-```text
-UI pixels MUST be produced on GPU
-```
-
-It says:
-
-> **UI policy/state/layout are CPU-side; final rasterization/composition belongs to the active graphics backend. Image display is GPU-first, with software rendering as the final fallback target.**
-
-Do not create a separate CPU UI bitmap pipeline merely because UI semantics are CPU-side; that would risk an unnecessary per-frame CPU-bitmap→GPU transfer when a GPU backend is already active.
+Sampling intent can be selected as part of Product/view policy or derived generic draw policy; its **physical sampler object** belongs to the backend.
 
 ---
 
-# 3. Canonical end-to-end flow
+# 5. Coordinate spaces and transform order
 
-```text
-Local Encoded Source
-        │
-        ▼
-PicoView Source / Decode
-        │
-        ▼
-Image Semantic Interpretation
-        │
-        ├─ source extent
-        ├─ intrinsic orientation
-        ├─ representation / precision
-        ├─ alpha semantics
-        ├─ color / HDR semantics
-        └─ frame/page semantics
-        │
-        ▼
-Render-image admission description + owned/borrowed storage
-        │
-        ▼
-PocketJS Generic Image Admission
-        │
-        ▼
-Opaque Image Resource Identity
-        │
-        ├────► QuickJS/TSX sees bounded semantic state only
-        │
-        ▼
-PocketJS DrawList
-        │
-        ▼
-Selected Graphics Backend
-        │
-        ├─ wgpu/native GPU residency
-        ├─ WebGPU residency where applicable
-        └─ software bitmap/raster path
-        │
-        ▼
-Presentation
-        │
-        ▼
-Display
-```
+The viewer must not let every layer invent its own meaning for “image coordinates” or “100%.”
 
-**Semantic boundary != allocation boundary != memcpy boundary.**
-
-A clean module split does not imply each module receives a private copy of a multi-megapixel image.
-
----
-
-# 4. Coordinate spaces and transform order
-
-This section is normative. The viewer must not let every layer invent its own definition of “image coordinates” or “100%.”
-
-## 4.1 Coordinate spaces
+## 5.1 Spaces
 
 ### Source Sample Space `S`
 
-The decoded source sample grid before intrinsic orientation is applied.
-
-For a source of `W × H`, sample coordinates are based on that source extent.
+The decoded/source sample grid before intrinsic orientation.
 
 ### Oriented Logical Image Space `O`
 
-Source Sample Space after applying intrinsic image interpretation such as EXIF orientation.
+`S` after Image-owned intrinsic orientation such as EXIF orientation. A 90°/270° intrinsic rotation swaps logical width and height.
 
-A 90°/270° intrinsic rotation swaps logical width and height.
-
-The dimensions normally exposed to product view logic are **oriented logical dimensions**, not raw decoder storage dimensions.
+The dimensions normally exposed to Product view logic are oriented logical dimensions, not raw storage dimensions.
 
 ### User-Transformed Image Space `U`
 
-Oriented Logical Image Space after user-controlled Rotate View / Flip View.
-
-These transforms are presentation state and do not alter intrinsic source orientation.
+`O` after Product-owned user Rotate/Flip state.
 
 ### Viewport Logical Space `L`
 
@@ -222,43 +227,33 @@ PocketJS/UI logical coordinates, normally DIP-like units.
 
 ### Physical Presentation Space `P`
 
-Physical client/output pixels after applying the monitor/output scale.
+Physical client/output pixels after current output scaling.
 
-## 4.2 Transform order
-
-The order is fixed:
+## 5.2 Fixed order
 
 ```text
-S --intrinsic orientation--> O
-O --user rotate/flip-------> U
-U --Fit/Zoom/Pan-----------> L
-L --DPI/output scale-------> P
+S --intrinsic orientation--> O          [Image]
+O --user rotate/flip-------> U          [Product intent]
+U --Fit/Zoom/Pan-----------> L          [Product intent / generic draw geometry]
+L --DPI/output scale-------> P          [runtime/output fact]
+P --raster/present---------> Display    [Backend realization]
 ```
 
-Equivalently:
+Conceptually:
 
 ```text
 P = D ∘ V ∘ Ux ∘ Oi (S)
 ```
 
-where:
+Color/output transfer is a separate pixel-value transform; it does not redefine geometry.
 
-- `Oi` = intrinsic source-orientation transform;
-- `Ux` = user Rotate/Flip transform;
-- `V` = Fit/Zoom/Pan view transform;
-- `D` = logical-to-physical output transform.
+## 5.3 Reset View
 
-Color/output transfer is a separate pixel-value transform and does not redefine geometry.
+Reset View clears user-controlled view state. It never clears intrinsic source orientation.
 
-## 4.3 Reset View
+## 5.4 Fit
 
-Reset View clears user-controlled view state (`Ux`, zoom/pan/Fit selection according to product policy).
-
-It **never clears `Oi`**, because intrinsic orientation is part of image meaning, not transient view state.
-
-## 4.4 Fit
-
-Fit computes a zoom factor from the complete post-intrinsic/post-user-transform logical image extent and the available **physical image viewport**.
+Fit uses the complete post-intrinsic/post-user-transform logical image bounds and available physical image viewport while preserving aspect ratio.
 
 Conceptually:
 
@@ -267,241 +262,236 @@ fit_scale = min(viewport_physical_width / image_logical_width,
                 viewport_physical_height / image_logical_height)
 ```
 
-The corresponding UI-logical draw extent is derived through the current DPI/output scale.
+The corresponding UI-logical geometry is derived through current output scaling.
 
-Fit is a presentation transform; it does not require CPU-resizing the source into a new bitmap unless a deliberately distinct proxy resource is admitted for another named reason.
+Fit is presentation state. It does not require CPU-resizing the source merely to change the view.
 
-## 4.5 Actual Size / 100%
+## 5.5 Actual Size / 100%
 
-At 100%, the geometric scale is defined in physical-pixel terms:
+At 100%:
 
 > **1 oriented/user-transformed logical image sample maps to 1 physical presentation pixel in scale.**
 
-Let `d = physical_pixels_per_UI_logical_unit` for the current monitor/output. Then at 100%:
+If `d = physical_pixels_per_UI_logical_unit`:
 
 ```text
 UI_logical_units_per_image_sample = 1 / d
 ```
 
-Therefore a `4000 px` image on a `1.5×` DPI output occupies approximately `2666.67` UI logical units at 100%; it is **not** drawn as `4000 DIP` and then multiplied by DPI.
+A `4000 px` image on a `1.5×` output therefore occupies about `2666.67` UI logical units at 100%, not `4000 DIP` subsequently magnified to `6000` physical pixels.
 
 A reduced proxy can never satisfy true 100%.
 
-Pixel-perfect inspection may additionally require pixel-aligned translation/sampling policy; that is draw policy and does not change the 1:1 physical scale definition.
+Pixel-perfect inspection may additionally require pixel-aligned translation/sampling policy; that does not change the 1:1 physical-scale definition.
 
-## 4.6 Zoom
+## 5.6 Zoom / Pan / DPI transition
 
-User zoom is a multiplier of the 100%-defined physical image scale.
+Zoom is a multiplier over the 100%-defined physical image scale. Pan changes translation. Neither normally changes image content or resource identity.
 
-```text
-physical_pixels_per_image_sample = zoom_factor
-```
-
-where `zoom_factor = 1.0` at Actual Size.
-
-Ordinary zoom changes bounded view/draw state only. It must not itself trigger decode restart, CPU full-image resample, or resource re-admission.
-
-## 4.7 Pan
-
-Pan changes translation between image space and viewport space. It normally changes only bounded view/draw state.
-
-## 4.8 DPI/output transition
-
-Moving the window to a different-DPI output changes `D` and the logical draw geometry needed to preserve image-space semantics.
-
-It does not redefine source dimensions, intrinsic orientation, or 100% physical scale.
+Moving to a different-DPI output changes `D` and the UI-logical geometry needed to preserve semantics. It does not redefine image dimensions, intrinsic orientation, or 100%.
 
 ---
 
-# 5. Image → rendering semantic contract
+# 6. Image → PocketJS admission contract
 
-The rendering boundary must be **codec-transparent but representation-aware**.
+The boundary is **codec-transparent but representation-aware**.
 
-Do not pass JPEG/WIC/GIF-specific objects to PocketJS. Do pass the generic facts required to render pixels correctly.
+Do not pass JPEG/WIC/GIF-specific objects into PocketJS. Do pass generic facts required for correct rendering.
 
-## 5.1 Conceptual `RenderImageDesc`
+## 6.1 Conceptual `RenderImageDesc`
 
-The exact Rust name/type is intentionally not frozen, but the admission contract must be able to express at least:
+Exact Rust type names are intentionally not frozen. The admission description must be able to express, when applicable:
 
 ```text
 storage_extent
 logical_extent
-row_stride / plane layout as required
+row_stride / plane layout
 pixel_encoding + precision
 alpha_representation
 color_encoding / profile semantics
 intrinsic_transform if not materialized
-content_revision
 ```
 
-### Pixel encoding / precision
+**`content_revision` is not an Image-supplied field.** PocketJS Core owns revision state.
 
-The contract describes what the admitted samples physically mean. It must distinguish representations when the renderer needs different interpretation.
+On initial resource creation, Core establishes the initial revision. On a committed content update, Core advances it. Image-side codec/frame sequence values may exist but must not become a second PocketJS revision truth.
 
-Do not flatten every image into an unconditional `RGBA8 sRGB` semantic contract.
+## 6.2 CPU storage ingress
 
-### Alpha representation
-
-The boundary must distinguish at least the meaningful cases required by supported rendering paths, such as opaque, straight/unassociated alpha, and premultiplied alpha.
-
-The renderer's blend state must agree with the admitted alpha representation; fixed alpha blending is not allowed to silently reinterpret pixels.
-
-### Color semantics
-
-The boundary must preserve enough information for correct display adaptation. This may be a normalized working color encoding or a generic color-description/profile reference resolved before/at rendering, but codec-specific metadata must not leak into generic renderer APIs.
-
-### Intrinsic transform
-
-If EXIF/source orientation is not materialized into a new pixel plane, the generic admission/draw path must preserve an intrinsic transform or equivalent logical-image mapping.
-
-## 5.2 Normalize only when semantics require it
-
-A transformation may be justified by:
-
-- decoder output representation not accepted by the selected resource path;
-- required color transform;
-- required alpha conversion;
-- frame composition;
-- orientation materialization where transform-only presentation cannot satisfy semantics;
-- another explicit correctness requirement.
-
-If the decoded representation is already acceptable, ownership should move forward without a full-plane copy.
-
----
-
-# 6. Product view semantics
-
-## 6.1 Rotate View / Flip View
-
-User Rotate/Flip are applied **after intrinsic source orientation**.
-
-They are non-destructive presentation transforms by default.
-
-Materializing a new full pixel plane requires a named reason such as backend limitation, frame-composition requirement, explicit export/save, or another correctness constraint.
-
-## 6.2 Fullscreen / resize
-
-These change viewport/presentation geometry. They do not by themselves redefine the logical image or require full-resource image upload.
-
-## 6.3 Refresh / revalidation
-
-Refresh uses candidate-then-publish semantics:
-
-1. revalidate current source;
-2. build/decode an independent candidate;
-3. admit candidate resource successfully;
-4. atomically publish the candidate according to product policy;
-5. retire previous publication only after replacement publication is committed;
-6. if candidate construction/admission fails, retain last-good publication when product policy requires it and surface a bounded refresh error.
-
-Navigate-to-bad-file and refresh-current-bad-file are intentionally distinct product cases.
-
----
-
-# 7. Resource lifecycle and ownership state machine
-
-“Core owns lifetime” is not sufficient without a state model.
-
-## 7.1 Logical resource states
-
-A normal candidate follows:
+A common ingress is:
 
 ```text
-DecodedCandidate
-      │ owns CPU storage / semantic description
-      ▼
+owned/borrowed CPU storage + RenderImageDesc
+→ PocketJS generic admission
+→ logical resource identity
+```
+
+If the representation is already accepted, ownership moves/borrows forward without an avoidable full-plane copy.
+
+## 6.3 Backend-native/importable ingress
+
+The generic contract must also leave room for accelerator/platform decode paths that produce backend-native or backend-importable storage:
+
+```text
+accelerator/platform decode result + generic image semantics
+→ generic import/admission
+→ same logical resource model
+```
+
+This is **not** a second public image type or compositor. Different physical ingress paths converge on one logical resource/draw contract.
+
+Backend/platform handles remain below the generic boundary; Product/TSX do not see them.
+
+## 6.4 Alpha
+
+The contract distinguishes the alpha representations required by supported paths, such as opaque, straight/unassociated alpha, and premultiplied alpha.
+
+Backend blend realization must agree with admitted alpha semantics.
+
+## 6.5 Color/HDR
+
+Image owns source color/HDR truth. PocketJS Core carries generic representation/adaptation requirements. Backend provides output capability and performs physical conversion/presentation.
+
+A codec-specific profile object must not leak into generic DrawList/TSX contracts merely because a decoder produced it.
+
+## 6.6 Intrinsic orientation
+
+If intrinsic orientation is not materialized into storage, its generic logical mapping must survive admission/draw.
+
+---
+
+# 7. Publication, logical resource lifetime, and physical residency
+
+These are three different authorities.
+
+## 7.1 Product publication state
+
+Product owns questions such as:
+
+```text
+Which item is the candidate?
+Which item is current/published?
+Should last-good remain visible?
+Has replacement committed?
+When is the old logical resource no longer needed by Product?
+```
+
+Product emits resource create/update/release intent. It does not directly destroy physical backend storage.
+
+## 7.2 PocketJS logical resource state
+
+PocketJS Core owns states conceptually like:
+
+```text
 AdmissionPending
-      │ move/borrow into generic admission
-      ▼
-Admitted
-      │ opaque logical resource exists
-      ▼
-Published
-      │ product may reference it through non-owning handle/id
-      ▼
-Retired
-      │ no new product publication should target it
-      ▼
-Released
+→ Admitted/Live
+→ ReleaseRequested
+→ LogicallyDead
 ```
 
-Backend physical residency may be created, evicted, recreated, or destroyed underneath an admitted logical resource according to backend policy.
+Core owns opaque handles, stale-handle safety, logical lifetime, and `content_revision`.
 
-## 7.2 Ownership rules
+QuickJS/TSX receives only a **non-owning opaque identity**.
 
-- `DecodedCandidate` owns or explicitly borrows its CPU storage.
-- Generic admission must make ownership transfer/borrow semantics explicit.
-- QuickJS/TSX receives only a **non-owning opaque identity**.
-- PocketJS owns logical resource lifetime and stale-handle protection.
-- The backend owns physical storage/residency and in-flight GPU/software leases.
-- Final release must wait until no backend/in-flight frame can still dereference the physical resource.
+## 7.3 Backend physical residency
 
-## 7.3 Publish/replace ordering
-
-For a refresh/replacement with last-good semantics:
+Backend owns physical states/events such as:
 
 ```text
-old Published resource remains valid
-        │
-        ├── candidate decode/admission succeeds
-        │       ▼
-        │   atomic publication swap
-        │       ▼
-        └── old resource retires/releases
+nonresident
+↔ resident
+resident + in-flight leases
+→ evicted/recreated as policy requires
+→ physically destroyed when safe
 ```
 
-Never retire last-good first and then discover that replacement admission failed.
+Residency may disappear and later be recreated without changing Product item identity or logical handle identity if the Core/backend contract permits recovery.
 
-For navigation to a new corrupt/unsupported item, product policy may instead publish an error item and retire the previous item; that is a Product decision, not an accidental side effect of admission order.
+Final physical destruction waits until no in-flight frame/work can dereference the storage.
 
-## 7.4 Device loss / backend switch
+## 7.4 Refresh / last-good ordering
 
-Physical residency loss does not automatically mean logical product identity changed.
+For refresh of an already-visible item:
 
-A backend may recreate residency for the same logical resource if recoverable storage/source exists. Otherwise it may require re-decode/re-admission under the same product item, with truthful loading/capability state.
+```text
+old Product publication remains current
+        │
+        ├─ candidate decode/import/admission succeeds
+        │        ▼
+        │   Product publication swap commits
+        │        ▼
+        └─ Product releases old logical resource
+                 ▼
+             Core retires when safe
+                 ▼
+             Backend destroys when safe
+```
 
-Switching from GPU to software after startup/device failure is a recovery feature distinct from selecting software fallback at startup. Do not claim seamless runtime failover until implemented and tested.
+Do not release/destroy last-good first and then discover that candidate decode or admission failed.
+
+Navigation to a new corrupt/unsupported item may follow different Product publication policy; that must be deliberate, not an accident of resource APIs.
+
+## 7.5 Device loss / backend switch
+
+Physical residency loss does not automatically mean Product identity changed.
+
+A backend may recreate residency from retained/recoverable storage, or the system may re-decode/re-admit under the same Product item with truthful loading/capability state.
+
+Startup software fallback and seamless mid-session migration after device loss are separate features.
 
 ---
 
-# 8. Memory movement and residency contract
+# 8. Memory movement and decode/import paths
 
-This is architecture correctness, not deferred performance tuning.
+This is architecture correctness, not deferred micro-optimization.
 
-## 8.1 Pixel-plane handoff
+## 8.1 General rule
 
-For every `O(image-pixels)` boundary crossing:
+For every `O(image-pixels)` handoff:
 
-> **Move ownership or borrow storage by default.**
+> **Move ownership, borrow storage, or transfer/import once for a named physical reason.**
 
-A full-plane copy requires a named semantic or physical reason.
+A module boundary is not a reason to materialize another full image.
 
-## 8.2 Canonical static fast path
+## 8.2 CPU-decoded static fast path
 
-When decoder output is already accepted by admission:
+When CPU decode output is already accepted:
 
 ```text
-Decode creates final CPU pixel plane
+CPU decoder produces final required pixel plane
         │
         │ ownership move / borrow
         ▼
-Generic resource admission
+PocketJS admission
         │
-        │ required device/backend transfer
+        │ one required backend/device transfer if needed
         ▼
 Backend residency
-        │
-        ▼
-CPU storage may retire when recovery/lifetime policy permits
 ```
 
-Target invariants:
+Targets:
 
 - avoidable post-decode CPU full-plane copies = **0**;
 - GPU→CPU image readback = **0** unless an explicit feature requires it;
-- view/UI changes do not create new image content and therefore do not themselves trigger full-resource upload.
+- view/UI state changes do not trigger new image content admission.
 
-## 8.3 Residency-aware upload rule
+## 8.3 Accelerator-direct path
+
+Where supported and actually beneficial:
+
+```text
+encoded source
+→ hardware/GPU/platform decode
+→ backend-native/importable image
+→ PocketJS logical admission
+→ render
+```
+
+This path may avoid a full CPU pixel plane and CPU→GPU upload entirely.
+
+Do not call a path “zero-copy” merely because the API surface looks direct. Count hidden interop, cross-adapter, format-conversion, staging, and import copies when evaluating the physical path.
+
+## 8.4 Residency-aware upload/import rule
 
 Do **not** encode “one upload forever.”
 
@@ -509,66 +499,62 @@ For the same:
 
 ```text
 logical resource identity
-+ content_revision
++ PocketJS content_revision
 + device_generation
 ```
 
-an existing valid residency must be reused.
+valid existing residency must be reused.
 
-A new full upload is legitimate only after a named event such as:
+A new upload/import is legitimate after a named event such as:
 
-- first residency creation;
-- content revision;
+- first residency creation/import;
+- committed content update;
 - explicit backend eviction/residency loss;
 - device recreation;
 - deliberately distinct proxy/full-resolution/tiled resource;
-- backend representation conversion requiring a new physical resource.
+- required representation conversion.
 
-While valid residency exists, zoom, pan, Fit, Actual Size toggle, window resize, DPI move, UI rerender, and presentation-only rotate/flip must not cause redundant full-resource upload.
+While valid residency exists, Zoom, Pan, Fit, Actual Size toggle, window resize, DPI move, UI rerender, and presentation-only Rotate/Flip do not justify redundant full-resource upload.
 
-Backend residency/eviction is backend state, not product generation.
+## 8.5 Encoded-source movement
 
-## 8.4 Encoded-source movement
-
-Encoded source bytes have a weaker but similar rule: avoid unnecessary whole-file duplication when streaming, move, mapped access, or bounded buffering is sufficient.
-
-This does not require every decoder to stream; it requires whole-file materialization/copies to have a reason rather than arise accidentally at every layer.
+Avoid unnecessary whole-file duplication when streaming, move, mapped access, or bounded buffering is sufficient. Streaming is not mandatory; accidental repeated whole-file copies are not acceptable.
 
 ---
 
 # 9. Identity, generations, and revisions
 
-Do not use one ambiguous `generation` for unrelated lifetimes.
+Keep these distinct:
 
-## 9.1 `request_generation`
+## 9.1 `request_generation` — Product
 
-Product publication ordering. A newer open/navigation request makes older publication stale.
+Latest-wins Product publication ordering. A stale request may finish unavoidable work but may not publish over a newer request.
 
-A stale request may finish unavoidable work but may not publish over the newest request.
+## 9.2 `handle_generation` — PocketJS Core
 
-## 9.2 `handle_generation`
+Stale logical-resource handle protection. Free/reuse must not let an old handle alias a new resource.
 
-Resource stale-handle protection. Free/reuse of a slot must not let an old handle alias a new logical resource.
+## 9.3 `content_revision` — PocketJS Core
 
-## 9.3 `content_revision`
+Changed content committed under a stable logical resource identity.
 
-Changed content under a stable logical resource identity.
+Image/Product code requests a content update; **PocketJS assigns/advances the revision** when the update commits.
 
-Animation is the canonical example:
+Animation is the canonical case:
 
 ```text
 request_generation   stable
 resource handle      stable
-content_revision     advances
+content_revision     advances in PocketJS
 ```
 
-## 9.4 `device_generation`
+## 9.4 `device_generation` — Graphics runtime/backend
 
-Backend/device recreation domain. It is not product navigation and not image-content revision.
+Graphics device/resource-domain recreation. It is not Product navigation and not image-content revision.
 
-## 9.5 Backend residency identity
+## 9.5 Backend-private residency epochs
 
-A backend may additionally track private residency/cache epochs. These are not exposed as another product generation.
+Backend may track private cache/residency epochs. They do not leak as another Product/Core generation.
 
 ---
 
@@ -576,62 +562,52 @@ A backend may additionally track private residency/cache epochs. These are not e
 
 QuickJS is a **control plane**, not an image-data plane.
 
-## 10.1 Allowed
+Allowed bounded state includes opaque resource identity, oriented/logical display dimensions, loading/ready/error status, request generation, view capability, Zoom/Pan state, bounded metadata, and bounded Product errors.
 
-Bounded semantics such as opaque resource identity, oriented/logical display dimensions, loading/ready/error status, request generation, view capability, zoom/pan state, bounded metadata, and bounded product errors.
-
-## 10.2 Forbidden normal-path payloads
+Forbidden normal-path payloads include:
 
 - encoded image file bytes;
 - decoded multi-megapixel pixel planes;
 - giant base64/JSON/ArrayBuffer payloads;
 - decoder-specific objects;
-- backend texture/device objects;
+- backend texture/device/import handles;
 - adapter/device internals.
 
 **Hard invariant: `O(image-bytes)` never crosses QuickJS in the ordinary viewer path.**
 
-## 10.3 TSX authority
-
-TSX may own product view policy and interaction binding. It may know `actualSizeAvailable`; it must not know that the reason is a raw GPU dimension limit, PSM representation, decoder object, or adapter detail.
+TSX may own Product view interaction/policy. It may know `actualSizeAvailable`; it must not know the raw GPU dimension limit, PSM representation, decoder object, or adapter detail causing a capability result.
 
 ---
 
-# 11. Resource description vs draw description
+# 11. Resource facts vs draw facts
 
-Resource facts answer **what the image resource is**:
+Resource facts answer **what the logical image resource is**:
 
-- identity;
+- opaque identity;
 - storage/logical extent;
 - representation/precision;
 - alpha/color semantics;
-- content revision;
-- intrinsic mapping where needed.
+- intrinsic mapping where needed;
+- PocketJS-managed revision state.
 
-Draw facts answer **how to draw it now**:
+Draw facts answer **how Product currently wants it shown**:
 
 - source rect / UV;
 - destination geometry;
 - user/view transform;
-- sampling;
+- sampling intent;
 - opacity;
 - clip.
 
-Sampling therefore normally belongs to draw/view policy, not immutable resource identity.
+The backend realizes these draw facts using physical sampler/matrix/shader objects.
 
-The same resource may be drawn with different sampling policy for Fit versus pixel inspection without resource recreation.
+The same resource may be drawn with different sampling/view policy without resource recreation.
 
 ---
 
 # 12. Format support
 
-## 12.1 Decoder capability != product support
-
-A system codec becoming available does not silently expand PicoView's advertised support.
-
-Official format support is Product authority.
-
-## 12.2 Capability matrix
+Decoder capability does not automatically become Product support.
 
 For every advertised format, evaluate as relevant:
 
@@ -646,37 +622,27 @@ For every advertised format, evaluate as relevant:
 - corruption/truncation behavior;
 - large-image/full-resolution behavior.
 
-“File opens” is not enough to claim full support.
-
-## 12.3 Codec nouns stop at image semantics
-
-JPEG / PNG / GIF / AVIF / HEIF / WIC objects / codec-specific disposal semantics must not leak into generic PocketJS rendering APIs or TSX.
+JPEG / PNG / GIF / AVIF / HEIF / WIC objects / codec-specific disposal semantics stop at Image authority. Generic PocketJS rendering must not branch on them.
 
 ---
 
-# 13. Source truth, color, alpha, and presentation adaptation
+# 13. Color, alpha, and presentation adaptation
 
-## 13.1 Source truth
+## 13.1 Source truth — Image
 
-Source truth includes the image meaning required for faithful viewing: dimensions, intrinsic orientation, precision, color characteristics, alpha semantics, HDR characteristics, and temporal/frame semantics where applicable.
+Image owns source precision, color characteristics/profile meaning, alpha semantics, HDR characteristics, and temporal/frame meaning.
 
-## 13.2 Presentation adaptation
+## 13.2 Generic render contract — PocketJS Core
 
-Presentation adapts source truth to the current output capability. Examples include Fit scaling, monitor/output color transform, HDR presentation, HDR→SDR tone mapping, and draw sampling policy.
+Core carries the representation and generic adaptation requirements needed to render correctly without codec-specific nouns.
 
-Presentation adaptation does not redefine the source.
+## 13.3 Output capability and physical adaptation — Backend
 
-## 13.3 Alpha/blending
+Backend knows the active output/surface capability and physically performs the required conversion, blending, tone mapping, and presentation.
 
-The renderer must know the admitted alpha representation required for correct blending.
+A user-visible future color/HDR mode would itself be Product policy; absent such a mode, Product does not choose shaders or working spaces.
 
-A generic renderer may branch on generic alpha/pixel representations. It must not branch on JPEG/PNG/GIF/PicoView product nouns.
-
-## 13.4 Advanced color
-
-The architecture preserves enough semantics for wide-gamut/HDR paths even when a release does not advertise them.
-
-If the active backend/output cannot faithfully provide an advanced path, product capability must remain truthful and adaptation must not pretend the source itself changed meaning.
+Presentation adaptation never redefines source truth.
 
 ---
 
@@ -691,39 +657,41 @@ On native Windows, GPU selection prioritizes:
 3. low-power preference among valid adapters;
 4. compatible discrete GPU fallback.
 
-In many hybrid systems the low-power choice will be the iGPU. This is a preference, not a vendor/device rule.
+In many hybrid systems the low-power choice is the iGPU. This is a preference, not a vendor/device rule.
 
-Do not force resources onto an iGPU if a coherent compatible dGPU path avoids harmful cross-adapter movement.
+Do not force an iGPU if a coherent compatible dGPU path avoids harmful cross-adapter movement.
+
+The same locality rule applies to accelerator decode: a nominal hardware-decode path is not preferred if interop/cross-adapter transfers make it physically worse.
 
 ## 14.2 Software fallback target
 
 If no viable GPU path exists, the target architecture provides a software backend capable of basic correct viewing.
 
-Minimum fallback semantics before claiming “GPU not required” are:
+Before claiming “GPU not required,” verify at least:
 
-- product UI is usable;
-- ordinary SDR image is visible;
-- Fit / Actual Size / Zoom / Pan work truthfully;
-- source orientation and alpha are handled correctly for supported formats;
-- errors/capabilities remain truthful.
+- usable Product UI;
+- ordinary SDR image display;
+- Fit / Actual Size / Zoom / Pan;
+- supported intrinsic orientation and alpha semantics;
+- truthful errors/capabilities.
 
 Advanced HDR/wide-gamut/performance capability may be unavailable.
 
-**Current implementation note:** the locked PocketJS/PicoView Windows path currently depends on wgpu for presentation. Software fallback is therefore a migration target, not an already-proved capability.
+**Current implementation note:** the locked PocketJS/PicoView Windows path currently depends on wgpu for presentation. Software fallback is a migration target, not an already-proved capability.
 
 ## 14.3 Runtime recovery is separate
 
-Startup selection of software fallback and mid-session recovery from GPU device loss are different features. Seamless runtime backend migration is not implied unless separately implemented and tested.
+Startup software fallback and seamless mid-session recovery from GPU device loss are separate features. Do not claim runtime backend migration unless implemented and tested.
 
 ---
 
 # 15. Large images and truthful admission
 
-Backend limits are runtime capabilities, not image semantic limits.
+Backend limits are runtime capabilities, not Image semantic limits.
 
-A constant such as `8192` must not become “the maximum semantic image size” because one backend/default limit once used that number.
+A constant such as `8192` must not become “the maximum semantic image size” because one backend/default limit once used that value.
 
-Possible truthful states include:
+Possible truthful Product capability states include:
 
 - `FullResolutionAvailable`;
 - `FitProxyOnly`;
@@ -738,20 +706,18 @@ Silent destructive downsampling followed by pretending a proxy is full resolutio
 
 # 16. Error domains
 
-Internal errors preserve where failure happened.
+Internal errors preserve origin at least across:
 
-At minimum distinguish:
+- Source;
+- Decode provider/execution;
+- Image semantic/interpretation;
+- Resource admission/import/update;
+- Rendering;
+- Presentation.
 
-- Source error;
-- Decode error;
-- Image-semantic/interpretation error;
-- Resource-admission error;
-- Rendering error;
-- Presentation error.
+They map at the Product boundary into bounded user-visible states.
 
-These map at the product boundary to bounded user-facing states.
-
-A GPU/resource admission rejection must not be relabeled as “decode failed.”
+A GPU/resource admission failure must not be relabeled as “decode failed,” and an accelerator-import failure must not redefine source-format truth.
 
 ---
 
@@ -759,11 +725,11 @@ A GPU/resource admission rejection must not be relabeled as “decode failed.”
 
 CurrentItem answers:
 
-> **Which logical item does the product currently consider published?**
+> **Which logical item does Product currently consider published?**
 
-It may own/reference source identity, `request_generation`, loading/ready/error status, logical display geometry, published opaque resource identity, view capability, last-good publication, and bounded product error.
+It may own/reference source identity, `request_generation`, loading/ready/error status, logical display geometry, published opaque logical resource identity, view capability, last-good publication, and bounded Product error.
 
-It must not become owner of decoder implementation, color-management implementation, animation-renderer internals, backend texture representation, GPU adapter/device, surface/swapchain, DrawList renderer, directory enumeration, or TSX layout/input machinery.
+It must not own decoder implementation, color-management implementation, `content_revision`, backend texture/import representation, GPU adapter/device, surface/swapchain, DrawList renderer, directory enumeration, or TSX layout/input machinery.
 
 ---
 
@@ -781,61 +747,70 @@ Current-image work outranks BrowseSession background work.
 
 Architecture boundaries are healthy when these substitutions remain local:
 
+### Decoder provider change
+
 ```text
-WIC → another decoder
+WIC CPU decode → another CPU decoder / hardware decoder / accelerator provider
 ```
 
-changes PicoView image/decode code, not TSX/DrawList/generic renderer semantics.
+Changes Image/provider integration, not Product view semantics or generic DrawList semantics.
+
+### New format
 
 ```text
 JPEG → AVIF / another admitted format
 ```
 
-does not add codec branches to the generic renderer.
+Does not add codec branches to generic PocketJS rendering.
+
+### View change
 
 ```text
-wgpu GPU backend → another graphics implementation
+Fit → 100% → Zoom → Rotate
 ```
 
-does not rewrite PicoView product/image semantics.
+Changes Product view intent and generic draw parameters, not image resource content by default.
+
+### Graphics backend change
+
+```text
+wgpu GPU backend → another GPU backend / verified software backend
+```
+
+Does not rewrite Product/Image semantics.
+
+### Adapter change
 
 ```text
 compatible iGPU → compatible dGPU
 ```
 
-does not change product semantics.
+Does not change Product semantics.
 
-```text
-GPU startup unavailable → software backend
-```
+### Static → animated content
 
-may reduce performance/advanced capability but keeps basic product truth coherent once fallback is implemented.
-
-```text
-static → animated resource
-```
-
-may advance `content_revision`; codec-specific disposal semantics do not leak into TSX.
+Codec-specific frame/disposal semantics remain in Image; committed generic resource content updates advance PocketJS `content_revision` without inventing new Product request generations.
 
 ---
 
 # 20. Current known implementation differentials
 
-These are migration targets, not accepted target design:
+These are migration targets, not accepted design:
 
 - PicoView currently imports PocketJS PSM representation for native image registration;
 - ordinary decoded images are cloned into `NativeResource` instead of ownership-moving;
 - PocketJS core currently materializes CPU-owned aligned texture storage before wgpu;
 - the wgpu path currently materializes another RGBA vector even for `PSM_8888`;
-- current sampling preference is stored partly as texture identity/state rather than purely draw policy;
+- current sampling preference is partly stored as texture state rather than purely generic draw policy;
 - current `NATIVE_TEX_MAX_DIM` embeds a wgpu-default-class limit in core and PicoView uses it as an admission/downsample trigger;
 - current giant-image path silently creates a reduced resource, so full-resolution capability needs truthful separation;
 - current resource-admission failure can be mapped as decode failure;
 - current refresh/publication ordering may retire the previous resource before replacement admission succeeds;
 - renderer/presentation authority is still partly implemented in PicoView host code;
 - current Windows presentation path has no proved software renderer fallback;
-- current color/alpha boundary is effectively RGBA8/PSM-oriented and is not yet the generic `RenderImageDesc` contract;
-- existing `generation` terminology must be split by authority.
+- current color/alpha boundary is effectively RGBA8/PSM-oriented rather than the generic admission contract;
+- current decode path always materializes CPU RGBA even though future accelerator-direct/import paths are allowed;
+- existing generation/revision terminology must be split by authority.
 
 ---
 
@@ -843,30 +818,48 @@ These are migration targets, not accepted target design:
 
 If PicoView needs a capability generic to runtime/graphics, implement it in `jnhu76/pocketjs` first, review/merge it there, then advance `POCKETJS.lock`.
 
-Likely PocketJS work includes backend-native generic image admission, resource lifetime/revision, representation-aware render contract, renderer backend selection/fallback, surface/presentation mechanics, sampling state, and runtime capability reporting.
+Likely PocketJS work includes:
 
-PicoView owns format policy/decoder orchestration, CurrentItem publication, Fit/100% product semantics, navigation/browse semantics, source-fidelity policy, and product-visible errors/capabilities.
+- backend-native/importable generic image admission;
+- logical resource lifetime / `content_revision` ownership;
+- representation-aware render contract;
+- graphics backend selection/fallback;
+- surface/presentation mechanics;
+- generic sampling/draw realization;
+- runtime/output capability reporting.
 
-Do not patch a hidden local PocketJS fork inside PicoView.
+PicoView owns:
+
+- format policy and decode orchestration;
+- source/image semantics;
+- CurrentItem publication;
+- Fit/100%/Zoom/Pan/Rotate/Flip Product intent;
+- navigation/browse semantics;
+- source-fidelity policy;
+- Product-visible errors/capabilities.
+
+A hardware decoder/provider may require cross-repo/platform integration, but it must still obey these authorities. Do not patch a hidden local PocketJS fork inside PicoView.
 
 ---
 
 # 22. Deferred optimization vs non-deferred correctness
 
-Workload-driven optimization may remain deferred: decoder tuning, texture/buffer pools, preload/cache, tiling algorithm, mip generation, hardware decode, upload staging optimization, and UMA-specific optimization.
+Workload-driven choices may remain deferred: decoder provider tuning, texture/buffer pools, preload/cache, tiling algorithm, mip generation, specific hardware-decode APIs, upload staging, and UMA-specific tuning.
 
-These correctness properties are **not** deferred:
+These properties are **not** deferred:
 
 - no image bytes through QuickJS;
-- no accidental full-plane copy merely because a module boundary exists;
-- no redundant upload while valid residency exists merely because view/UI state changed;
-- no stale request publication;
+- no accidental full-plane copy merely because a semantic boundary exists;
+- no redundant upload/import while valid residency exists merely because view/UI state changed;
+- no stale Product request publication;
 - no false 100% from a reduced proxy;
 - no codec semantics in generic renderer;
 - no backend/device semantics in PicoView Product/Image policy;
 - no conflation of intrinsic orientation and user transform;
 - no undefined alpha/color representation at resource admission;
-- no conflation of source truth and display adaptation.
+- no Product ownership of PocketJS `content_revision`;
+- no conflation of publication, logical lifetime, and physical residency;
+- no conflation of semantic authority with CPU/GPU execution placement.
 
 ---
 
@@ -876,16 +869,20 @@ Stop implementation and repair authority/design if continuing requires:
 
 1. `O(image-bytes)` through QuickJS;
 2. an unexplained full-image copy at a semantic boundary;
-3. backend texture/device nouns as PicoView Product/Image semantics;
+3. backend texture/device/import nouns as PicoView Product/Image semantics;
 4. codec-specific branches in generic rendering;
 5. a reduced proxy advertised as true 100%;
-6. a view/UI state change causing redundant upload while valid residency exists;
+6. a view/UI state change causing redundant upload/import while valid residency exists;
 7. stale `request_generation` publication;
-8. request/handle/content/device generations treated as interchangeable;
-9. user Reset View discarding intrinsic source orientation;
-10. fixed blending/color behavior silently reinterpreting an admitted representation;
-11. last-good refresh state destroyed before replacement admission succeeds;
-12. Product and Architecture authority conflict.
+8. Product/Image code setting PocketJS `content_revision` directly;
+9. request/handle/content/device generations treated as interchangeable;
+10. user Reset View discarding intrinsic source orientation;
+11. fixed blending/color behavior silently reinterpreting an admitted representation;
+12. last-good Product publication destroyed before replacement admission succeeds;
+13. Product directly destroying backend physical storage;
+14. PocketJS inventing Product Fit/100% policy;
+15. CPU/GPU execution placement being used to redefine semantic authority;
+16. Product and Architecture authority conflict.
 
 A truthful blocker is preferable to a workaround that damages the architecture.
 
@@ -893,4 +890,4 @@ A truthful blocker is preferable to a workaround that damages the architecture.
 
 # 24. Design rule in one sentence
 
-> **PicoView decides which image, what the image means, and how the user wants to view it; PocketJS owns the generic resource/rendering contract and the active graphics backend produces final pixels; large image data has explicit ownership, and every O(N pixels) copy/upload must have a physical or semantic reason.**
+> **PicoView Product decides what the user wants; PicoView Image decides what the source means and orchestrates decoding; PocketJS Core owns the generic logical resource/draw contract; the selected backend physically realizes it on GPU or CPU. Execution placement may change, but semantic authority does not, and every O(N pixels) materialization/transfer needs a reason.**
