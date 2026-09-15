@@ -1,55 +1,216 @@
 # PicoView Product Roadmap
 
-Status: **active product authority** (rank 6 in the authority order).
+Status: **CURRENT OPERATIONAL SEQUENCING**  
+Date: **2026-09-15**
 
-Product implementation is authorized (owner decision
-`POCKETJS_ACCEPTED_FOR_PRODUCT_DEVELOPMENT`). The historical
-architecture/startup campaigns are frozen history — see
-`docs/history/README.md`. Optimization work is governed by the DEFERRED list
-in `docs/ARCHITECTURE.md`; nothing below may be turned into a performance
-experiment.
+This roadmap does not define Product or Architecture semantics. It sequences work under:
 
-Slices are **sequential vertical tracer bullets**. Each slice states a goal;
-acceptance is defined when the slice's execution ticket is written, within
-the PRD/SPEC/ARCHITECTURE boundaries.
+- Product: `docs/PRD/PicoView-PRD-v0.6.md`
+- Architecture: `docs/ADR/` + `docs/ARCHITECTURE.md`
+- Execution contract: `docs/SPEC/PicoView-v1.1.md`
 
-## V0 — Product Shell
+Older V0→V5 issue wording may contain provisional architecture assumptions. Do not execute those assumptions automatically after the architecture reset.
 
-Launch PicoView through PocketJS and render the normal PicoView UI shell.
+---
 
-- proves: PocketJS app bundle → PicoView TSX → product shell on screen;
-- no decoder, no image pipeline;
-- starting point: the clean `guest/` skeleton established by PICOVIEW-PRODUCT-BASELINE-RESET-1; executing the launch/render proof is folded into the start of the next ticket rather than tracked as a separate campaign.
+## R0 — Viewer Architecture Reset
 
-## V1 — Open One Image
+Control issue: **#50**  
+Implementation docs PR: **#51**
 
-Real file path → native Rust → WIC baseline decode → native image resource →
-PocketJS image composition → pixels visible.
+Goal:
 
-- the first meaningful product slice;
-- only bounded semantic state (handle/dimensions/status) crosses to JS.
+- freeze Product / Image / Rendering authority;
+- freeze CPU-control / GPU-graphics split;
+- freeze QuickJS boundary;
+- freeze source-truth vs presentation-adaptation semantics;
+- freeze pixel ownership/copy/upload invariants;
+- freeze graphics adapter/fallback policy;
+- freeze resource generation/revision vocabulary.
 
-## V2 — View Interaction
+Exit:
 
-Fit, 100%, zoom, pan, resize, DPI correctness.
+- fresh adversarial architecture review has no unresolved MAJOR;
+- authority docs are mutually consistent;
+- current implementation differentials are explicit.
 
-## V3 — BrowseSession
+No downstream architecture-sensitive implementation should outrun R0.
 
-Directory enumeration, PicoView Natural Order, Current Item authority,
-Next/Previous, generation-safe switching.
+---
 
-## V4 — Handle + Inspect
+## R1 — Code-Reality Conformance Audit
 
-Metadata; rename/delete/open-location as defined by the product authority
-(PRD/SPEC).
+Audit **current PicoView + exact `POCKETJS.lock` revision** against the frozen architecture.
 
-## V5 — Real Viewer Baseline
+Trace at minimum:
 
-Launch → open → present → navigate → zoom/pan → resize → close/reopen →
-bounded lifecycle. The complete minimal real viewer.
+```text
+source
+→ decoder allocation
+→ PicoView ownership
+→ PocketJS admission
+→ PocketJS core resource
+→ graphics backend
+→ GPU/software resource
+→ DrawList
+→ presentation
+→ retirement
+```
 
-## Only after V5
+For every image-sized allocation/copy/upload/drop record:
 
-`PICOVIEW-REAL-WORKLOAD-PERFORMANCE-1` — the first authorized performance
-work on a real workload, executed per `docs/BENCHMARK.md`. Before that point,
-the DEFERRED list in `docs/ARCHITECTURE.md` is closed for business.
+- owner;
+- representation;
+- lifetime;
+- reason;
+- whether the work is required or differential.
+
+Audit separately:
+
+- PSM/legacy representation leakage;
+- full-plane CPU copies;
+- resource upload count;
+- renderer/presentation ownership;
+- 8192/device-limit authority;
+- error-domain mapping;
+- request/handle/content/device generations.
+
+Output: a differential table, not code changes.
+
+---
+
+## R2 — PocketJS Generic Graphics Corrections
+
+Only generic runtime/graphics gaps discovered by R1 belong here.
+
+Likely candidates, subject to audit evidence:
+
+- backend-native generic image-resource admission;
+- ownership-taking / borrow-capable admission path;
+- removal of unnecessary native-desktop canonical CPU texture materialization;
+- no-copy fast path for already accepted pixel representation;
+- resource identity / content revision contract;
+- sampling as draw state rather than immutable resource identity where appropriate;
+- runtime resource limits/capabilities instead of image-semantic constants;
+- renderer/presentation authority cleanup;
+- low-power compatible-GPU preference + dGPU/software fallback.
+
+Each generic capability is implemented/reviewed in `jnhu76/pocketjs`, then PicoView advances `POCKETJS.lock`.
+
+Do not create a PicoView-only parallel renderer to bypass missing PocketJS capability.
+
+---
+
+## R3 — PicoView Image/Product Corrections
+
+Apply the new PocketJS contract to PicoView-specific authority:
+
+- decoder/image-semantic boundary;
+- format capability policy;
+- CurrentItem publication;
+- view capability (`actualSizeAvailable`, etc.);
+- source truth / presentation adaptation;
+- bounded error mapping;
+- Fit / 100% / Zoom / Pan / Rotate / Flip product semantics;
+- refresh / last-good;
+- BrowseSession integration.
+
+No codec noun crosses into generic rendering.
+
+---
+
+## R4 — Format Capability Matrix
+
+Define official format support by capability, not by decoder discovery.
+
+For each admitted format record relevant dimensions:
+
+- decode;
+- orientation;
+- alpha;
+- color/ICC;
+- precision;
+- HDR;
+- animation;
+- page/frame behavior;
+- corrupt input;
+- large-image/full-resolution behavior.
+
+This matrix determines product support truth.
+
+---
+
+## R5 — Rendering Fidelity / Advanced Display
+
+After the base resource/rendering contract is correct, validate display fidelity paths:
+
+- ordinary SDR;
+- transparency/blending;
+- color-managed/wide-gamut inputs;
+- HDR semantics and HDR-capable output where product support is admitted;
+- HDR→SDR display adaptation;
+- monitor/DPI/display transition.
+
+Do not force all advanced inputs through a universal RGBA8-sRGB semantic contract.
+
+---
+
+## R6 — Real Viewer Baseline
+
+Only after R0–R5 have produced a coherent path, assemble the minimal real viewer baseline:
+
+```text
+launch
+→ open
+→ faithful present
+→ Fit / 100% / zoom / pan / rotate / flip
+→ Previous / Next
+→ refresh
+→ bounded lifecycle
+→ close / reopen
+```
+
+Product feature order may be split into smaller execution issues, but every issue is derived from current authority rather than copied from old ticket prose.
+
+---
+
+## Performance work
+
+Architecture correctness is not deferred.
+
+These must be enforced immediately:
+
+- no image bytes through QuickJS;
+- no unexplained full-plane copy at module boundaries;
+- no redundant full-resource upload caused solely by view/UI state;
+- no stale request publication;
+- no false 100% from a proxy;
+- no backend noun leakage into PicoView product/image semantics.
+
+Workload-dependent optimization remains evidence-driven, including:
+
+- decoder tuning;
+- texture/buffer pools;
+- prefetch/cache;
+- tiled-image strategy;
+- mip generation;
+- hardware decode;
+- UMA/staging/upload micro-optimization.
+
+Physical claims follow `docs/BENCHMARK.md`.
+
+---
+
+## Rule for existing GitHub issues
+
+An issue created before R0 is not automatically executable merely because it was previously labeled ready.
+
+Before reuse it must be checked for:
+
+1. current Product authority;
+2. current Architecture authority;
+3. current SPEC;
+4. whether it belongs in PicoView or PocketJS;
+5. whether it assumes a representation/copy/generation rule now superseded.
+
+If drift is material, rewrite or close/recreate the issue rather than preserving obsolete wording for continuity.
