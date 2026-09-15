@@ -25,7 +25,7 @@ investigation report is posted at jnhu76/PicoView#46 (comment 5673780953).
 | Item | Value |
 | --- | --- |
 | PicoView base SHA | `e109ce6` (main, product baseline reset) |
-| PicoView evidence-capture/code HEAD | `68a03ae` (full corrective chain before docs-only attribution/truthfulness edits); final PR HEAD is later docs-only history |
+| PicoView evidence-capture/code HEAD | `68a03ae` (full corrective code/evidence capture before docs-only attribution/truthfulness edits); final PR HEAD is later docs-only history |
 | Branch | `product/v1-open-one-image` |
 | PocketJS locked revision | `df869a51225df5e310b84612c9195030c058b6d9` (`POCKETJS.lock`, branch_hint `feat/windows-desktop-parity`); advanced from `6e631f46` through jnhu76/pocketjs#1 (adversarially reviewed: APPROVE, MINORs closed in `57745b1`) |
 | PocketJS consumption | Cargo git deps pinned to the locked revision (`native/Cargo.toml`); sibling checkout `C:\Users\fred1\source\pocketjs` detached at the same SHA; guest toolchain invoked from the sibling checkout; **no `..` references, no submodule, no vendoring in committed files** |
