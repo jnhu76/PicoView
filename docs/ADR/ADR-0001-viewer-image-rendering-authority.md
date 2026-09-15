@@ -1,31 +1,27 @@
 # ADR-0001 — Viewer / Image / Rendering Authority
 
 Status: **ACCEPTED**  
-Date: **2026-09-15**  
-Scope: PicoView product/image/rendering boundary, resource ownership, graphics backend and presentation semantics
+Date: **2026-09-16**  
+Scope: PicoView product/image/rendering boundary, resource ownership, graphics backend, presentation, and fallback semantics
 
 ## Context
 
-PicoView has proved that a real local file can be decoded and presented through PocketJS on Windows. That proof also exposed a deeper problem: product semantics, image semantics, resource representation, renderer behavior, presentation policy and physical pixel ownership were not separated strongly enough.
+PicoView has proved a real Windows path from local image decode to PocketJS presentation. That proof also exposed architectural ambiguity: product semantics, image semantics, resource representation, renderer behavior, presentation policy, and physical pixel ownership were not separated strongly enough.
 
-The result was a path where one logical image could be repeatedly materialized across module boundaries, where product code could see PocketJS representation details, and where “can display an image” risked being confused with “faithfully represents the source on the current display.”
+The result was a path where one logical image could be repeatedly materialized across module boundaries, where PicoView could see PocketJS representation details, and where “can display an image” risked being confused with “faithfully represents the source on the current display.”
 
-This ADR resets the durable architecture around the design settled in the #50 architecture discussion. Earlier PRD/SPEC architecture assumptions are historical inputs only and do not override this decision.
-
-Detailed program semantics live in `docs/ARCHITECTURE.md`.
+This ADR freezes the durable authority model. Detailed coordinate math, resource lifecycle, render-image admission, and executable invariants live in `docs/ARCHITECTURE.md` and the current SPEC.
 
 ## Authority model
 
-PicoView no longer uses one total ordering where unrelated documents override each other across domains.
+PicoView uses domain authority rather than one total document ranking:
 
-Authority is split by domain:
+- **Product authority** — current PRD: user-visible scope, jobs, commands, promises, and non-goals.
+- **Architecture authority** — accepted ADRs plus `docs/ARCHITECTURE.md`: semantic boundaries, ownership, lifetime, rendering contracts, and physical invariants.
+- **Execution authority** — current SPEC: executable behavior satisfying both Product and Architecture authority.
+- **Operational authority** — `AGENTS.md`, `CONTEXT.md`, `docs/ROADMAP.md`, and GitHub issues: workflow, current state, and sequencing only.
 
-- **Product authority** — current PRD: user-visible scope, jobs, commands, product promises and non-goals.
-- **Architecture authority** — accepted ADRs plus `docs/ARCHITECTURE.md`: ownership, semantic boundaries, resource lifetime, rendering contracts and invariants.
-- **Execution authority** — current SPEC: executable behavior that must satisfy both Product and Architecture authority.
-- **Operational authority** — `AGENTS.md`, `CONTEXT.md`, `docs/ROADMAP.md`, and GitHub issues: workflow, current phase and task sequencing. These cannot redefine product or architecture semantics.
-
-If Product and Architecture authorities genuinely conflict, implementation stops. The conflict must be resolved by an explicit update to the relevant authorities; lower documents must not pick a winner implicitly.
+If Product and Architecture authority genuinely conflict, implementation stops until authority is repaired explicitly.
 
 ## Decision
 
@@ -33,208 +29,178 @@ If Product and Architecture authorities genuinely conflict, implementation stops
 
 #### Product semantics — PicoView
 
-PicoView decides what the user means and what logical product state is current:
-
-- Open / CurrentItem / BrowseSession;
-- Previous / Next;
-- Fit / Actual Size / 100%;
-- Zoom / Pan;
-- Rotate View / Flip View / Reset View;
-- Fullscreen and view-mode policy;
-- Refresh / revalidation;
-- last-good publication policy;
-- product-visible capability and errors.
+PicoView owns what the user means and what logical product state is current: Open, CurrentItem, BrowseSession, Previous/Next, Fit, Actual Size/100%, Zoom, Pan, Rotate View, Flip View, Reset View, Fullscreen, Refresh/revalidation, last-good policy, product-visible capability, and product-visible errors.
 
 #### Image semantics — PicoView native
 
-PicoView native decides what an encoded source means as an image:
-
-- product format policy;
-- decoder orchestration;
-- source dimensions;
-- frame/page structure;
-- orientation metadata;
-- alpha semantics;
-- bit depth / precision;
-- color description / ICC;
-- HDR/source characteristics;
-- animation timing/composition semantics;
-- source-fidelity requirements.
+PicoView native owns what an encoded source means as an image: format policy, decoder orchestration, source dimensions, frame/page structure, intrinsic orientation, alpha semantics, bit depth/precision, color description/ICC, HDR/source characteristics, animation timing/composition semantics, and source-fidelity requirements.
 
 #### Rendering semantics — PocketJS graphics/runtime
 
-PocketJS owns generic rendering mechanics:
-
-- opaque image-resource identity and lifetime;
-- DrawList composition;
-- graphics-backend selection;
-- backend-native graphics resources;
-- sampling / transforms / clipping / blending;
-- UI + image composition;
-- display adaptation;
-- surface lifecycle and presentation;
-- software-renderer fallback where required.
+PocketJS owns generic rendering mechanics: opaque image-resource identity/lifetime, DrawList/image draw contract, backend selection, backend-native physical resources, sampling, transforms, clipping, blending, display adaptation, surface lifecycle, presentation, and software fallback where provided.
 
 **One fact has one authority.** A consumer may use a fact; it must not redefine it.
 
-### 2. Two execution planes
+### 2. CPU control is mandatory; UI raster location is not a semantic rule
 
-The **CPU control/preparation plane** owns product state, source I/O, decode/image interpretation, UI state/layout/input and DrawList generation.
+The CPU control/preparation plane owns product state, source I/O, decode/image interpretation, UI state/layout/input, view-state calculation, and DrawList generation.
 
-The **GPU graphics plane** is the primary path for image residency, sampling, view transforms, UI/image composition and presentation.
+The architecture does **not** require UI pixels to be rasterized on the CPU, and it does **not** require UI pixels to be rasterized on the GPU.
 
-“UI on CPU” means UI policy/state/layout are CPU-side; it does not require CPU bitmap rasterization. UI and image pixels may both be rasterized/composited by the GPU.
+UI rasterization/composition is a graphics-backend implementation choice:
 
-### 3. GPU-first, not GPU-required
+- with the current wgpu backend, UI primitives and image content may be rasterized/composited together on the GPU;
+- with a software backend, UI and image content may be rasterized/composited on the CPU.
 
-On native Windows, graphics-backend selection follows:
+The important boundary is semantic: **UI policy/layout live in CPU-side control state; final pixel production belongs to the selected graphics backend.**
 
-1. adapter must be compatible with the target presentation surface;
-2. adapter must satisfy required capabilities;
+PicoView must not create a separate CPU UI bitmap pipeline merely because UI semantics are CPU-side.
+
+### 3. Image/display rendering is GPU-first, not GPU-required
+
+For native Windows, a GPU backend is the primary rendering path for image residency, sampling, transforms, display adaptation, and presentation.
+
+GPU adapter selection follows architecture policy:
+
+1. compatible with the target presentation surface;
+2. satisfies required graphics capabilities;
 3. among valid choices, prefer low-power operation — normally the iGPU on hybrid systems;
 4. otherwise use a compatible discrete GPU;
-5. if no usable GPU path exists, software/CPU rendering is the final correctness fallback where the product can still function.
+5. if no viable GPU path exists, a software renderer is the final fallback once that capability is implemented and verified.
 
-PicoView product/image code must not hard-code Intel/AMD/NVIDIA selection and must not force an iGPU when that would create an invalid or cross-adapter presentation path.
+PicoView product/image code must not hard-code Intel/AMD/NVIDIA selection and must not force an iGPU when that would create an invalid or harmful cross-adapter path.
+
+The target architecture is GPU-first/not-GPU-required. The current implementation may still be operationally GPU-required until software presentation exists; documentation must not claim otherwise.
 
 ### 4. Backend owns representation and storage
 
-PocketJS core owns **identity, lifetime, revision semantics and draw contracts**.
+PocketJS core owns **identity, lifetime, stale-handle protection, content revision, and draw contracts**.
 
-The selected graphics backend owns the **physical representation and storage** of an admitted image resource.
+The selected graphics backend owns the **physical representation, residency, and storage** of an admitted image resource.
 
 A native desktop image must not be forced through an unrelated canonical CPU texture representation only because another backend historically uses that representation.
 
-Possible physical representations include wgpu-native textures, WebGPU resources, software bitmaps or platform-specific texture storage. Upper layers see a generic opaque resource identity.
+Possible physical representations include wgpu-native textures, WebGPU resources, software bitmaps, or platform-specific storage. Upper layers see one generic opaque resource identity.
 
-This ADR does **not** require a second `NativeImageHandle`, a parallel compositor or a PicoView-specific DrawList path. Prefer one generic image-resource identity that existing composition can consume.
+This ADR does **not** require a second `NativeImageHandle`, parallel compositor, or PicoView-specific DrawList path.
 
-### 5. QuickJS is bounded control state only
+### 5. The image-to-rendering boundary is representation-aware, codec-transparent
+
+PocketJS is **codec-transparent, not pixel-representation-blind**.
+
+The image/rendering boundary must carry enough generic semantic description for correct rendering — including representation/precision, alpha semantics, color semantics, extent/layout, and any intrinsic transform not materialized into storage — without carrying JPEG/PNG/WIC/GIF-specific nouns.
+
+The exact Rust type is not frozen by this ADR; the detailed contract is defined in `docs/ARCHITECTURE.md`.
+
+### 6. QuickJS is bounded control state only
 
 `O(image-bytes)` never crosses QuickJS in the normal viewer path.
 
-TSX/QuickJS may observe bounded semantics such as:
+TSX/QuickJS may observe bounded semantics such as opaque resource identity, logical/display dimensions, request/status state, view capability, small metadata, and bounded product errors.
 
-- opaque resource identity;
-- display dimensions;
-- request/status state;
-- view capabilities;
-- small metadata;
-- bounded product errors.
+It must not receive complete encoded files, decoded multi-megapixel pixel planes, decoder objects, raw GPU resources, backend texture formats, or adapter/device internals.
 
-It must not receive:
-
-- complete encoded files;
-- decoded multi-megapixel pixel planes;
-- decoder objects;
-- raw ICC blobs;
-- backend texture objects/formats;
-- adapter/device internals.
-
-### 6. Source truth and presentation adaptation are separate
+### 7. Source truth and presentation adaptation are separate
 
 PicoView preserves source information until a transformation is required to interpret the source or adapt it to the target display.
 
-Fit, Zoom, Pan, Rotate View and Flip View are presentation operations by default. They do not mutate the source file and do not require rewriting the entire source pixel plane merely to change the view.
+Intrinsic source orientation is part of image interpretation. Fit, Zoom, Pan, user Rotate View, and user Flip View are presentation operations by default.
 
-The renderer must not silently reduce resolution, precision, gamut or HDR semantics only to simplify implementation.
+The renderer must not silently reduce resolution, precision, gamut, or HDR semantics solely to simplify implementation. When the current output cannot reproduce the source directly, adaptation such as tone mapping is presentation behavior, not mutation of source truth.
 
-When the current display cannot reproduce the source directly, adaptation such as tone mapping is a **presentation operation**, not mutation of source truth.
+### 8. Coordinate semantics are explicit
 
-Whether a release officially promises HDR is a Product-authority decision. The architecture must nevertheless preserve enough semantic information that HDR support does not require violating boundaries later.
+The architecture must distinguish source sample space, intrinsically oriented logical-image space, user view transform, UI logical/DIP space, and physical presentation pixels.
 
-### 7. Format support is product policy, not decoder discovery
+The transform order is normative:
 
-`decoder can decode X` does not imply `PicoView supports X`.
+```text
+source sample grid
+→ intrinsic source orientation
+→ logical image space
+→ user rotate/flip
+→ Fit / Zoom / Pan
+→ UI logical-to-physical output transform
+→ presentation
+```
 
-Official support is defined by the product’s promised behavior across relevant dimensions, including:
+Reset View clears user-controlled transforms; it never clears intrinsic source orientation.
 
-- decode;
-- orientation;
-- alpha;
-- color/ICC;
-- precision;
-- HDR when promised;
-- animation;
-- multi-page/frame semantics;
-- corruption/error behavior;
-- resource bounds.
+Actual Size / 100% is defined by the detailed Architecture contract, not by raw UI DIP dimensions.
 
-Decoder implementations are replaceable behind the image-semantics boundary.
-
-### 8. Semantic boundaries are not memcpy boundaries
+### 9. Semantic boundaries are not memcpy boundaries
 
 A module boundary is not a reason to duplicate an entire image.
 
-For every `O(image-pixels)` handoff, **ownership transfer or borrowing is the default**. A full pixel-plane copy requires an explicit semantic or physical reason, such as unavoidable conversion, frame composition, color transform, backend layout/alignment requirements or device transfer.
+For every `O(image-pixels)` handoff, ownership transfer or borrowing is the default. A full pixel-plane copy requires an explicit semantic or physical reason.
 
-For a canonical static-image fast path, after the decoder has produced the final CPU representation required for resource admission:
+For a canonical static-image fast path, after decode has produced a representation accepted by resource admission:
 
-- avoidable post-decode CPU full-plane copies = **0**;
-- view-state changes do not cause full image re-upload;
-- GPU readback does not occur unless a feature explicitly requires it.
+- avoidable post-decode CPU full-plane copies are zero;
+- view-state changes do not cause redundant full-image upload;
+- GPU readback does not occur unless an explicit feature requires it.
 
-This is an architecture invariant, not a deferred micro-optimization.
+The same principle applies more weakly to large encoded payloads: avoid unnecessary whole-file duplication when streaming, move, or borrow is sufficient.
 
-It does **not** mean one source file can only ever be uploaded once. A deliberately different resource identity — for example a fit proxy versus later full-resolution/tiled admission — may legitimately require another upload.
+### 10. Upload invariants are residency-aware
 
-### 9. Resource identity and generations are distinct
+The architecture does **not** require “one upload forever.”
+
+For the same logical resource identity, content revision, and device generation, an existing valid backend residency must be reused. A redundant re-upload while that residency is still valid is forbidden.
+
+A new upload is legitimate after an explicit event such as first admission, content revision, backend eviction/residency loss, device recreation, a deliberately distinct proxy/full-resolution resource, or another named correctness requirement.
+
+Backend residency/eviction is not product generation.
+
+### 11. Resource identity, publication, and lifetime are distinct
 
 The architecture distinguishes at least:
 
 - `request_generation` — latest-wins product publication ordering;
 - `handle_generation` — stale resource-handle protection;
-- `content_revision` — changed content under a stable resource identity;
-- `device_generation` — graphics-device/resource-domain recreation when applicable.
+- `content_revision` — changed content under a stable logical resource identity;
+- `device_generation` — graphics device/resource-domain recreation when applicable.
 
-These must not be collapsed into one generic `generation` field.
+A generic resource lifecycle also separates candidate creation, admission, publication, retirement, and final release. TSX holds only a non-owning opaque identity.
 
-For animation, a stable logical resource may advance `content_revision` without inventing a new product request generation or handle generation for every frame.
+A replacement resource must not destroy a last-good published resource before replacement policy says the candidate is ready to publish.
 
-### 10. Large-image admission remains truthful
+### 12. Format support is product policy, not decoder discovery
+
+`decoder can decode X` does not imply `PicoView supports X`.
+
+Official support is defined by the product promise across relevant dimensions such as decode, orientation, alpha, color/ICC, precision, HDR, animation, multi-frame/page semantics, corruption behavior, and resource/full-resolution behavior.
+
+Decoder implementations are replaceable behind the image-semantics boundary.
+
+### 13. Large-image admission remains truthful
 
 A backend/device limit must not silently redefine the image.
 
-If the source cannot be represented as one full-resolution resource, the product/runtime must expose truthful capability, for example:
-
-- full-resolution available;
-- fit/proxy-only;
-- tiled/virtualized path;
-- unsupported on the current backend.
+If the source cannot be represented as one full-resolution resource, the product/runtime exposes truthful capability such as full-resolution available, fit/proxy-only, tiled/virtualized, or unsupported on the current path.
 
 Silent destructive downsampling followed by claiming Actual Size / 100% is forbidden.
 
-### 11. Current code may differ during migration
+### 14. Current code may differ during migration
 
-This ADR is target authority, not a statement that the present implementation already conforms.
+This ADR is target authority, not a statement that current code already conforms.
 
 Generic runtime/graphics capability is implemented in `jnhu76/pocketjs` first, reviewed there, then PicoView advances `POCKETJS.lock`. PicoView-specific product/image policy remains in PicoView.
 
-Known differentials are tracked explicitly rather than normalized into the architecture document as if they were desired behavior.
+Known differentials are tracked explicitly rather than normalized into the target architecture.
 
 ## Consequences
 
-- PocketJS may need a generic backend-native image-resource admission seam while preserving one composition/resource identity model.
-- Existing PSM/CPU-backed texture paths may remain valid where required; they are not automatically the canonical native-desktop image path.
+- PocketJS may need generic backend-native image admission while preserving one composition/resource identity model.
+- Existing PSM/CPU-backed texture paths may remain valid for workloads/backends that need them; they are not automatically the canonical native-desktop image path.
+- UI state/layout remain CPU-side even when the active graphics backend rasterizes UI on GPU.
 - View-state changes normally alter draw parameters, not image storage.
-- Image decode and rendering can be tested independently through stable contracts.
-- CPU rendering is a correctness fallback, not the preferred graphics path.
-- New image formats cannot leak codec nouns into TSX, DrawList or generic renderer APIs.
-- New full-image copies are architectural events requiring explicit justification.
+- CPU software rendering is a target correctness fallback, not the preferred graphics path and not a current capability claim until implemented.
+- New formats cannot leak codec nouns into TSX, DrawList, or generic renderer APIs.
+- New full-image copies/uploads are architectural events requiring explicit justification.
 
 ## Non-decisions
 
-This ADR does not freeze:
-
-- a permanent decoder library;
-- exact Rust type names;
-- one universal working pixel format;
-- which releases advertise HDR;
-- the concrete tiled-image algorithm;
-- texture/buffer pools;
-- prefetch/cache strategy;
-- mip generation;
-- hardware image decode;
-- identical acceleration across all backends.
+This ADR does not freeze a permanent decoder library, exact Rust type names, one universal working pixel format, a specific HDR product promise, a tiled-image algorithm, texture/buffer pools, prefetch/cache strategy, mip generation, hardware decode, or identical acceleration across all backends.
 
 Those decisions are earned later while preserving this ADR.
