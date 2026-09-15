@@ -54,12 +54,51 @@ A hardware/GPU decode path is allowed when it preserves Image semantics and actu
 
 ---
 
+## Desktop/wgpu direct image rule
+
+`docs/ADR/ADR-0002-desktop-wgpu-direct-image-admission.md` freezes the normal PicoView Windows/Desktop path.
+
+PocketJS's stock Desktop backend is `pocket-ui-wgpu`. When PicoView has already decoded an image to RGBA8 that the wgpu path can directly consume, the intended physical path is:
+
+```text
+decoder-owned RGBA8
+→ PocketJS generic logical admission
+→ direct wgpu upload/admission
+→ wgpu::Texture residency
+```
+
+The logical PocketJS resource boundary remains; an additional canonical CPU texture allocation does not.
+
+Do **not** introduce this normal path:
+
+```text
+decoded RGBA8
+→ full PSM_8888/portable Core copy
+→ second full RGBA8 copy
+→ wgpu upload
+```
+
+`PSM_8888` may remain valid for PocketJS backends/workloads that need that representation. It is not the mandatory canonical Desktop image representation.
+
+For Desktop/wgpu work use this decision order:
+
+1. directly consume/upload the admitted representation when possible;
+2. if representation conversion is required, fuse it into the final backend backing where practical;
+3. allocate a complete intermediate plane only for a named correctness/physical reason.
+
+A module/API boundary or legacy PocketJS uniformity is not such a reason.
+
+Do not bypass PocketJS Core by giving PicoView ownership of `wgpu::Texture`, and do not create a parallel PicoView-native compositor/handle namespace.
+
+---
+
 ## Required design questions
 
 Before coding, answer:
 
 - Which authority owns each fact this change touches?
 - Does the change introduce or move any `O(image-pixels)` storage/copy/upload/import?
+- For Windows/Desktop, can the selected wgpu path consume the decoded representation directly instead of materializing a PSM/portable intermediate?
 - Does a generic capability belong upstream in PocketJS rather than PicoView?
 - Does the change alter coordinate semantics, intrinsic orientation, Product view intent, logical resource lifetime, PocketJS revision, or backend residency?
 - Does a decoder execution choice leak physical backend details into Product/Image semantics?
@@ -75,6 +114,8 @@ The normative wording lives in ADR/ARCHITECTURE/SPEC. Stop and report a blocker 
 
 - image bytes through QuickJS;
 - unexplained full-image copy at a semantic boundary;
+- on the normal Windows/Desktop wgpu path, decoded RGBA8 copied into full `PSM_8888`/portable Core backing merely for uniformity;
+- on the normal Windows/Desktop wgpu path, already-RGBA8 content copied into another full RGBA8 plane solely before wgpu upload;
 - backend texture/device/import semantics in PicoView Product/Image authority;
 - codec-specific semantics in generic PocketJS rendering;
 - CPU/GPU execution placement redefining semantic authority;
@@ -91,7 +132,7 @@ The normative wording lives in ADR/ARCHITECTURE/SPEC. Stop and report a blocker 
 - hidden local PocketJS fork/workaround;
 - Product/Architecture authority conflict.
 
-Use the exact current Architecture/SPEC text when adjudicating a case; this summary is not a second architecture source.
+Use the exact current Architecture/SPEC/accepted ADR text when adjudicating a case; this summary is not a second architecture source.
 
 ---
 
@@ -100,6 +141,8 @@ Use the exact current Architecture/SPEC text when adjudicating a case; this summ
 PicoView consumes `jnhu76/pocketjs` at the exact revision pinned in `POCKETJS.lock`.
 
 If PicoView needs a **generic runtime/graphics capability**, implement it in PocketJS first, review/merge it there, then deliberately advance `POCKETJS.lock`.
+
+The direct Desktop/wgpu image-admission capability required by ADR-0002 is a PocketJS-generic graphics correction. Do not implement a PicoView-only `PSM_8888` detour to avoid changing PocketJS.
 
 PicoView-specific Product/Image policy stays in PicoView.
 
@@ -116,6 +159,8 @@ Do not claim “GPU not required” until the software fallback contract in the 
 Do not infer that UI semantics being CPU-side requires CPU bitmap rasterization; final UI/image rasterization is an active-backend concern.
 
 Do not infer that Image semantics being PicoView-owned requires CPU decode; decoder execution may use CPU, platform hardware, or GPU behind the same Image contract.
+
+For the normal Windows/Desktop GPU path, follow PocketJS's existing Desktop→wgpu backend choice. Do not add another GPU backend merely to avoid fixing resource admission.
 
 ---
 
@@ -148,6 +193,7 @@ During coding:
 - keep codec semantics out of generic graphics;
 - keep backend nouns out of PicoView Product/Image policy;
 - keep PocketJS revision ownership inside PocketJS;
+- on Desktop/wgpu, prefer direct admitted-representation → backend residency over PSM/canonical CPU detours;
 - prefer move/borrow/import/deletion over another storage layer;
 - do not broaden the issue silently.
 
@@ -156,6 +202,7 @@ Before completion:
 - run acceptance checks from the current SPEC/issue;
 - verify replacement boundaries still hold;
 - verify no unexplained full-plane copy/upload/import exists;
+- for Desktop/wgpu, verify an already-RGBA8 decode does not materialize a full `PSM_8888` intermediate or second RGBA8 plane without a named reason;
 - verify publication/logical-lifetime/residency ordering;
 - update authority if a frozen assumption is disproved;
 - leave the worktree clean.
