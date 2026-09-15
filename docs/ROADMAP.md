@@ -9,27 +9,23 @@ Older issue wording may contain provisional architecture assumptions and is not 
 
 ---
 
-## R0 — Viewer Architecture Reset
+## R0 — Viewer Architecture Reset — CLOSED
 
 Control issue: **#50**  
-Docs PR: **#51**
+Docs PR: **#51**  
+Merge: `528d3d849e823f3d5c017906584fc97dd57c8303`
 
-Goal: freeze Product / Image / Rendering authority, coordinate/view semantics, QuickJS boundary, source-truth/presentation separation, resource ownership/lifetime, representation/color/alpha contract, residency-aware copy/upload rules, backend/fallback policy, and generation vocabulary.
+The reset froze Product / Image / Rendering authority, coordinate/view semantics, QuickJS boundary, source-truth/presentation separation, resource ownership/lifetime, representation/color/alpha contract, residency-aware copy/upload rules, backend/fallback policy, and generation vocabulary.
 
-Exit:
+ADR-0002 subsequently freezes the native Desktop specialization: when decoded RGBA8 is already directly admissible by PocketJS's established Desktop/wgpu backend, the normal path is direct logical admission + wgpu residency, not a `PSM_8888` canonical CPU detour.
 
-- second fresh adversarial review has no unresolved MAJOR;
-- Product / Architecture / SPEC authority are mutually consistent;
-- current implementation differentials are explicit;
-- archive/current-authority references are unambiguous.
-
-No downstream architecture-sensitive implementation may outrun R0.
+R0 is complete. Do not reopen the old architecture discussion unless new evidence disproves an accepted assumption.
 
 ---
 
 ## R1 — Code-Reality Conformance Audit
 
-Audit current PicoView + exact `POCKETJS.lock` revision against the frozen Architecture/SPEC.
+Audit current PicoView + exact `POCKETJS.lock` revision against the frozen Architecture/SPEC and accepted ADRs.
 
 Trace at minimum:
 
@@ -53,6 +49,8 @@ Audit explicitly:
 - encoded whole-file buffering/copies;
 - PSM/legacy representation leakage;
 - decoded-plane clone/copy chain;
+- the current Desktop `decoded RGBA8 → PSM_8888/portable backing → temporary RGBA8 → wgpu` chain;
+- whether each full-plane step has a real physical/correctness reason;
 - generic representation/color/alpha gap;
 - intrinsic orientation vs user-transform ordering;
 - 100% / DPI physical-pixel math;
@@ -65,6 +63,20 @@ Audit explicitly:
 - error-domain mapping;
 - request/handle/content/device generations.
 
+For the Desktop image path, R1 must distinguish:
+
+```text
+required device transfer
+```
+
+from:
+
+```text
+avoidable CPU full-plane materialization
+```
+
+and must not treat the legacy PSM path as self-justifying merely because it already exists.
+
 Output: evidence-backed differential table only; no corrective coding in R1.
 
 ---
@@ -73,13 +85,42 @@ Output: evidence-backed differential table only; no corrective coding in R1.
 
 Only generic runtime/graphics gaps proven by R1 belong here.
 
+### R2-A — Desktop/wgpu direct image admission
+
+Highest-priority expected correction, subject to R1 evidence:
+
+```text
+decoder-owned/admitted RGBA8
+→ PocketJS logical resource admission
+→ direct wgpu upload/admission
+→ wgpu::Texture residency
+```
+
+The correction must preserve one existing logical resource/DrawList identity model while eliminating avoidable Desktop-only full-plane intermediates.
+
+Normal Desktop/wgpu implementation must not require:
+
+```text
+decoded RGBA8
+→ full PSM_8888/portable CPU copy
+→ second full RGBA8 copy
+→ wgpu upload
+```
+
+Implementation rule:
+
+> **Direct if already admissible; fuse required conversion into final backend backing where practical; full intermediate plane only as a last resort with a named reason.**
+
+Do not add a second public `NativeImageHandle`, PicoView-specific renderer, or parallel compositor.
+
+### Other R2 candidates
+
 Likely candidates, subject to evidence:
 
-- backend-native generic image admission;
+- backend-native/importable generic image admission;
 - ownership-taking / borrow-capable admission;
 - generic render-image representation contract including alpha/color/precision;
-- removal of unnecessary native-desktop canonical CPU texture materialization;
-- no-copy path for already accepted representations;
+- preservation of PSM/portable paths for backends that actually require/use them without making them Desktop canonical storage;
 - resource lifecycle / handle generation / content revision;
 - residency-aware cache/re-upload semantics;
 - sampling as draw state where appropriate;
@@ -90,7 +131,7 @@ Likely candidates, subject to evidence:
 
 Each generic capability is implemented/reviewed in `jnhu76/pocketjs`, then PicoView deliberately advances `POCKETJS.lock`.
 
-Do not create a PicoView-only parallel renderer to bypass a missing generic PocketJS capability.
+Do not create a PicoView-only parallel renderer or `PSM_8888` detour to bypass a missing generic PocketJS capability.
 
 ---
 
@@ -99,6 +140,7 @@ Do not create a PicoView-only parallel renderer to bypass a missing generic Pock
 Apply the new PocketJS contract to PicoView-specific authority:
 
 - decoder/image-semantic boundary;
+- ownership-moving handoff from decode into generic admission;
 - intrinsic orientation;
 - format capability policy;
 - CurrentItem candidate/admission/publication ordering;
@@ -109,6 +151,8 @@ Apply the new PocketJS contract to PicoView-specific authority:
 - BrowseSession integration.
 
 No codec noun crosses into generic rendering.
+
+No normal Desktop path reintroduces a canonical PSM texture solely at the PicoView side.
 
 ---
 
@@ -155,12 +199,14 @@ Architecture correctness is not deferred. Workload-dependent optimization remain
 
 Physical claims follow `docs/BENCHMARK.md`.
 
+For the Desktop/wgpu path, an already-RGBA8 decode passing through a full PSM_8888 copy and then another full RGBA8 copy is an architecture differential first, not a benchmark-tuning choice.
+
 ---
 
 ## Rule for existing GitHub issues
 
 An issue created before R0 is not automatically executable merely because it was previously labeled ready.
 
-Before reuse, check it against current Product authority, Architecture authority, SPEC, cross-repo ownership, and current representation/copy/generation/lifetime semantics.
+Before reuse, check it against current Product authority, Architecture authority, SPEC, accepted ADRs, cross-repo ownership, and current representation/copy/generation/lifetime semantics.
 
 If drift is material, rewrite or close/recreate the issue rather than preserving obsolete wording for continuity.
