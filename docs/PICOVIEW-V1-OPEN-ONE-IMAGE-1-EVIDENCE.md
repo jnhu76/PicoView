@@ -202,8 +202,8 @@ reproduce" conclusion is **superseded by round 2**.
 
 ### 7.2 Round 2 (this round): the bad state exists and is deterministic
 
-The same machine later entered a distinct state in which the defect reproduces at
-100%. All records committed under `experiments/v1-corrective-1/matrix/`:
+The same machine later entered a distinct state in which the white-window symptom
+reproduces at 100%. All records committed under `experiments/v1-corrective-1/matrix/`:
 
 | matrix (committed JSONL) | binary | launches | result |
 | --- | --- | --- | --- |
@@ -217,13 +217,15 @@ The same machine later entered a distinct state in which the defect reproduces a
 
 Mechanism findings:
 
-1. **Presents succeed; DWM never composites.** Timelines (`sync-*.log`): window
-   created ~52 ms → surface created+configured ~657 ms → first present ~758 ms
-   `submitted true` → screen stays white; a second natural-WM_PAINT present ~+45 ms
-   also submits while the window stays white. This is not "uninitialized first image".
+1. **Presentation calls succeed, but the submitted frame is not observed in the window.**
+   Timelines (`sync-*.log`): window created ~52 ms → surface created+configured ~657 ms
+   → first present ~758 ms `submitted true` → screen stays white; a second natural
+   WM_PAINT present ~+45 ms also submits while the window stays white. The available
+   evidence therefore rules out a simple "first image was never submitted" explanation,
+   but does not by itself identify which WSI/DWM layer failed to make it visible.
 2. **A resize does not recover.** `dbg2.log` + `dbg2-now.png`: after presents and a
    `SetWindowPos` resize, the capture shows a broken composite (black clear-color band
-   + white region) — a partially composited buffer.
+   + white region), consistent with a lower-layer presentation/composition failure.
 3. **The capture channel is healthy.** A notepad probe captures real content
    (`notepad-probe.png`); no TDR events in the system log.
 4. **Machine-state dependence.** The same binaries flip good⇄bad with zero code
@@ -265,9 +267,9 @@ follow-up; none are fabricated here. Full report: jnhu76/PicoView#46 (comment
 which is the observed effective recovery. This is a bounded **compatibility mitigation**,
 not a claim that the exact lower-layer defect owner has been proven. Event-shaped: no
 timers, no polling, no magic durations; static idle remains `ControlFlow::Wait`
-(verified truly idle in round 1). Removed in this round: the (already deleted) heal's replacement
-Focused/Occluded re-present handlers — recorded runs show they contributed no
-protection (Focused fires pre-frame; re-presents alone did not recover `dbg2`), so
+(verified truly idle in round 1). Removed in this round: the (already deleted) heal's
+replacement Focused/Occluded re-present handlers — recorded runs show they contributed
+no protection (Focused fires pre-frame; re-presents alone did not recover `dbg2`), so
 the final design carries exactly one recovery mechanism. Residual mode without the
 recovery: the window stays white until the process is restarted or an external
 presentation event happens to land (observed: the heal-era binary recovered via its
