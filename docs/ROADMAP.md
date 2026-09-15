@@ -1,103 +1,96 @@
 # PicoView Product Roadmap
 
 Status: **CURRENT OPERATIONAL SEQUENCING**  
-Date: **2026-09-15**
+Date: **2026-09-16**
 
-This roadmap does not define Product or Architecture semantics. It sequences work under:
+This roadmap sequences work under current Product, Architecture, and SPEC authority. It does not define those semantics itself.
 
-- Product: `docs/PRD/PicoView-PRD-v0.6.md`
-- Architecture: `docs/ADR/` + `docs/ARCHITECTURE.md`
-- Execution contract: `docs/SPEC/PicoView-v1.1.md`
-
-Older V0→V5 issue wording may contain provisional architecture assumptions. Do not execute those assumptions automatically after the architecture reset.
+Older issue wording may contain provisional architecture assumptions and is not automatically executable after the reset.
 
 ---
 
 ## R0 — Viewer Architecture Reset
 
 Control issue: **#50**  
-Implementation docs PR: **#51**
+Docs PR: **#51**
 
-Goal:
-
-- freeze Product / Image / Rendering authority;
-- freeze CPU-control / GPU-graphics split;
-- freeze QuickJS boundary;
-- freeze source-truth vs presentation-adaptation semantics;
-- freeze pixel ownership/copy/upload invariants;
-- freeze graphics adapter/fallback policy;
-- freeze resource generation/revision vocabulary.
+Goal: freeze Product / Image / Rendering authority, coordinate/view semantics, QuickJS boundary, source-truth/presentation separation, resource ownership/lifetime, representation/color/alpha contract, residency-aware copy/upload rules, backend/fallback policy, and generation vocabulary.
 
 Exit:
 
-- fresh adversarial architecture review has no unresolved MAJOR;
-- authority docs are mutually consistent;
-- current implementation differentials are explicit.
+- second fresh adversarial review has no unresolved MAJOR;
+- Product / Architecture / SPEC authority are mutually consistent;
+- current implementation differentials are explicit;
+- archive/current-authority references are unambiguous.
 
-No downstream architecture-sensitive implementation should outrun R0.
+No downstream architecture-sensitive implementation may outrun R0.
 
 ---
 
 ## R1 — Code-Reality Conformance Audit
 
-Audit **current PicoView + exact `POCKETJS.lock` revision** against the frozen architecture.
+Audit current PicoView + exact `POCKETJS.lock` revision against the frozen Architecture/SPEC.
 
 Trace at minimum:
 
 ```text
-source
-→ decoder allocation
-→ PicoView ownership
-→ PocketJS admission
-→ PocketJS core resource
-→ graphics backend
-→ GPU/software resource
-→ DrawList
+encoded source
+→ decoder/source buffering
+→ decoded candidate
+→ intrinsic orientation / image semantics
+→ generic resource admission
+→ logical resource publication
+→ backend residency
+→ DrawList/view transform
 → presentation
-→ retirement
+→ retirement / release
 ```
 
-For every image-sized allocation/copy/upload/drop record:
+For every image-sized allocation/copy/upload/drop, record owner, representation, lifetime, reason, and whether it is required or differential.
 
-- owner;
-- representation;
-- lifetime;
-- reason;
-- whether the work is required or differential.
+Audit explicitly:
 
-Audit separately:
-
+- encoded whole-file buffering/copies;
 - PSM/legacy representation leakage;
-- full-plane CPU copies;
-- resource upload count;
+- decoded-plane clone/copy chain;
+- generic representation/color/alpha gap;
+- intrinsic orientation vs user-transform ordering;
+- 100% / DPI physical-pixel math;
+- resource state machine and last-good replacement ordering;
+- residency/re-upload behavior;
+- sampling ownership;
+- backend/device-limit leakage;
 - renderer/presentation ownership;
-- 8192/device-limit authority;
+- current lack of software fallback;
 - error-domain mapping;
 - request/handle/content/device generations.
 
-Output: a differential table, not code changes.
+Output: evidence-backed differential table only; no corrective coding in R1.
 
 ---
 
 ## R2 — PocketJS Generic Graphics Corrections
 
-Only generic runtime/graphics gaps discovered by R1 belong here.
+Only generic runtime/graphics gaps proven by R1 belong here.
 
-Likely candidates, subject to audit evidence:
+Likely candidates, subject to evidence:
 
-- backend-native generic image-resource admission;
-- ownership-taking / borrow-capable admission path;
+- backend-native generic image admission;
+- ownership-taking / borrow-capable admission;
+- generic render-image representation contract including alpha/color/precision;
 - removal of unnecessary native-desktop canonical CPU texture materialization;
-- no-copy fast path for already accepted pixel representation;
-- resource identity / content revision contract;
-- sampling as draw state rather than immutable resource identity where appropriate;
-- runtime resource limits/capabilities instead of image-semantic constants;
+- no-copy path for already accepted representations;
+- resource lifecycle / handle generation / content revision;
+- residency-aware cache/re-upload semantics;
+- sampling as draw state where appropriate;
+- runtime resource capability reporting instead of image-semantic constants;
 - renderer/presentation authority cleanup;
-- low-power compatible-GPU preference + dGPU/software fallback.
+- compatible low-power GPU preference and dGPU fallback;
+- software backend sufficient for the Architecture/SPEC minimum fallback contract.
 
-Each generic capability is implemented/reviewed in `jnhu76/pocketjs`, then PicoView advances `POCKETJS.lock`.
+Each generic capability is implemented/reviewed in `jnhu76/pocketjs`, then PicoView deliberately advances `POCKETJS.lock`.
 
-Do not create a PicoView-only parallel renderer to bypass missing PocketJS capability.
+Do not create a PicoView-only parallel renderer to bypass a missing generic PocketJS capability.
 
 ---
 
@@ -106,13 +99,13 @@ Do not create a PicoView-only parallel renderer to bypass missing PocketJS capab
 Apply the new PocketJS contract to PicoView-specific authority:
 
 - decoder/image-semantic boundary;
+- intrinsic orientation;
 - format capability policy;
-- CurrentItem publication;
-- view capability (`actualSizeAvailable`, etc.);
-- source truth / presentation adaptation;
-- bounded error mapping;
-- Fit / 100% / Zoom / Pan / Rotate / Flip product semantics;
+- CurrentItem candidate/admission/publication ordering;
+- truthful full-resolution capability;
+- 100% / Fit / Zoom / Pan / Rotate / Flip product semantics;
 - refresh / last-good;
+- bounded error mapping;
 - BrowseSession integration.
 
 No codec noun crosses into generic rendering.
@@ -121,20 +114,9 @@ No codec noun crosses into generic rendering.
 
 ## R4 — Format Capability Matrix
 
-Define official format support by capability, not by decoder discovery.
+Define official format support by capability rather than decoder discovery.
 
-For each admitted format record relevant dimensions:
-
-- decode;
-- orientation;
-- alpha;
-- color/ICC;
-- precision;
-- HDR;
-- animation;
-- page/frame behavior;
-- corrupt input;
-- large-image/full-resolution behavior.
+For each admitted format record relevant dimensions: decode, orientation, alpha, color/ICC, precision, HDR, animation, page/frame behavior, corrupt input, and large-image/full-resolution behavior.
 
 This matrix determines product support truth.
 
@@ -142,16 +124,9 @@ This matrix determines product support truth.
 
 ## R5 — Rendering Fidelity / Advanced Display
 
-After the base resource/rendering contract is correct, validate display fidelity paths:
+After the base resource/rendering contract is correct, validate ordinary SDR, transparency/blending, color-managed/wide-gamut inputs, HDR semantics/output where admitted, HDR→SDR adaptation, and monitor/DPI/output transitions.
 
-- ordinary SDR;
-- transparency/blending;
-- color-managed/wide-gamut inputs;
-- HDR semantics and HDR-capable output where product support is admitted;
-- HDR→SDR display adaptation;
-- monitor/DPI/display transition.
-
-Do not force all advanced inputs through a universal RGBA8-sRGB semantic contract.
+Do not force all advanced inputs through a universal `RGBA8 sRGB` semantic contract.
 
 ---
 
@@ -170,32 +145,13 @@ launch
 → close / reopen
 ```
 
-Product feature order may be split into smaller execution issues, but every issue is derived from current authority rather than copied from old ticket prose.
+Product feature work may be split further, but every issue is derived from current authority rather than copied from old ticket prose.
 
 ---
 
-## Performance work
+## Performance rule
 
-Architecture correctness is not deferred.
-
-These must be enforced immediately:
-
-- no image bytes through QuickJS;
-- no unexplained full-plane copy at module boundaries;
-- no redundant full-resource upload caused solely by view/UI state;
-- no stale request publication;
-- no false 100% from a proxy;
-- no backend noun leakage into PicoView product/image semantics.
-
-Workload-dependent optimization remains evidence-driven, including:
-
-- decoder tuning;
-- texture/buffer pools;
-- prefetch/cache;
-- tiled-image strategy;
-- mip generation;
-- hardware decode;
-- UMA/staging/upload micro-optimization.
+Architecture correctness is not deferred. Workload-dependent optimization remains evidence-driven.
 
 Physical claims follow `docs/BENCHMARK.md`.
 
@@ -205,12 +161,6 @@ Physical claims follow `docs/BENCHMARK.md`.
 
 An issue created before R0 is not automatically executable merely because it was previously labeled ready.
 
-Before reuse it must be checked for:
-
-1. current Product authority;
-2. current Architecture authority;
-3. current SPEC;
-4. whether it belongs in PicoView or PocketJS;
-5. whether it assumes a representation/copy/generation rule now superseded.
+Before reuse, check it against current Product authority, Architecture authority, SPEC, cross-repo ownership, and current representation/copy/generation/lifetime semantics.
 
 If drift is material, rewrite or close/recreate the issue rather than preserving obsolete wording for continuity.
