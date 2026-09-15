@@ -24,7 +24,8 @@ Superseded authority under `docs/history/` is history/evidence only.
 3. Read the current SPEC for executable contracts.
 4. Read `CONTEXT.md`, `docs/ROADMAP.md`, and the assigned issue for current sequencing.
 5. Read `POCKETJS.lock` and the exact locked PocketJS code when runtime/graphics behavior is involved.
-6. Read `docs/BENCHMARK.md` before making physical performance/memory claims.
+6. For Windows/Desktop graphics work, inspect the existing PocketJS **macOS/Linux `hosts/desktop` + `pocket-ui-wgpu` implementation first**. Windows joins that native-desktop family; PSP/Vita/3DS/ESP32 physical rules are comparative evidence, not Desktop requirements.
+7. Read `docs/BENCHMARK.md` before making physical performance/memory claims.
 
 There is no single total authority order across unrelated domains. Product owns Product meaning; Architecture owns architecture; SPEC must satisfy both; operational documents cannot redefine either.
 
@@ -58,7 +59,17 @@ A hardware/GPU decode path is allowed when it preserves Image semantics and actu
 
 `docs/ADR/ADR-0002-desktop-wgpu-direct-image-admission.md` freezes the normal PicoView Windows/Desktop path.
 
-PocketJS's stock Desktop backend is `pocket-ui-wgpu`. When PicoView has already decoded an image to RGBA8 that the wgpu path can directly consume, the intended physical path is:
+The reference family is PocketJS's existing native Desktop implementation:
+
+```text
+macos-app ─┐
+linux-app ─┼─→ shared hosts/desktop → pocket-ui-wgpu
+windows-app┘
+```
+
+Windows/Desktop work must extend this shared family before considering a Windows-specific graphics mechanism. A Windows-only branch requires a named platform/API constraint that the shared host/backend cannot express.
+
+When PicoView has already decoded an image to RGBA8 that the shared wgpu path can directly consume, the intended physical path is:
 
 ```text
 decoder-owned RGBA8
@@ -86,7 +97,7 @@ For Desktop/wgpu work use this decision order:
 2. if representation conversion is required, fuse it into the final backend backing where practical;
 3. allocate a complete intermediate plane only for a named correctness/physical reason.
 
-A module/API boundary or legacy PocketJS uniformity is not such a reason.
+A module/API boundary, legacy PocketJS uniformity, or another device backend's native representation is not such a reason.
 
 Do not bypass PocketJS Core by giving PicoView ownership of `wgpu::Texture`, and do not create a parallel PicoView-native compositor/handle namespace.
 
@@ -98,7 +109,9 @@ Before coding, answer:
 
 - Which authority owns each fact this change touches?
 - Does the change introduce or move any `O(image-pixels)` storage/copy/upload/import?
-- For Windows/Desktop, can the selected wgpu path consume the decoded representation directly instead of materializing a PSM/portable intermediate?
+- For Windows/Desktop, what do the current macOS/Linux `hosts/desktop` + `pocket-ui-wgpu` paths already do for the same responsibility?
+- If a Windows-only mechanism is proposed, what concrete Windows/wgpu constraint prevents reuse of the shared desktop path?
+- Can the selected wgpu path consume the decoded representation directly instead of materializing a PSM/portable intermediate?
 - Does a generic capability belong upstream in PocketJS rather than PicoView?
 - Does the change alter coordinate semantics, intrinsic orientation, Product view intent, logical resource lifetime, PocketJS revision, or backend residency?
 - Does a decoder execution choice leak physical backend details into Product/Image semantics?
@@ -114,6 +127,8 @@ The normative wording lives in ADR/ARCHITECTURE/SPEC. Stop and report a blocker 
 
 - image bytes through QuickJS;
 - unexplained full-image copy at a semantic boundary;
+- a Windows-only renderer/resource path added without first checking the shared macOS/Linux native-desktop path;
+- PSP/Vita/3DS/other-device texture/storage constraints treated as Windows/Desktop requirements without an independent wgpu/Desktop reason;
 - on the normal Windows/Desktop wgpu path, decoded RGBA8 copied into full `PSM_8888`/portable Core backing merely for uniformity;
 - on the normal Windows/Desktop wgpu path, already-RGBA8 content copied into another full RGBA8 plane solely before wgpu upload;
 - backend texture/device/import semantics in PicoView Product/Image authority;
@@ -142,7 +157,7 @@ PicoView consumes `jnhu76/pocketjs` at the exact revision pinned in `POCKETJS.lo
 
 If PicoView needs a **generic runtime/graphics capability**, implement it in PocketJS first, review/merge it there, then deliberately advance `POCKETJS.lock`.
 
-The direct Desktop/wgpu image-admission capability required by ADR-0002 is a PocketJS-generic graphics correction. Do not implement a PicoView-only `PSM_8888` detour to avoid changing PocketJS.
+The direct Desktop/wgpu image-admission capability required by ADR-0002 is a PocketJS-generic graphics correction to the shared native-desktop backend family. Do not implement a PicoView-only `PSM_8888` detour or a Windows-only renderer to avoid changing PocketJS.
 
 PicoView-specific Product/Image policy stays in PicoView.
 
@@ -160,7 +175,7 @@ Do not infer that UI semantics being CPU-side requires CPU bitmap rasterization;
 
 Do not infer that Image semantics being PicoView-owned requires CPU decode; decoder execution may use CPU, platform hardware, or GPU behind the same Image contract.
 
-For the normal Windows/Desktop GPU path, follow PocketJS's existing Desktop→wgpu backend choice. Do not add another GPU backend merely to avoid fixing resource admission.
+For the normal Windows/Desktop GPU path, follow PocketJS's existing native Desktop→`pocket-ui-wgpu` backend family. Do not add another GPU backend merely to avoid fixing resource admission.
 
 ---
 
@@ -194,6 +209,7 @@ During coding:
 - keep backend nouns out of PicoView Product/Image policy;
 - keep PocketJS revision ownership inside PocketJS;
 - on Desktop/wgpu, prefer direct admitted-representation → backend residency over PSM/canonical CPU detours;
+- preserve the shared macOS/Linux/Windows desktop host/backend family unless a platform-specific constraint is proved;
 - prefer move/borrow/import/deletion over another storage layer;
 - do not broaden the issue silently.
 
@@ -203,6 +219,7 @@ Before completion:
 - verify replacement boundaries still hold;
 - verify no unexplained full-plane copy/upload/import exists;
 - for Desktop/wgpu, verify an already-RGBA8 decode does not materialize a full `PSM_8888` intermediate or second RGBA8 plane without a named reason;
+- verify any Windows-only divergence from macOS/Linux has an explicit platform/API reason;
 - verify publication/logical-lifetime/residency ordering;
 - update authority if a frozen assumption is disproved;
 - leave the worktree clean.
