@@ -1,0 +1,3 @@
+[2026-09-15T01:08:48Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-15T01:08:48Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-15T01:08:49Z INFO  picoview] current item: generation=1 handle=Some(0) path=C:/Users/fred1/source/PicoView/test-media/real-screenshot.jpg

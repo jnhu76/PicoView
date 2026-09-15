@@ -157,6 +157,10 @@ impl Presentation {
             info.name,
             format
         );
+        crate::tlog(&format!(
+            "surface created+configured {}x{} ({info:?}, present Fifo, latency 1)",
+            config.width, config.height
+        ));
         Ok(Self {
             gpu,
             surface,
@@ -170,6 +174,10 @@ impl Presentation {
             return Ok(false);
         }
         if (self.config.width, self.config.height) != (size.width, size.height) {
+            crate::tlog(&format!(
+                "surface reconfigure {}x{} -> {}x{}",
+                self.config.width, self.config.height, size.width, size.height
+            ));
             self.config.width = size.width;
             self.config.height = size.height;
             self.surface.configure(&self.gpu.device, &self.config);
@@ -177,11 +185,13 @@ impl Presentation {
         let output = match self.surface.get_current_texture() {
             Ok(output) => output,
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                crate::tlog("acquire failed (Lost/Outdated) -> reconfigure + redraw");
                 self.surface.configure(&self.gpu.device, &self.config);
                 window.request_redraw();
                 return Ok(false);
             }
             Err(wgpu::SurfaceError::Timeout) => {
+                crate::tlog("acquire failed (Timeout) -> redraw");
                 window.request_redraw();
                 return Ok(false);
             }
@@ -236,6 +246,7 @@ impl Presentation {
         self.gpu.queue.submit([encoder.finish()]);
         window.pre_present_notify();
         output.present();
+        crate::tlog("swapchain present submitted");
         Ok(true)
     }
 }

@@ -1,0 +1,22 @@
+[2026-09-15T01:03:22Z INFO  picoview] [     0.0ms] process start
+[2026-09-15T01:03:22Z INFO  picoview] [     6.6ms] heal DISABLED (PICOVIEW_HEAL=0)
+[2026-09-15T01:03:22Z INFO  picoview] [    57.8ms] window created
+[2026-09-15T01:03:22Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-15T01:03:22Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-15T01:03:22Z INFO  picoview] [   638.3ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-15T01:03:22Z INFO  picoview] [   638.4ms] Resized 1904x984
+[2026-09-15T01:03:22Z INFO  picoview] [   638.4ms] Resized 960x640
+[2026-09-15T01:03:22Z INFO  picoview] [   638.4ms] Resized 960x640
+[2026-09-15T01:03:22Z INFO  picoview] [   638.6ms] RedrawRequested
+[2026-09-15T01:03:22Z INFO  picoview] current item: generation=1 handle=Some(0) path=C:/Users/fred1/source/PicoView/test-media/real-screenshot.jpg
+[2026-09-15T01:03:22Z INFO  picoview] [   713.1ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-15T01:03:22Z INFO  picoview] [   722.4ms] render submit (tick 1)
+[2026-09-15T01:03:22Z INFO  picoview] [   722.5ms] frame ready from worker (tick 1), requesting redraw
+[2026-09-15T01:03:22Z INFO  picoview] [   722.6ms] RedrawRequested
+[2026-09-15T01:03:22Z INFO  picoview] [   722.6ms] present begin (frame tick 1)
+[2026-09-15T01:03:22Z INFO  picoview] [   727.4ms] swapchain present submitted
+[2026-09-15T01:03:22Z INFO  picoview] [   727.4ms] present end (frame tick 1, submitted true)
+[2026-09-15T01:03:22Z INFO  picoview] [   770.3ms] RedrawRequested
+[2026-09-15T01:03:22Z INFO  picoview] [   770.4ms] present begin (frame tick 1)
+[2026-09-15T01:03:22Z INFO  picoview] [   771.7ms] swapchain present submitted
+[2026-09-15T01:03:22Z INFO  picoview] [   771.7ms] present end (frame tick 1, submitted true)

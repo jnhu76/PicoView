@@ -1,0 +1,22 @@
+[2026-09-15T00:56:17Z INFO  picoview] [     0.0ms] process start
+[2026-09-15T00:56:17Z INFO  picoview] [     4.8ms] heal DISABLED (PICOVIEW_HEAL=0)
+[2026-09-15T00:56:17Z INFO  picoview] [    56.5ms] window created
+[2026-09-15T00:56:18Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-15T00:56:18Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-15T00:56:18Z INFO  picoview] [   654.5ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-15T00:56:18Z INFO  picoview] [   654.7ms] Resized 1904x984
+[2026-09-15T00:56:18Z INFO  picoview] [   654.8ms] Resized 960x640
+[2026-09-15T00:56:18Z INFO  picoview] [   654.8ms] Resized 960x640
+[2026-09-15T00:56:18Z INFO  picoview] [   655.3ms] RedrawRequested
+[2026-09-15T00:56:18Z INFO  picoview] current item: generation=1 handle=Some(0) path=test-media/real-screenshot.jpg
+[2026-09-15T00:56:18Z INFO  picoview] [   731.5ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-15T00:56:18Z INFO  picoview] [   739.2ms] render submit (tick 1)
+[2026-09-15T00:56:18Z INFO  picoview] [   739.4ms] frame ready from worker (tick 1), requesting redraw
+[2026-09-15T00:56:18Z INFO  picoview] [   739.4ms] RedrawRequested
+[2026-09-15T00:56:18Z INFO  picoview] [   739.4ms] present begin (frame tick 1)
+[2026-09-15T00:56:18Z INFO  picoview] [   744.8ms] swapchain present submitted
+[2026-09-15T00:56:18Z INFO  picoview] [   744.9ms] present end (frame tick 1, submitted true)
+[2026-09-15T00:56:18Z INFO  picoview] [   792.0ms] RedrawRequested
+[2026-09-15T00:56:18Z INFO  picoview] [   792.1ms] present begin (frame tick 1)
+[2026-09-15T00:56:18Z INFO  picoview] [   793.4ms] swapchain present submitted
+[2026-09-15T00:56:18Z INFO  picoview] [   793.5ms] present end (frame tick 1, submitted true)

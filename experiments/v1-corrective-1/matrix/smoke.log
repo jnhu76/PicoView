@@ -1,0 +1,18 @@
+[2026-09-15T00:59:55Z INFO  picoview] [     0.0ms] process start
+[2026-09-15T00:59:55Z INFO  picoview] [     6.3ms] heal DISABLED (PICOVIEW_HEAL=0)
+[2026-09-15T00:59:55Z INFO  picoview] [    59.6ms] window created
+[2026-09-15T00:59:55Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-15T00:59:55Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-15T00:59:55Z INFO  picoview] [   689.6ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-15T00:59:55Z INFO  picoview] [   690.0ms] Resized 1904x984
+[2026-09-15T00:59:55Z INFO  picoview] [   690.0ms] Resized 960x640
+[2026-09-15T00:59:55Z INFO  picoview] [   690.1ms] Resized 960x640
+[2026-09-15T00:59:55Z INFO  picoview] [   691.2ms] RedrawRequested
+[2026-09-15T00:59:55Z INFO  picoview] current item: generation=1 handle=Some(0) path=test-media/real-screenshot.jpg
+[2026-09-15T00:59:55Z INFO  picoview] [   772.3ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-15T00:59:55Z INFO  picoview] [   780.7ms] render submit (tick 1)
+[2026-09-15T00:59:55Z INFO  picoview] [   780.9ms] frame ready from worker (tick 1), requesting redraw
+[2026-09-15T00:59:55Z INFO  picoview] [   781.0ms] RedrawRequested
+[2026-09-15T00:59:55Z INFO  picoview] [   781.0ms] present begin (frame tick 1)
+[2026-09-15T00:59:55Z INFO  picoview] [   786.6ms] swapchain present submitted
+[2026-09-15T00:59:55Z INFO  picoview] [   786.7ms] present end (frame tick 1, submitted true)

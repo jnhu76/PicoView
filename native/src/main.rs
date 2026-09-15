@@ -26,6 +26,15 @@ use current_item::CurrentItem;
 const HOST_ID: &str = "windows-app";
 const HOST_ABI: u32 = 4;
 
+/// Monotonic milliseconds since process start, for first-frame lifecycle
+/// evidence. Both the window thread and the runtime worker log against this
+/// base so event order is reconstructible from the log alone.
+pub(crate) fn tlog(msg: &str) {
+    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    let start = START.get_or_init(Instant::now);
+    log::info!("[{:>8.1}ms] {}", start.elapsed().as_secs_f64() * 1000.0, msg);
+}
+
 #[derive(Debug)]
 enum Wake {
     Output,
@@ -148,6 +157,7 @@ impl Runtime {
                 path.display()
             );
         }
+        tlog("runtime booted (pak fed, guest mounted, source eval'd, current item opened)");
         Ok(Self {
             surface,
             guest,
@@ -255,6 +265,7 @@ fn run_runtime(
                 (runtime.viewport.0 * runtime.density, runtime.viewport.1 * runtime.density),
                 runtime.density as f32,
             )?;
+            tlog(&format!("render submit (tick {})", runtime.ticks));
             let rendered = target.is_some();
             let output = Output {
                 _permit: permit,
@@ -300,19 +311,7 @@ struct Host {
     title: String,
     viewport: (u32, u32),
     failure: Option<String>,
-    /// Presentation bootstrap self-heal: for a short window after startup we
-    /// re-present the retained target at a low cadence. The very first present
-    /// can race the swapchain/DWM handoff on some drivers and land on a surface
-    /// that never reaches the screen; because a static frame is hash-gated and
-    /// never re-renders, the window would stay blank until an external resize.
-    /// Re-presenting only blits the existing GPU target — no re-record, no UI
-    /// tick — and the window goes fully quiet (ControlFlow::Wait) afterwards,
-    /// so static idle still owns no continuous loop.
-    heal_until: Option<Instant>,
 }
-
-const PRESENT_HEAL_WINDOW: Duration = Duration::from_millis(2500);
-const PRESENT_HEAL_CADENCE: Duration = Duration::from_millis(200);
 
 impl Host {
     fn present(&mut self) -> Result<()> {
@@ -321,9 +320,39 @@ impl Host {
         else {
             return Ok(());
         };
-        let (_, target) = frame;
-        surface.present(window, target)?;
+        let (tick, target) = frame;
+        tlog(&format!("present begin (frame tick {tick})"));
+        let presented = surface.present(window, target)?;
+        tlog(&format!(
+            "present end (frame tick {tick}, submitted {presented})"
+        ));
         Ok(())
+    }
+
+    /// Re-present the retained GPU frame when the window (re)enters an
+    /// attention state. This is the presentation-lifecycle recovery path:
+    /// a present that raced the swapchain/DWM handoff (recorded on this
+    /// machine's AMD Vulkan driver, PR-era evidence) leaves a blank window
+    /// that a static hash gate would never retry. Focus, un-occlusion, and
+    /// resize are exactly the events that historically recovered it — each
+    /// re-presents the EXISTING frame: one blit, no re-record, no UI tick,
+    /// and the static steady state stays fully event-quiet. No timers.
+    fn republish_on_attention(&mut self, event: &winit::event::WindowEvent) {
+        match event {
+            winit::event::WindowEvent::Focused(true) => {
+                tlog("attention: focused -> re-present retained frame");
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            winit::event::WindowEvent::Occluded(false) => {
+                tlog("attention: unoccluded -> re-present retained frame");
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -342,6 +371,7 @@ impl ApplicationHandler<Wake> for Host {
                 )
                 .expect("create window"),
         );
+        tlog("window created");
         let presentation = match gpu::Presentation::new(window.clone()) {
             Ok(presentation) => presentation,
             Err(error) => {
@@ -385,6 +415,10 @@ impl ApplicationHandler<Wake> for Host {
             Wake::Output => {
                 while let Ok(output) = self.rx.try_recv() {
                     if let Some(target) = output.target {
+                        tlog(&format!(
+                            "frame ready from worker (tick {}), requesting redraw",
+                            output.tick
+                        ));
                         self.frame = Some((output.tick, target));
                         if let Some(window) = &self.window {
                             window.request_redraw();
@@ -395,27 +429,17 @@ impl ApplicationHandler<Wake> for Host {
         }
     }
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if let Some(until) = self.heal_until {
-            if Instant::now() < until {
-                if let Some(window) = &self.window {
-                    window.request_redraw();
-                }
-                event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
-                    Instant::now() + PRESENT_HEAL_CADENCE,
-                ));
-                return;
-            }
-            self.heal_until = None;
-        }
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
     }
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: winit::event::WindowEvent) {
+        self.republish_on_attention(&event);
         match event {
             winit::event::WindowEvent::CloseRequested => {
                 self.tx.try_send(Input::Quit).ok();
                 event_loop.exit();
             }
             winit::event::WindowEvent::RedrawRequested => {
+                tlog("RedrawRequested");
                 if let Err(error) = self.present() {
                     log::error!("{error}");
                     self.failure = Some(error.to_string());
@@ -423,6 +447,7 @@ impl ApplicationHandler<Wake> for Host {
                 }
             }
             winit::event::WindowEvent::Resized(size) => {
+                tlog(&format!("Resized {}x{}", size.width, size.height));
                 // Per-Monitor DPI V2: the runtime viewport is logical pixels;
                 // physical client size is the presentation surface's business.
                 let scale = self.window.as_ref().unwrap().scale_factor();
@@ -440,6 +465,7 @@ impl ApplicationHandler<Wake> for Host {
 
 fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    tlog("process start");
     let args = parse_args()?;
     let event_loop = EventLoop::<Wake>::with_user_event().build()?;
     let (tx, inputs) = sync_channel(256);
@@ -454,7 +480,6 @@ fn main() -> Result<()> {
         title: args.title.clone(),
         viewport: args.viewport,
         failure: None,
-        heal_until: Some(Instant::now() + PRESENT_HEAL_WINDOW),
     };
     host.startup = Some(RuntimeStartup {
         args,

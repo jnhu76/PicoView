@@ -110,6 +110,15 @@ def main() -> int:
     ap.add_argument("--title", default="PicoView probe")
     ap.add_argument("--out", default="shot.png")
     ap.add_argument("--cwd", default=".", help="working directory the exe runs in")
+    ap.add_argument(
+        "--watch-log",
+        help="capture right after this log file records the first successful present",
+    )
+    ap.add_argument(
+        "--extra-params",
+        default="",
+        help="additional pre-quoted command-line parameters appended verbatim",
+    )
     args = ap.parse_args()
 
     verb = "open"
@@ -118,12 +127,34 @@ def main() -> int:
     params = f'--title "{args.title}"'
     if args.image:
         params += f' "{args.image}"'
+    if args.extra_params:
+        params += f" {args.extra_params}"
     code = ctypes.windll.shell32.ShellExecuteW(
         None, verb, args.exe, params, args.cwd, SW_SHOWNORMAL
     )
     if code <= 32:
         print(json.dumps({"error": f"ShellExecuteW failed: {code}"}))
         return 2
+
+    if args.watch_log:
+        hwnd = wait_for_window(args.title, 0)
+        if not hwnd:
+            print(json.dumps({"error": "window never appeared"}))
+            return 3
+        deadline = time.perf_counter() + 30.0
+        while time.perf_counter() < deadline:
+            try:
+                with open(args.watch_log, "r", encoding="utf-8", errors="replace") as f:
+                    text = f.read()
+                if "present end" in text and "submitted true" in text:
+                    break
+            except (FileNotFoundError, OSError):
+                pass
+            time.sleep(0.005)
+        else:
+            print(json.dumps({"error": "first present never recorded"}))
+            user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+            return 4
 
     hwnd = wait_for_window(args.title, args.wait_ms)
     if not hwnd:
