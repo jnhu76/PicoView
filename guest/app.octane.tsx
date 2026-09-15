@@ -23,29 +23,23 @@ interface CurrentItemState {
   handle?: number;
   width?: number;
   height?: number;
-  texWidth?: number;
-  texHeight?: number;
   error?: string;
   viewport?: { w: number; h: number };
 }
 
-function fit(item: CurrentItemState): { cw: number; ch: number; tw: number; th: number } | null {
-  if (item.status !== "ready" || !item.viewport || !item.texWidth || !item.texHeight) return null;
+function fit(item: CurrentItemState): { w: number; h: number } | null {
+  if (item.status !== "ready" || !item.viewport || !item.width || !item.height) return null;
   const availW = Math.max(32, item.viewport.w - 32);
   const availH = Math.max(32, item.viewport.h - 64);
-  // Fit-to-window minification only, scaled against the pow2 texture
-  // envelope. The envelope already IS the native presentation resolution
-  // (a large decode is box-downsampled natively), so magnifying it past
-  // 1:1 only reproduces blocky texels; V1 has no zoom/100% semantics.
-  const s = Math.min(1, availW / item.texWidth, availH / item.texHeight);
+  // Fit-to-window minification of the full-resolution native resource. The
+  // resource keeps the source resolution (the old pow2 <=512 envelope is
+  // gone), so this scale is GPU minification of real pixels; V1 has no
+  // zoom/100% semantics, and the pixels are intact for when it does.
+  const s = Math.min(1, availW / item.width, availH / item.height);
   if (!(s > 0)) return null;
   return {
-    tw: Math.max(1, Math.floor(item.texWidth * s)),
-    th: Math.max(1, Math.floor(item.texHeight * s)),
-    // Content extent keeps the decode's aspect ratio; the envelope's
-    // transparent padding is cropped here by the clip view.
-    cw: Math.max(1, Math.floor((item.width ?? item.texWidth) * s)),
-    ch: Math.max(1, Math.floor((item.height ?? item.texHeight) * s)),
+    w: Math.max(1, Math.floor(item.width * s)),
+    h: Math.max(1, Math.floor(item.height * s)),
   };
 }
 
@@ -73,7 +67,7 @@ export default function App() {
       for (const line of batch.split("\n")) {
         if (!line) continue;
         let v: Partial<Record<"t" | "status" | "name" | "error", string>> &
-          Partial<Record<"g" | "handle" | "width" | "height" | "texWidth" | "texHeight" | "w" | "h", number>>;
+          Partial<Record<"g" | "handle" | "width" | "height" | "w" | "h", number>>;
         try {
           v = JSON.parse(line);
         } catch {
@@ -103,8 +97,6 @@ export default function App() {
             handle: v.handle,
             width: v.width,
             height: v.height,
-            texWidth: v.texWidth,
-            texHeight: v.texHeight,
             error: v.error,
             viewport: item.current.viewport,
           };
@@ -122,30 +114,25 @@ export default function App() {
   });
 
   const box = fit(item.current);
-  const item2 = item.current;
+  const cur = item.current;
   return (
     <View class="w-full h-full flex-col bg-slate-900">
       <View class="flex-row items-center justify-between px-4 py-2 bg-slate-900">
         <Text class="text-sm text-white font-bold">PicoView</Text>
-        {item2.name ? <Text class="text-xs text-slate-400">{item2.name}</Text> : null}
+        {cur.name ? <Text class="text-xs text-slate-400">{cur.name}</Text> : null}
       </View>
       <View class="flex-1 flex-col items-center justify-center bg-slate-800 overflow-hidden">
         {box ? (
-          <View
-            class="overflow-hidden bg-slate-900"
-            style={{ width: box.cw, height: box.ch }}
-          >
-            <Image
-              src={TEXTURE_KEY}
-              class="absolute top-0 left-0"
-              style={{ width: box.tw, height: box.th }}
-            />
-          </View>
-        ) : item2.status === "loading" ? (
-          <Text class="text-sm text-slate-400">{`Opening ${item2.name ?? "image"}…`}</Text>
-        ) : item2.status === "error" ? (
-          <Text class="text-sm text-red-400">{item2.error ?? "Could not open image"}</Text>
-        ) : item2.status === "ready" ? (
+          <Image
+            src={TEXTURE_KEY}
+            class="overflow-hidden"
+            style={{ width: box.w, height: box.h }}
+          />
+        ) : cur.status === "loading" ? (
+          <Text class="text-sm text-slate-400">{`Opening ${cur.name ?? "image"}…`}</Text>
+        ) : cur.status === "error" ? (
+          <Text class="text-sm text-red-400">{cur.error ?? "Could not open image"}</Text>
+        ) : cur.status === "ready" ? (
           <Text class="text-sm text-slate-400">Preparing image…</Text>
         ) : (
           <Text class="text-sm text-slate-400">No image open</Text>
@@ -153,10 +140,10 @@ export default function App() {
       </View>
       <View class="flex-row items-center justify-between px-4 py-1 bg-slate-900">
         <Text class="text-xs text-slate-500">
-          {item2.status === "error" ? "Error" : item2.status === "loading" ? "Opening…" : "Ready"}
+          {cur.status === "error" ? "Error" : cur.status === "loading" ? "Opening…" : "Ready"}
         </Text>
-        {item2.status === "ready" && item2.width ? (
-          <Text class="text-xs text-slate-500">{`${item2.width} x ${item2.height}`}</Text>
+        {cur.status === "ready" && cur.width ? (
+          <Text class="text-xs text-slate-500">{`${cur.width} x ${cur.height}`}</Text>
         ) : null}
       </View>
     </View>

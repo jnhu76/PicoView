@@ -5,10 +5,12 @@
 //! state over the svc channel. Image bytes never cross QuickJS — the only
 //! guest-facing payloads here are small JSON objects of strings and integers.
 //!
-//! Presentation textures honor the PocketJS core texture contract (pow2 dims
-//! up to TEX_MAX_DIM), so the full decode is box-downsampled into a pow2
-//! envelope. The texture's transparent padding is cropped guest-side by the
-//! clip composition, keeping aspect ratio correct.
+//! The full-resolution decode is published through the PocketJS native
+//! large-image resource seam (`Ui::register_native_texture`), so ordinary
+//! photographs keep their source resolution in the production resource: fit
+//! to window is GPU minification of the real pixels, not a destructive
+//! pre-shrink. The seam's admission rule (1..=NATIVE_TEX_MAX_DIM per axis)
+//! is the only resize a normal image ever sees: none.
 
 use pocketjs_core::spec::psm;
 use anyhow::Result;
@@ -21,14 +23,18 @@ pub const SVC_TYPE: &str = "current-item";
 /// guest/app.octane.tsx; the handle travels via svc, the key stays literal).
 #[allow(dead_code)]
 const TEXTURE_KEY_HINT: &str = "picoview-current";
-/// PocketJS core texture limit (spec::TEX_MAX_DIM).
-const MAX_TEXTURE_DIM: u32 = pocketjs_core::spec::TEX_MAX_DIM;
+/// PocketJS native seam admission limit (spec::NATIVE_TEX_MAX_DIM). Images
+/// above this on either axis are box-fitted down into it — a documented
+/// bounded degradation for giant images only; normal photos pass through
+/// byte-identical in geometry.
+const MAX_RESOURCE_DIM: u32 = pocketjs_core::NATIVE_TEX_MAX_DIM;
 /// svc is a bounded-semantic channel; error strings are capped.
 const MAX_ERROR_CHARS: usize = 200;
 /// Decode allocation guard: a container may declare absurd frame dimensions
 /// (up to 65535x65535 for JPEG) before any pixel is validated; allocating
 /// w*h*4 for those would abort the process on OOM instead of failing bounded.
-/// 80 megapixels comfortably covers real photographs.
+/// 80 megapixels comfortably covers real photographs (the seam's 8192^2
+/// admission ceiling is 67 MP, so this guard binds first).
 const MAX_DECODE_PIXELS: u64 = 80_000_000;
 
 /// Pure allocation guard for a decoded frame: the byte length a WIC RGBA
@@ -42,7 +48,7 @@ fn decode_alloc_len(width: u32, height: u32) -> Result<usize, OpenError> {
 }
 
 /// Full-resolution WIC decode output. Lifetime is fully native: it exists only
-/// between decode and texture upload, inside `CurrentItem::open`.
+/// between decode and resource registration, inside `CurrentItem::open`.
 pub struct DecodedImage {
     pub width: u32,
     pub height: u32,
@@ -50,14 +56,16 @@ pub struct DecodedImage {
     pub rgba: Vec<u8>,
 }
 
-pub struct PresentTexture {
-    /// BGRA8888 (spec PSM_8888 little-endian word order), pow2 envelope.
-    pub bgra: Vec<u8>,
-    pub tex_width: u32,
-    pub tex_height: u32,
-    /// Content extent inside the envelope (top-left anchored).
-    pub content_width: u32,
-    pub content_height: u32,
+/// The native image resource body handed to `register_native_texture`.
+/// For ordinary images (both axes <= MAX_RESOURCE_DIM) this is a pure
+/// RGBA8888 → PSM_8888 word-order pass-through of the full decode: content
+/// resolution is the source resolution, full stop. Only giant images above
+/// the seam's admission ceiling are box-fitted down into it.
+pub struct NativeResource {
+    /// PSM_8888 (little-endian BGRA word order), `width * height * 4` bytes.
+    pub pixels: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,19 +93,19 @@ impl OpenError {
     }
 }
 
-struct LiveTexture {
+struct LiveResource {
     handle: i32,
     #[allow(dead_code)]
-    tex_width: u32,
+    width: u32,
     #[allow(dead_code)]
-    tex_height: u32,
+    height: u32,
 }
 
 /// Native-side Current Item truth. The guest observes it through svc events
 /// only; it never owns decode, filesystem, or texture lifetime authority.
 pub struct CurrentItem {
     next_generation: u64,
-    live: Option<LiveTexture>,
+    live: Option<LiveResource>,
 }
 
 impl CurrentItem {
@@ -118,7 +126,7 @@ impl CurrentItem {
     }
 
     /// Open an explicit local path: decode with WIC, retire any previous
-    /// native texture, publish the new one, and push exactly one bounded
+    /// native resource, publish the new one, and push exactly one bounded
     /// terminal svc event (ready or error) for this generation.
     pub fn open(&mut self, surface: &UiSurface, path: &Path) {
         let generation = self.next_generation;
@@ -128,61 +136,45 @@ impl CurrentItem {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         self.push(surface, loading_event(generation, &name));
-        match open_decoded(path) {
-            Ok(decoded) => self.publish(
-                surface,
-                generation,
-                name,
-                &presentation_texture(&decoded),
-            ),
+        match open_decoded(path).and_then(|decoded| native_resource(&decoded)) {
+            Ok(resource) => self.publish(surface, generation, name, &resource),
             Err(error) => {
                 self.retire(surface);
                 self.push(surface, error_event(generation, &error));
             }
         }
     }
-    /// Retire the previous resource, upload the new texture, and publish the
+
+    /// Retire the previous resource, register the new one, and publish the
     /// ready event: handles are generation-tagged in the core, so a stale
     /// handle drawn by the guest in the interim renders nothing after free.
-    fn publish(
-        &mut self,
-        surface: &UiSurface,
-        generation: u64,
-        name: String,
-        tex: &PresentTexture,
-    ) {
+    fn publish(&mut self, surface: &UiSurface, generation: u64, name: String, res: &NativeResource) {
         self.retire(surface);
-        // FLAG_LINEAR: bilinear sampling — the presentation envelope is
-        // frequently displayed at non-integer scale, and nearest sampling
-        // turns that into visible blockiness.
+        // FLAG_LINEAR: bilinear sampling — the resource is frequently
+        // displayed at non-integer scale (fit to window), and nearest
+        // sampling turns that into visible blockiness.
         let handle = surface.with_ui(|ui| {
-            ui.upload_texture_flags(
-                &tex.bgra,
-                tex.tex_width,
-                tex.tex_height,
-                psm::PSM_8888,
-                pocketjs_core::spec::img::FLAG_LINEAR,
-            )
+            ui.register_native_texture(&res.pixels, res.width, res.height, psm::PSM_8888, true)
         });
         if handle < 0 {
             self.push(
                 surface,
-                error_event(generation, &OpenError::Decode("texture upload rejected".into())),
+                error_event(generation, &OpenError::Decode("resource registration rejected".into())),
             );
             return;
         }
-        self.live = Some(LiveTexture {
+        self.live = Some(LiveResource {
             handle,
-            tex_width: tex.tex_width,
-            tex_height: tex.tex_height,
+            width: res.width,
+            height: res.height,
         });
         self.push(
             surface,
-            ready_event(generation, &name, handle, tex.content_width, tex.content_height, tex.tex_width, tex.tex_height),
+            ready_event(generation, &name, handle, res.width, res.height),
         );
     }
 
-    /// Free the live native texture. Never waits on QuickJS GC.
+    /// Free the live native resource. Never waits on QuickJS GC.
     pub fn retire(&mut self, surface: &UiSurface) {
         if let Some(live) = self.live.take() {
             surface.with_ui(|ui| ui.free_texture(live.handle));
@@ -205,15 +197,7 @@ fn loading_event(generation: u64, name: &str) -> serde_json::Value {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn ready_event(
-    generation: u64,
-    name: &str,
-    handle: i32,
-    width: u32,
-    height: u32,
-    tex_width: u32,
-    tex_height: u32,
-) -> serde_json::Value {
+fn ready_event(generation: u64, name: &str, handle: i32, width: u32, height: u32) -> serde_json::Value {
     json!({
         "t": SVC_TYPE,
         "g": generation,
@@ -221,8 +205,6 @@ fn ready_event(
         "handle": handle,
         "width": width,
         "height": height,
-        "texWidth": tex_width,
-        "texHeight": tex_height,
         "name": name,
     })
 }
@@ -246,29 +228,25 @@ fn bounded(s: &str) -> String {
     out
 }
 
-fn pow2_at_least(v: u32) -> u32 {
-    debug_assert!(v >= 1 && v <= MAX_TEXTURE_DIM);
-    let mut p = 1u32;
-    while p < v {
-        p <<= 1;
-    }
-    p.min(MAX_TEXTURE_DIM)
-}
-
-/// Box-downsample the full decode into a pow2 presentation envelope and
-/// convert RGBA8888 → PSM_8888 (little-endian BGRA words). Content sits
-/// top-left; the pow2 padding stays fully transparent (zeroed).
-pub fn presentation_texture(src: &DecodedImage) -> PresentTexture {
+/// Convert the full decode into the native resource body: RGBA8888 →
+/// PSM_8888 (little-endian BGRA words). Images at or below the seam's
+/// admission ceiling pass through at full source resolution: the sample
+/// window of every output pixel is exactly one input pixel, so pixel count
+/// and every pixel value are preserved — a pure word-order conversion.
+/// Only images above MAX_RESOURCE_DIM on either axis are box-fitted down
+/// into the ceiling (documented bounded degradation for giant images;
+/// viewport paging is a later-slice concern).
+pub fn native_resource(src: &DecodedImage) -> Result<NativeResource, OpenError> {
     let (w, h) = (src.width.max(1), src.height.max(1));
-    let scale = (MAX_TEXTURE_DIM as f64 / w as f64)
-        .min(MAX_TEXTURE_DIM as f64 / h as f64)
+    let scale = (MAX_RESOURCE_DIM as f64 / w as f64)
+        .min(MAX_RESOURCE_DIM as f64 / h as f64)
         .min(1.0);
-    let cw = ((w as f64 * scale).round() as u32).clamp(1, MAX_TEXTURE_DIM);
-    let ch = ((h as f64 * scale).round() as u32).clamp(1, MAX_TEXTURE_DIM);
-    let tw = pow2_at_least(cw);
-    let th = pow2_at_least(ch);
-    let mut out = vec![0u8; (tw as usize) * (th as usize) * 4];
-    let row = src.width as usize * 4;
+    let (cw, ch) = (
+        ((w as f64 * scale).round() as u32).clamp(1, MAX_RESOURCE_DIM),
+        ((h as f64 * scale).round() as u32).clamp(1, MAX_RESOURCE_DIM),
+    );
+    let mut pixels = vec![0u8; cw as usize * ch as usize * 4];
+    let row = w as usize * 4;
     for cy in 0..ch {
         let sy0 = (cy as u64 * h as u64 / ch as u64) as usize;
         let sy1 = (((cy as u64 + 1) * h as u64 / ch as u64) as usize).clamp(sy0 + 1, h as usize);
@@ -287,20 +265,18 @@ pub fn presentation_texture(src: &DecodedImage) -> PresentTexture {
                     n += 1;
                 }
             }
-            let at = (cy * tw + cx) as usize * 4;
-            out[at] = (b / n) as u8;
-            out[at + 1] = (g / n) as u8;
-            out[at + 2] = (r / n) as u8;
-            out[at + 3] = (a / n) as u8;
+            let out = (cy * cw + cx) as usize * 4;
+            pixels[out] = (b / n) as u8;
+            pixels[out + 1] = (g / n) as u8;
+            pixels[out + 2] = (r / n) as u8;
+            pixels[out + 3] = (a / n) as u8;
         }
     }
-    PresentTexture {
-        bgra: out,
-        tex_width: tw,
-        tex_height: th,
-        content_width: cw,
-        content_height: ch,
-    }
+    Ok(NativeResource {
+        pixels,
+        width: cw,
+        height: ch,
+    })
 }
 
 #[cfg(windows)]
@@ -398,7 +374,7 @@ mod tests {
     #[test]
     fn svc_events_are_bounded_scalars() {
         event_values(&loading_event(1, "a.jpg"));
-        event_values(&ready_event(2, "a.jpg", 3, 1920, 1080, 512, 512));
+        event_values(&ready_event(2, "a.jpg", 3, 1920, 1080));
         event_values(&error_event(3, &OpenError::Decode("x".repeat(500).into())));
     }
 
@@ -410,58 +386,99 @@ mod tests {
     }
 
     #[test]
-    fn presentation_texture_matches_core_contract() {
-        // Realistic opaque JPEG decode: RGB gray, full alpha.
-        let mut rgba = vec![128u8; 1920 * 1080 * 4];
-        for at in (3..rgba.len()).step_by(4) {
-            rgba[at] = 255;
-        }
-        let tex = presentation_texture(&DecodedImage {
-            width: 1920,
-            height: 1080,
-            rgba,
-        });
-        // pow2 envelope within the core limit; 16:9 content keeps its aspect.
-        assert_eq!(tex.tex_width, 512);
-        assert_eq!(tex.tex_height, 512);
-        assert_eq!(tex.content_width, 512);
-        assert_eq!(tex.content_height, 288);
-        assert_eq!(tex.bgra.len(), 512 * 512 * 4);
-        // Uniform gray survives as BGRA gray inside the content area.
-        let at = (10 * tex.tex_width + 10) as usize * 4;
-        assert_eq!(tex.bgra[at], 128);
-        assert_eq!(tex.bgra[at + 1], 128);
-        assert_eq!(tex.bgra[at + 2], 128);
-        assert_eq!(tex.bgra[at + 3], 255);
-        // Padding outside the content extent is fully transparent.
-        let pad = (500 * tex.tex_width + 500) as usize * 4;
-        assert_eq!(tex.bgra[pad + 3], 0);
-    }
-
-    #[test]
-    fn small_images_stay_untouched_envelope_only() {
-        let mut rgba = vec![0u8; 8 * 2 * 4];
-        for y in 0..2 {
-            for x in 0..8 {
-                let at = (y * 8 + x) * 4;
-                rgba[at] = x as u8 * 30;
-                rgba[at + 2] = 200;
+    fn native_resource_preserves_source_resolution_and_pixels() {
+        // Resource dimension oracle: the exact image from the corrective
+        // brief. The registered native resource must carry the FULL source
+        // resolution — the old path box-shrank it into a 512x512 pow2
+        // envelope (1153x1198 -> 493x512), destroying detail before display.
+        let (w, h) = (1153u32, 1198u32);
+        let mut rgba = vec![0u8; (w * h * 4) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let at = ((y * w + x) * 4) as usize;
+                rgba[at] = (x % 256) as u8;
+                rgba[at + 1] = (y % 256) as u8;
+                rgba[at + 2] = ((x + y) % 256) as u8;
                 rgba[at + 3] = 255;
             }
         }
-        let tex = presentation_texture(&DecodedImage {
-            width: 8,
-            height: 2,
+        let res = native_resource(&DecodedImage {
+            width: w,
+            height: h,
+            rgba: rgba.clone(),
+        })
+        .expect("ordinary image passes through");
+        assert_eq!(res.width, w, "resource width must equal source width");
+        assert_eq!(res.height, h, "resource height must equal source height");
+        assert_eq!(res.pixels.len(), (w * h * 4) as usize);
+
+        // Pixel oracle: RGBA8888 -> PSM_8888 is a pure word-order swap. Sample
+        // corners and a striped interior where the pattern is exact.
+        let sample = |x: u32, y: u32| {
+            let src = ((y * w + x) * 4) as usize;
+            let dst = ((y * w + x) * 4) as usize;
+            (
+                res.pixels[dst] == rgba[src + 2],
+                res.pixels[dst + 1] == rgba[src + 1],
+                res.pixels[dst + 2] == rgba[src],
+                res.pixels[dst + 3] == rgba[src + 3],
+            )
+        };
+        for (x, y) in [(0u32, 0u32), (w - 1, h - 1), (500, 501), (1152, 0)] {
+            let (b, g, r, a) = sample(x, y);
+            assert!(b && g && r && a, "pixel ({x},{y}) must survive word-order swap");
+        }
+
+        // High-frequency oracle: a 1px checkerboard at 1024x1024. The old
+        // path averaged every 2x2 block into uniform mush on its way into the
+        // 512 envelope; the new path must keep every alternating pixel exact.
+        let (cw, chh) = (1024u32, 1024u32);
+        let mut check = vec![0u8; (cw * chh * 4) as usize];
+        for y in 0..chh {
+            for x in 0..cw {
+                let at = ((y * cw + x) * 4) as usize;
+                let v = if (x + y) % 2 == 0 { 0u8 } else { 255u8 };
+                check[at] = v;
+                check[at + 1] = v;
+                check[at + 2] = v;
+                check[at + 3] = 255;
+            }
+        }
+        let res2 = native_resource(&DecodedImage {
+            width: cw,
+            height: chh,
+            rgba: check,
+        })
+        .expect("checkerboard passes through");
+        assert_eq!(res2.width, cw);
+        assert_eq!(res2.height, chh);
+        for y in 0..chh {
+            for x in 0..cw {
+                let at = ((y * cw + x) * 4) as usize;
+                let v = if (x + y) % 2 == 0 { 0u8 } else { 255u8 };
+                assert_eq!(res2.pixels[at], v, "checkerboard must stay exact at ({x},{y})");
+            }
+        }
+    }
+
+    #[test]
+    fn giant_images_are_admission_fitted_bounded() {
+        // One axis above the seam's ceiling (8192): the resource is
+        // box-fitted into the admission limit, bounded, never rejected, and
+        // still large enough that fit-to-window display is GPU minification
+        // of real pixels.
+        let (w, h) = (20000u32, 100u32);
+        let rgba = vec![90u8; (w * h * 4) as usize];
+        let res = native_resource(&DecodedImage {
+            width: w,
+            height: h,
             rgba,
-        });
-        assert_eq!(tex.content_width, 8);
-        assert_eq!(tex.content_height, 2);
-        assert_eq!(tex.tex_width, 8);
-        assert_eq!(tex.tex_height, 2);
-        // Pixel (7,0): RGBA red-dominant input arrives as BGRA.
-        assert_eq!(tex.bgra[28], 200);
-        assert_eq!(tex.bgra[30], 7 * 30);
-        assert_eq!(tex.bgra[31], 255);
+        })
+        .expect("giant image is admission-fitted");
+        assert_eq!(res.width, 8192);
+        assert_eq!(res.height, (100 * 8192 + w / 2) / w);
+        assert!(res.width <= pocketjs_core::NATIVE_TEX_MAX_DIM);
+        assert_eq!(res.pixels.len(), (res.width * res.height * 4) as usize);
     }
 
     #[cfg(windows)]
@@ -575,7 +592,7 @@ mod tests {
         // field; the actual svc_in queue is guest-drained only, so wire
         // behavior rests on the manual presentation evidence.
         for generation in [1u64, 2] {
-            let ready = ready_event(generation, "x.jpg", 0, 1, 1, 1, 1);
+            let ready = ready_event(generation, "x.jpg", 0, 1, 1);
             assert_eq!(ready["g"], generation);
         }
 
