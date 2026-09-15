@@ -1,12 +1,10 @@
 # PicoView PRD v0.6 — Viewer Semantics Reset
 
 Status: **CURRENT PRODUCT AUTHORITY**  
-Date: **2026-09-15**  
+Date: **2026-09-16**  
 Target: **Windows 11 local image viewer**
 
-This document replaces `PicoView-PRD-v0.5.md` as current product authority. v0.5 remains historical context only.
-
-Architecture authority lives in accepted ADRs and `docs/ARCHITECTURE.md`. This PRD defines user-visible product meaning; it does not redefine graphics/resource internals.
+This document defines **user-visible product meaning only**. Architecture, graphics-backend policy, ownership, lifetime, and physical data movement are owned by accepted ADRs and `docs/ARCHITECTURE.md`.
 
 ---
 
@@ -14,7 +12,7 @@ Architecture authority lives in accepted ADRs and `docs/ARCHITECTURE.md`. This P
 
 PicoView is a fast, small, focused local image viewer.
 
-Its job is simple:
+Its job is:
 
 > **Open an image, show it faithfully, let the user inspect it, move to neighboring images, and perform a narrow set of current-file actions.**
 
@@ -23,9 +21,9 @@ PicoView is not an editor, photo library, cloud product, DAM, media database, ba
 The product optimizes for:
 
 - **directness** — opening an image goes straight to that image;
-- **fidelity** — the viewer does not silently rewrite image meaning merely to make rendering easier;
+- **fidelity** — viewing does not silently rewrite image meaning;
 - **responsiveness** — current-image interaction outranks background work;
-- **smallness** — no second application runtime or broad media stack without explicit evidence;
+- **smallness** — a viewer does not grow into a platform;
 - **truthfulness** — unavailable capabilities are reported as unavailable rather than simulated dishonestly.
 
 ---
@@ -42,18 +40,9 @@ A supplied file is the initial product truth. A gallery/home screen must not int
 
 Exactly one logical item is current in a window.
 
-CurrentItem represents product publication state, not decoder implementation, GPU resource internals, zoom implementation, or directory enumeration machinery.
+CurrentItem represents product publication state, not decoder implementation, graphics-resource internals, zoom implementation, or directory enumeration machinery.
 
-CurrentItem may expose bounded product facts such as:
-
-- source identity;
-- request generation;
-- loading / ready / error status;
-- logical display dimensions;
-- published image-resource identity;
-- view capabilities;
-- last-good publication when applicable;
-- bounded product error.
+CurrentItem may expose bounded product facts such as source identity, request generation, loading/ready/error state, logical display dimensions, published opaque image-resource identity, view capabilities, last-good publication where applicable, and bounded product error.
 
 ### 2.3 Previous / Next
 
@@ -69,9 +58,11 @@ Fit is presentation state. It does not rewrite the source image.
 
 ### 2.5 Actual Size / 100%
 
-Actual Size means truthful native image-pixel inspection, subject to the capabilities of the admitted image resource and current rendering backend.
+Actual Size means truthful native image-pixel inspection according to the coordinate semantics defined by the Architecture authority.
 
-If true full-resolution inspection is unavailable, PicoView must expose that capability honestly. A reduced proxy must never masquerade as source-resolution 100%.
+A reduced proxy must never masquerade as source-resolution 100%.
+
+If true full-resolution inspection is unavailable, PicoView exposes that capability honestly.
 
 ### 2.6 Zoom / Pan
 
@@ -89,7 +80,7 @@ They do not change the file on disk. A future explicit save/edit feature would b
 
 ### 2.8 Reset View
 
-Reset View returns transient view state to the product-defined default without reinterpreting source semantics.
+Reset View clears user-controlled transient view state. It does **not** discard intrinsic source interpretation such as EXIF orientation.
 
 ### 2.9 Fullscreen
 
@@ -99,22 +90,22 @@ Fullscreen changes presentation/chrome state only. It does not change image iden
 
 Refresh revalidates the current source and attempts to publish a replacement.
 
-When refreshing an already-visible item, PicoView may retain the last-good image until a replacement succeeds. Navigating to a corrupt new item may instead publish an error item. These are intentionally different product cases.
+When refreshing an already-visible item, PicoView retains the last-good image until a replacement is ready or product policy explicitly requires otherwise. Navigating to a corrupt new item may publish an error item instead. These are intentionally different product cases.
 
 ---
 
 ## 3. Source fidelity
 
-PicoView’s default behavior is non-destructive viewing.
+PicoView's default behavior is non-destructive viewing.
 
 The product must not silently:
 
 - reduce source resolution and then claim full-resolution viewing;
-- discard meaningful bit depth, gamut or HDR semantics merely for implementation convenience;
+- discard meaningful bit depth, gamut, alpha, or HDR semantics merely for implementation convenience;
 - bake Fit/Zoom/Pan/Rotate/Flip into a replacement source image;
 - modify the file while performing view-only commands.
 
-Display adaptation is allowed when required by the target display. For example, showing HDR content on an SDR display may require tone mapping. That is a presentation adaptation, not a mutation of source truth.
+Display adaptation is allowed when required by the target display. For example, showing HDR content on an SDR output may require tone mapping. That is presentation adaptation, not mutation of source truth.
 
 ---
 
@@ -122,7 +113,7 @@ Display adaptation is allowed when required by the target display. For example, 
 
 Format support is a **product capability decision**, not a side effect of whichever codecs happen to be installed.
 
-For each advertised format, PicoView must state the supported capability dimensions that matter for that format, including as applicable:
+For each advertised format, PicoView states the supported capability dimensions that matter for that format, including as applicable:
 
 - still-image decode;
 - orientation;
@@ -137,84 +128,71 @@ For each advertised format, PicoView must state the supported capability dimensi
 
 A decoder being technically able to open a file is insufficient to advertise complete product support.
 
-Exact format promises belong in the current format matrix/spec and may expand over time without changing the architecture boundary.
+Exact format promises belong in the current format matrix/spec and may expand over time without changing architecture boundaries.
 
 ---
 
 ## 5. Rendering product requirement
 
-PicoView’s rendering goal is:
+PicoView's rendering goal is:
 
-> **Present the logical image as faithfully as the current backend and display allow, without hidden destructive conversion.**
+> **Present the logical image as faithfully as the active rendering path and display allow, without hidden destructive conversion.**
 
-The product does not require users to know whether the active path is iGPU, discrete GPU, or software fallback.
+The product does not expose graphics implementation details as normal user concepts.
 
-User-visible behavior must remain semantically consistent across backends, although performance and advanced-display capability may differ.
+User-visible image semantics remain coherent when the rendering implementation changes, although performance and advanced-display capability may differ.
 
-For common static images, view-state changes such as Fit, Zoom, Pan, Rotate View, Flip View, window resize, or ordinary UI redraw must feel like view operations rather than image reloads.
+For common static images, Fit, Zoom, Pan, Rotate View, Flip View, window resize, DPI changes, or ordinary UI redraw must behave like view operations rather than image reloads.
 
----
+### Basic fallback requirement
 
-## 6. GPU / fallback product policy
+PicoView's release architecture should provide a **basic software-rendered fallback** for systems where no viable hardware-GPU path exists.
 
-PicoView is **GPU-first, not GPU-required**.
+The fallback must preserve truthful basic viewing semantics. It may expose reduced performance or advanced-display capability. The product must not claim this fallback is available until the implementation actually exists and is verified.
 
-Normal Windows rendering should use an eligible GPU path when available. The graphics runtime should prefer a surface-compatible low-power adapter where appropriate, normally the integrated GPU on hybrid systems, then use a compatible discrete GPU when necessary.
-
-If no usable GPU path exists, a software renderer is the final product fallback where correct viewing can still be provided.
-
-The product must not sacrifice correct presentation merely to force a particular GPU class.
+The exact GPU/adapter/backend selection policy is **not Product authority**; it belongs to Architecture.
 
 ---
 
-## 7. HDR and advanced color
+## 6. HDR and advanced color
 
-PicoView architecture must preserve the semantics needed for HDR/wide-gamut/advanced-color images.
+PicoView architecture must preserve the semantics needed for HDR, wide-gamut, and advanced-color images even when a release does not yet advertise every advanced-display capability.
 
-Product support may be delivered incrementally, but no ordinary SDR implementation is allowed to permanently define all images as “RGBA8 sRGB” at the product boundary.
+No ordinary SDR implementation may permanently define all images as `RGBA8 sRGB` at the product boundary.
 
-When HDR output is available and officially supported, PicoView should preserve sufficient source precision and use an HDR-capable presentation path.
-
-When the active display path is SDR, HDR content requires truthful display adaptation rather than pretending the source itself is SDR.
+When an advanced output path is officially supported, PicoView should preserve sufficient source precision and present it faithfully. When the active output cannot reproduce the source directly, display adaptation must remain truthful about the source.
 
 ---
 
-## 8. BrowseSession
+## 7. BrowseSession
 
 BrowseSession owns deterministic neighbor ordering and lightweight eligibility for the current source context.
 
 It must not become a media library or require decoding every file merely to discover navigation candidates.
 
-Current-image work outranks directory discovery, metadata enrichment and future prefetch.
+Current-image work outranks directory discovery, metadata enrichment, and future prefetch.
 
 ---
 
-## 9. Handle
+## 8. Handle
 
 PicoView may provide a narrow set of actions on the current file, such as copy/reveal/rename/delete/open-with according to the active product spec.
 
-It does not grow multi-select, batch conversion or general file-manager authority from these commands.
+It does not grow multi-select, batch conversion, or general file-manager authority from these commands.
 
 ---
 
-## 10. Error truthfulness
+## 9. Error truthfulness
 
 Product-visible failures are bounded and meaningful.
 
-The UI should distinguish product-relevant classes such as:
+The UI should distinguish product-relevant classes such as unsupported image/capability, corrupt image, source unavailable, full-resolution unavailable, display/rendering unavailable, and generic open failure.
 
-- unsupported image / unsupported capability;
-- corrupt image;
-- source unavailable;
-- full-resolution unavailable / image too large for the current path;
-- display/rendering unavailable;
-- generic open failure.
-
-Decoder errors, resource-admission errors and presentation errors must not all be mislabeled as “decode failed.”
+Decoder errors, resource-admission errors, and presentation errors must not all be mislabeled as “decode failed.”
 
 ---
 
-## 11. Non-goals
+## 10. Non-goals
 
 Unless separately admitted by a future product decision, PicoView does not become:
 
@@ -230,20 +208,19 @@ Unless separately admitted by a future product decision, PicoView does not becom
 
 ---
 
-## 12. Success criteria
+## 11. Success criteria
 
-The product architecture is serving PicoView when all of the following remain true:
+The product architecture is serving PicoView when:
 
-1. the user can reason about commands as view/navigation commands rather than hidden image rewrites;
-2. adding a new decoder does not require changing TSX or generic rendering semantics;
-3. adding a new graphics backend does not require changing PicoView image-format semantics;
-4. unavailable full-resolution/HDR/format capability is reported truthfully;
-5. the current image stays the highest-priority product object;
-6. the implementation remains small enough that a local image viewer does not behave like a platform.
+1. users can reason about commands as view/navigation commands rather than hidden image rewrites;
+2. unavailable full-resolution/advanced-display/format capability is reported truthfully;
+3. the current image stays the highest-priority product object;
+4. product behavior stays coherent across rendering implementations;
+5. the implementation remains small enough that a local image viewer does not behave like a platform.
 
 ---
 
-## 13. Related authority
+## 12. Related authority
 
 - Architecture decisions: `docs/ADR/`
 - Detailed architecture/program semantics: `docs/ARCHITECTURE.md`
@@ -251,4 +228,4 @@ The product architecture is serving PicoView when all of the following remain tr
 - Current operational state: `CONTEXT.md`
 - Agent rules: `AGENTS.md`
 
-Older PRD/SPEC versions are historical documents and do not override the current Product or Architecture authorities.
+Superseded authority is archived under `docs/history/authority-reset-20260915/` and does not override current Product or Architecture authority.
