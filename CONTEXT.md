@@ -33,34 +33,45 @@ Superseded authority is archived under `docs/history/authority-reset-20260915/`.
 
 ## Adversarial review status
 
-The first fresh adversarial review of PR #51 returned **REVISE_BEFORE_MERGE**.
+### First fresh review
 
-Correctives now applied in the branch include:
+Initial verdict: **REVISE_BEFORE_MERGE**.
 
-- Product authority no longer owns adapter/backend implementation policy;
-- UI CPU semantics are separated from UI rasterization location;
-- source/oriented/user/DIP/physical coordinate spaces and 100% math are explicit;
-- intrinsic source orientation is ordered before user Rotate/Flip and survives Reset View;
-- generic image→renderer representation semantics are explicit, including alpha/color/precision;
-- resource admission/publication/retirement/release state is explicit;
-- refresh keeps last-good until replacement admission succeeds;
-- upload invariants are residency-aware rather than “one upload forever”;
-- software fallback is a target capability, not an already-proved current capability claim;
-- AGENTS/CONTEXT have been reduced to operational guidance rather than duplicate architecture text.
+The first corrective closed:
 
-A second fresh review is still required before merge.
+- Product/backend policy leakage;
+- UI semantic state vs UI rasterization placement;
+- coordinate spaces / 100% DPI semantics;
+- intrinsic orientation vs user Rotate/Flip;
+- generic color/alpha/precision admission semantics;
+- last-good replacement ordering;
+- residency-aware upload rules;
+- target-vs-current software fallback claims.
+
+### Second boundary-only review
+
+A second review focused only on inter-layer authority found four remaining boundary ambiguities; all four have now been corrected in the branch:
+
+1. **decode semantics/orchestration != decode execution placement** — Image owns meaning/orchestration; CPU/GPU/platform hardware are replaceable execution choices;
+2. **Product view intent != backend transform realization** — Product owns Fit/100%/Zoom/Pan/Rotate/Flip state; PocketJS Core carries generic draw parameters; Backend physically realizes them;
+3. **Product publication != PocketJS logical lifetime != Backend residency** — each now has separate authority;
+4. **`content_revision` has one owner** — PocketJS Core assigns/advances it; PicoView Product/Image do not supply a competing revision truth.
+
+Hardware/GPU decode is explicitly permitted when it preserves Image semantics and demonstrably reduces full-plane CPU materialization/transfer without introducing worse interop/cross-adapter movement.
+
+A final fresh consistency review is still required before merge.
 
 ---
 
 ## Current known implementation differentials
 
-Current code predates the frozen architecture. Known audit targets include:
+Current code predates the frozen architecture. Known R1 audit targets include:
 
 - PicoView imports PocketJS PSM representation for native image registration;
 - ordinary decoded images are cloned before resource registration;
-- PocketJS core materializes aligned CPU texture storage before wgpu;
+- PocketJS Core materializes aligned CPU texture storage before wgpu;
 - wgpu materializes another RGBA buffer even for an already-RGBA8 path;
-- sampling is partly stored with texture state rather than purely draw state;
+- sampling is partly stored with texture state rather than generic draw state;
 - `NATIVE_TEX_MAX_DIM`/8192 leaks backend/default assumptions into image admission;
 - giant images are reduced before publication without a fully separated full-resolution capability;
 - resource-admission failure can be mislabeled as decode failure;
@@ -68,7 +79,8 @@ Current code predates the frozen architecture. Known audit targets include:
 - renderer/presentation authority is still partly in PicoView host code;
 - current Windows path has no proved software fallback;
 - current color/alpha admission is effectively PSM/RGBA8-oriented rather than the generic architecture contract;
-- generation terminology/authority remains mixed.
+- current decode path always materializes CPU RGBA and has no accelerator-direct/import path;
+- generation/revision terminology/authority remains mixed in code.
 
 These are differentials, not target design.
 
@@ -76,10 +88,10 @@ These are differentials, not target design.
 
 ## Near-term sequence
 
-After PR #51 passes second fresh review:
+After PR #51 passes final fresh review:
 
 1. audit current PicoView + exact locked PocketJS code against the frozen Architecture/SPEC;
-2. produce a differential table tracing every image-sized allocation/copy/upload/lifetime;
+2. trace every image-sized allocation/copy/upload/import/lifetime;
 3. split findings into PocketJS-generic corrections vs PicoView-specific corrections;
 4. recalibrate pre-reset GitHub issues before reusing them;
 5. only then continue implementation.
