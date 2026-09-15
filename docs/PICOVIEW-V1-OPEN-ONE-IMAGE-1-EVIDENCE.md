@@ -21,7 +21,7 @@ report is posted at jnhu76/PicoView#46 (comment 5673780953).
 | Item | Value |
 | --- | --- |
 | PicoView base SHA | `e109ce6` (main, product baseline reset) |
-| PicoView head SHA | `9308a2a` + corrective commits `0b38c0b` (image seam), `b9adbcf` (Vulkan investigation), `4826cf7` (evidence), plus the live-repro round commit that is this branch's HEAD at review time (exact hash pinned in the PR description and updated below after push) |
+| PicoView head SHA | `9308a2a` + corrective commits `0b38c0b` (image seam), `b9adbcf` (Vulkan investigation), `4826cf7` (evidence), `a7f829a` (live-repro round: one-shot reconfigure, evidence rewrite) |
 | Branch | `product/v1-open-one-image` |
 | PocketJS locked revision | `df869a51225df5e310b84612c9195030c058b6d9` (`POCKETJS.lock`, branch_hint `feat/windows-desktop-parity`); advanced from `6e631f46` through jnhu76/pocketjs#1 (adversarially reviewed: APPROVE, MINORs closed in `57745b1`) |
 | PocketJS consumption | Cargo git deps pinned to the locked revision (`native/Cargo.toml`); sibling checkout `C:\Users\fred1\source\pocketjs` detached at the same SHA; guest toolchain invoked from the sibling checkout; **no `..` references, no submodule, no vendoring in committed files** |
