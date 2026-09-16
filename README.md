@@ -4,15 +4,9 @@ PicoView is a fast, small, focused Windows 11 local image viewer built on Pocket
 
 Responsibility chain: **Open → View → Inspect → Browse → Handle**. It is not an editor, photo library, cloud product, file manager, media database, or general-purpose asset platform.
 
-## Current phase: Viewer Architecture Reset
+## Current phase: Code-Reality Conformance
 
-PicoView has already proved a real Windows path from local image decode to PocketJS presentation. The current work freezes the architecture that future product work must follow before additional architecture-sensitive implementation proceeds.
-
-Current reset:
-
-- control issue: **#50**;
-- documentation/authority PR: **#51**;
-- branch: `architecture/viewer-semantics-reset-1`.
+The viewer architecture reset is closed (control issue #50, PR #51). Current work audits running code against the frozen architecture and removes PicoView-side drift; generic graphics corrections land in `jnhu76/pocketjs` first (R2), then PicoView advances `POCKETJS.lock` (R3). Latest: conformance-cleanup-1 removed the PicoView-side full-plane copy before PocketJS admission and split resource-admission errors from decode errors.
 
 ## Current authority
 

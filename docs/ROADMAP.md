@@ -79,6 +79,14 @@ and must not treat the legacy PSM path as self-justifying merely because it alre
 
 Output: evidence-backed differential table only; no corrective coding in R1.
 
+> **Execution note (2026-09-16):** campaign `PICOVIEW-DESKTOP-WGPU-CONFORMANCE-CLEANUP-1`
+> executed the R1 Desktop image-path audit plus the owner-authorized subtractive
+> subset of R3 (removal of the PicoView-side full-plane clone before PocketJS
+> admission; admission/decode error-domain split). Nothing requiring a generic
+> PocketJS capability was worked around locally — those findings are classified
+> UPSTREAM-POCKETJS under R2-A. Evidence:
+> `docs/PICOVIEW-DESKTOP-WGPU-CONFORMANCE-CLEANUP-1-EVIDENCE.md`.
+
 ---
 
 ## R2 — PocketJS Generic Graphics Corrections
