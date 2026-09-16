@@ -2,17 +2,11 @@
 
 ## Current phase
 
-PicoView is in **VIEWER ARCHITECTURE RESET / CORRECTIVE REVIEW**.
+PicoView is in **POST-ARCHITECTURE-RESET / CODE-REALITY PREPARATION**.
 
-The product already has a proved Windows path from local image decode to PocketJS presentation. The current work is to finish the authority reset before architecture-sensitive implementation continues.
+The viewer authority reset has completed. PR #51 was squash-merged on 2026-09-16 as commit `528d3d849e823f3d5c017906584fc97dd57c8303`; control issue #50 is closed.
 
-Current reset work:
-
-- control issue: **#50**;
-- architecture-reset PR: **#51**;
-- branch: `architecture/viewer-semantics-reset-1`.
-
-PR #51 remains Draft and must not be auto-merged.
+The next work is to audit current PicoView + exact locked PocketJS code against the accepted architecture, then implement proven generic graphics corrections in PocketJS before advancing `POCKETJS.lock`.
 
 ---
 
@@ -31,13 +25,55 @@ Superseded authority is archived under `docs/history/authority-reset-20260915/`.
 
 ---
 
-## Adversarial review status
+## Accepted architecture decisions
 
-### First fresh review
+### ADR-0001 — Viewer / Image / Rendering Authority
 
-Initial verdict: **REVISE_BEFORE_MERGE**.
+The frozen authority model is:
 
-The first corrective closed:
+- PicoView Product owns user/current-item/view intent;
+- PicoView Image owns source/image meaning and decode orchestration;
+- PocketJS Core owns logical resource identity/lifetime/revision and generic draw contract;
+- Graphics Backend owns physical storage/residency and final rendering/presentation;
+- CPU/GPU/hardware accelerators are execution locations, not semantic authorities.
+
+Publication, logical lifetime, and physical residency are separate facts. `content_revision` has one owner: PocketJS Core.
+
+### ADR-0002 — Desktop/wgpu Direct Image Admission
+
+For the normal Windows/Desktop path, PicoView follows PocketJS's established Desktop→`pocket-ui-wgpu` backend choice.
+
+When CPU decode already produces RGBA8 directly consumable by the wgpu path, the target physical path is:
+
+```text
+decoder-owned RGBA8
+→ PocketJS generic logical admission
+→ direct wgpu upload/admission
+→ wgpu::Texture residency
+```
+
+The following legacy-shaped path is **not** target design:
+
+```text
+decoded RGBA8
+→ full PSM_8888/portable Core copy
+→ another full RGBA8 copy
+→ wgpu upload
+```
+
+`PSM_8888` may remain valid for PocketJS backends/workloads that need it. It is not the canonical native Desktop image representation.
+
+Desktop backend rule:
+
+> **Direct if already admissible; fuse required conversion into final backing where practical; materialize a full intermediate only for a named physical/correctness reason.**
+
+This does not bypass PocketJS Core authority and does not create a second image handle/compositor.
+
+---
+
+## Architecture review status
+
+The architecture reset passed successive adversarial reviews after correcting:
 
 - Product/backend policy leakage;
 - UI semantic state vs UI rasterization placement;
@@ -46,20 +82,13 @@ The first corrective closed:
 - generic color/alpha/precision admission semantics;
 - last-good replacement ordering;
 - residency-aware upload rules;
-- target-vs-current software fallback claims.
+- target-vs-current software fallback claims;
+- decode semantics/orchestration vs execution placement;
+- Product view intent vs backend transform realization;
+- Product publication vs PocketJS logical lifetime vs Backend residency;
+- single ownership of `content_revision`.
 
-### Second boundary-only review
-
-A second review focused only on inter-layer authority found four remaining boundary ambiguities; all four have now been corrected in the branch:
-
-1. **decode semantics/orchestration != decode execution placement** — Image owns meaning/orchestration; CPU/GPU/platform hardware are replaceable execution choices;
-2. **Product view intent != backend transform realization** — Product owns Fit/100%/Zoom/Pan/Rotate/Flip state; PocketJS Core carries generic draw parameters; Backend physically realizes them;
-3. **Product publication != PocketJS logical lifetime != Backend residency** — each now has separate authority;
-4. **`content_revision` has one owner** — PocketJS Core assigns/advances it; PicoView Product/Image do not supply a competing revision truth.
-
-Hardware/GPU decode is explicitly permitted when it preserves Image semantics and demonstrably reduces full-plane CPU materialization/transfer without introducing worse interop/cross-adapter movement.
-
-A final fresh consistency review is still required before merge.
+The remaining work is implementation conformance, not another architecture reset unless evidence disproves an accepted assumption.
 
 ---
 
@@ -70,7 +99,8 @@ Current code predates the frozen architecture. Known R1 audit targets include:
 - PicoView imports PocketJS PSM representation for native image registration;
 - ordinary decoded images are cloned before resource registration;
 - PocketJS Core materializes aligned CPU texture storage before wgpu;
-- wgpu materializes another RGBA buffer even for an already-RGBA8 path;
+- wgpu materializes another RGBA buffer even for an already-RGBA8/`PSM_8888` path;
+- the current normal Desktop path therefore does not yet satisfy ADR-0002 direct admission;
 - sampling is partly stored with texture state rather than generic draw state;
 - `NATIVE_TEX_MAX_DIM`/8192 leaks backend/default assumptions into image admission;
 - giant images are reduced before publication without a fully separated full-resolution capability;
@@ -88,13 +118,15 @@ These are differentials, not target design.
 
 ## Near-term sequence
 
-After PR #51 passes final fresh review:
-
-1. audit current PicoView + exact locked PocketJS code against the frozen Architecture/SPEC;
+1. audit current PicoView + exact locked PocketJS code against ADR-0001/ADR-0002/Architecture/SPEC;
 2. trace every image-sized allocation/copy/upload/import/lifetime;
-3. split findings into PocketJS-generic corrections vs PicoView-specific corrections;
-4. recalibrate pre-reset GitHub issues before reusing them;
-5. only then continue implementation.
+3. specifically prove the current Desktop RGBA8→PSM_8888→RGBA8→wgpu chain and identify the smallest generic PocketJS seam that removes it;
+4. split findings into PocketJS-generic corrections vs PicoView-specific corrections;
+5. implement/review generic PocketJS corrections first;
+6. advance `POCKETJS.lock` deliberately;
+7. then apply PicoView-specific Product/Image corrections.
+
+Do not preserve `PSM_8888` in the native Desktop path merely because the current API already exposes it.
 
 ---
 
