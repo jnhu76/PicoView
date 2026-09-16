@@ -819,7 +819,7 @@ Still open:
 
 # 21. Cross-repo rule
 
-If PicoView needs a capability generic to runtime/graphics, implement it in `jnhu76/pocketjs` first, review/merge it there, then advance `POCKETJS.lock`.
+If PicoView needs a capability generic to runtime/graphics, implement it in `jnhu76/pocketjs` first, review it there, freeze the exact reviewed commit on `integration/picoview-desktop`, then advance `POCKETJS.lock` to that exact SHA. Neither `jnhu76/pocketjs` main nor `pocket-stack/pocketjs` main is an integration target for PicoView-specific dependency advancement.
 
 Likely PocketJS work includes:
 
