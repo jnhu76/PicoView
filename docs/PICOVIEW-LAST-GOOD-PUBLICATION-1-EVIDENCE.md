@@ -301,3 +301,39 @@ frame-level oracle rests on (a) the framework flush ordering citation
 (§B), (b) the native lifetime tests, (c) the reducer tests, and (d) the
 release smokes above; an interactive refresh path arrives with the
 navigation slice and will exercise this contract live.
+
+## M. Fresh adversarial review
+
+Fresh-context reviewer, 17 attack vectors, all traced with file:line
+evidence against this branch and the locked PocketJS revision; reviewer
+independently re-ran both test suites (16 native + 12 reducer, all pass)
+and re-verified the framework claims (surface svc queue lossless,
+`free_texture` generation-bump, `set_image` stale-handle ignore,
+`Map.set` overwrite semantics) at `24bab5e`.
+
+Verdict: **PASS — 0 blocker, 0 MAJOR.** 4 non-blocking NOTEs:
+
+1. The post-commit release argument is call-site-dependent: it holds for
+   the boot call site (and the natural future input-processing placement),
+   but a hypothetical `open()` invoked between `guest.frame` and render in
+   one tick could raster one DrawList against a freed handle — bounded to
+   a blank image by Core's stale-handle semantics (resolves to nothing),
+   never garbage/crash. Documented limitation, not a branch defect.
+2. `isGeneration` accepts non-integers (dead robustness headroom; the
+   real emitter never produces them).
+3. Error requests carry no `name`, so the header hides the file name on
+   an error verdict — byte-for-byte the pre-branch behavior.
+4. `bounded()` caps chars, not bytes (pre-existing trait; the added
+   intent field costs ~25 bytes on loading/error lines).
+
+## N. Residuals
+
+- No runtime refresh/new-item trigger exists in V1 (boot-open only); the
+  refresh paths are exercised by the state-machine and reducer tests plus
+  release smokes. The navigation slice that introduces a live trigger
+  must keep `open()` out of the between-frame-and-render window (or
+  re-prove the ordering) per §M note 1.
+- The remaining R3 differentials (truthful full-resolution capability,
+  generic color/alpha admission) are untouched, per campaign scope.
+- `docs/ARCHITECTURE.md`/`AGENTS.md` cross-repo governance wording was
+  aligned as the §0 prerequisite (commit `f702922`), exactly 2 lines.
