@@ -9,15 +9,17 @@ description = "PicoView native host: Current Item authority, WIC baseline decode
 name = "picoview"
 path = "src/main.rs"
 
-# PocketJS is consumed at the exact revision pinned by PicoView's POCKETJS.lock.
-# No submodule, no vendoring, no path/`..` dependency.
+# PocketJS is consumed at the exact revision pinned by PicoView's POCKETJS.lock
+# (jnhu76/pocketjs:integration/picoview-desktop). No submodule, no vendoring,
+# no path/`..` dependency. Every PocketJS git dependency below must stay on
+# that same exact revision.
 [dependencies]
-pocketjs-core = { git = "https://github.com/jnhu76/pocketjs.git", rev = "df869a51225df5e310b84612c9195030c058b6d9", features = ["std"] }
-pocket-mod = { git = "https://github.com/jnhu76/pocketjs.git", rev = "df869a51225df5e310b84612c9195030c058b6d9" }
-pocket-ui-surface = { git = "https://github.com/jnhu76/pocketjs.git", rev = "df869a51225df5e310b84612c9195030c058b6d9" }
-pocket-text = { git = "https://github.com/jnhu76/pocketjs.git", rev = "df869a51225df5e310b84612c9195030c058b6d9" }
-pocket-ui-wgpu = { git = "https://github.com/jnhu76/pocketjs.git", rev = "df869a51225df5e310b84612c9195030c058b6d9" }
-pocket3d = { git = "https://github.com/jnhu76/pocketjs.git", rev = "df869a51225df5e310b84612c9195030c058b6d9", default-features = false }
+pocketjs-core = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb", features = ["std"] }
+pocket-mod = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb" }
+pocket-ui-surface = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb" }
+pocket-text = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb" }
+pocket-ui-wgpu = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb" }
+pocket3d = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb", default-features = false }
 wgpu = "25"
 winit = "0.30"
 anyhow = "1"

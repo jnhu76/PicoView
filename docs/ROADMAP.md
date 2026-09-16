@@ -121,6 +121,19 @@ Implementation rule:
 
 Do not add a second public `NativeImageHandle`, PicoView-specific renderer, or parallel compositor.
 
+> **Execution note (2026-09-16):** R2-A is implemented and reviewed as
+> `POCKETJS-DESKTOP-DIRECT-IMAGE-ADMISSION-1` (jnhu76/pocketjs PR #2, reviewed
+> HEAD `24bab5e`): `Ui::upload_owned_rgba8` moves a host decoder's tight RGBA8
+> plane into the existing logical texture record (`TexBacking::Owned`), and
+> `pocket-ui-wgpu` borrows `PSM_8888`/Owned planes straight into
+> `Queue::write_texture`. That HEAD is now the append-only
+> `jnhu76/pocketjs:integration/picoview-desktop` consumer branch. Campaign
+> `PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1` advanced `POCKETJS.lock` and
+> every PicoView Cargo git revision to exactly `24bab5e` and migrated the
+> publication path to the owned API — the ordinary Desktop image path now has
+> zero repository CPU-to-CPU full-plane copies after decode. Evidence:
+> `docs/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md`.
+
 ### Other R2 candidates
 
 Likely candidates, subject to evidence:
@@ -207,7 +220,7 @@ Architecture correctness is not deferred. Workload-dependent optimization remain
 
 Physical claims follow `docs/BENCHMARK.md`.
 
-For the Desktop/wgpu path, an already-RGBA8 decode passing through a full PSM_8888 copy and then another full RGBA8 copy is an architecture differential first, not a benchmark-tuning choice.
+For the Desktop/wgpu path, an already-RGBA8 decode passing through a full PSM_8888 copy and then another full RGBA8 copy is an architecture differential first, not a benchmark-tuning choice. As of 2026-09-16 no such chain exists on the ordinary image path (see R2-A execution note); the rule remains binding for any future path that reintroduces full-plane intermediates.
 
 ---
 

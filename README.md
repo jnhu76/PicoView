@@ -6,7 +6,7 @@ Responsibility chain: **Open → View → Inspect → Browse → Handle**. It is
 
 ## Current phase: Code-Reality Conformance
 
-The viewer architecture reset is closed (control issue #50, PR #51). Current work audits running code against the frozen architecture and removes PicoView-side drift; generic graphics corrections land in `jnhu76/pocketjs` first (R2), then PicoView advances `POCKETJS.lock` (R3). Latest: conformance-cleanup-1 removed the PicoView-side full-plane copy before PocketJS admission and split resource-admission errors from decode errors.
+The viewer architecture reset is closed (control issue #50, PR #51). Current work audits running code against the frozen architecture and removes PicoView-side drift; generic graphics corrections land in `jnhu76/pocketjs` first (R2), then PicoView advances `POCKETJS.lock` (R3). Latest: direct-image-admission-migration-1 pins `jnhu76/pocketjs:integration/picoview-desktop` (`24bab5e`) and ordinary decodes now MOVE their RGBA plane into PocketJS owned admission (`Ui::upload_owned_rgba8`) — zero full-plane CPU copies after decode, no PSM seam. Earlier: conformance-cleanup-1 removed the PicoView-side full-plane copy before PocketJS admission and split resource-admission errors from decode errors.
 
 ## Current authority
 

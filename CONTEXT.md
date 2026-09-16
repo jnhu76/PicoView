@@ -8,13 +8,20 @@ The viewer authority reset closed (PR #51, `528d3d8`). Campaign
 `PICOVIEW-DESKTOP-WGPU-CONFORMANCE-CLEANUP-1` (2026-09-16) then executed the
 R1 Desktop image-path audit and the owner-authorized subtractive subset of
 R3: the PicoView-side full-plane clone before PocketJS admission was removed
-(ordinary decodes admit the decoder's own RGBA plane by borrow), and
-resource-admission failures are no longer reported as decode failures.
+(then still by borrow into the legacy seam), and resource-admission failures
+are no longer reported as decode failures.
 
-The next work is the generic PocketJS seam: direct desktop/wgpu image
-admission (R2-A / `POCKETJS-DESKTOP-DIRECT-IMAGE-ADMISSION-1`), implemented
-and reviewed in `jnhu76/pocketjs` first, then `POCKETJS.lock` advances
-deliberately, then the remaining PicoView-side corrections apply (R3).
+Campaign `PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1` (2026-09-16) closed
+the R2 loop: PocketJS direct image admission
+(`POCKETJS-DESKTOP-DIRECT-IMAGE-ADMISSION-1`, jnhu76/pocketjs PR #2) is the
+reviewed HEAD of `jnhu76/pocketjs:integration/picoview-desktop`
+(`24bab5e`), `POCKETJS.lock` advanced to exactly that revision, and PicoView
+now publishes ordinary decodes by MOVING the WIC RGBA plane into
+`Ui::upload_owned_rgba8` — no PSM tag, no borrow seam, no second CPU plane.
+
+The next work is the remaining PicoView-side corrections (R3): truthful
+full-resolution capability, refresh/last-good ordering, generic color/alpha
+admission.
 
 ---
 
@@ -102,12 +109,13 @@ The remaining work is implementation conformance, not another architecture reset
 
 ## Current known implementation differentials
 
-Remaining differentials after `PICOVIEW-DESKTOP-WGPU-CONFORMANCE-CLEANUP-1` (2026-09-16) — audit-confirmed, migration targets only:
+Remaining differentials after `PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`
+(2026-09-16) — audit-confirmed, migration targets only:
 
-- PicoView admits decoded images through the locked-revision PSM-tagged core seam (`register_native_texture`); the PicoView-side pre-registration full-plane clone is gone;
-- PocketJS Core materializes aligned CPU texture storage before wgpu;
-- wgpu materializes another RGBA buffer even for an already-RGBA8/`PSM_8888` path;
-- the current normal Desktop path therefore does not yet satisfy ADR-0002 direct admission (requires the upstream generic seam);
+- ~~PicoView admits decoded images through the locked-revision PSM-tagged core seam (`register_native_texture`)~~ — resolved: ordinary decodes move the decoder's own RGBA plane into `Ui::upload_owned_rgba8`; no PSM vocabulary remains on the PicoView image path;
+- ~~PocketJS Core materializes aligned CPU texture storage before wgpu~~ — resolved for the ordinary image path (`TexBacking::Owned` keeps the moved plane tight; pak/PSM_T8 textures keep the aligned store by PSP design);
+- ~~wgpu materializes another RGBA buffer even for an already-RGBA8/`PSM_8888` path~~ — resolved at the integration revision (`pocket-ui-wgpu` borrows `PSM_8888`/Owned planes straight into `Queue::write_texture`; `to_rgba8` remains only for 5650/4444/T8 device textures);
+- ~~the current normal Desktop path therefore does not yet satisfy ADR-0002 direct admission~~ — satisfied on the ordinary image path at the pinned integration revision;
 - sampling is partly stored with texture state rather than generic draw state;
 - `NATIVE_TEX_MAX_DIM`/8192 leaks backend/default assumptions into image admission;
 - giant images are reduced before publication without a fully separated full-resolution capability;
@@ -128,8 +136,8 @@ These are differentials, not target design.
 2. ~~trace every image-sized allocation/copy/upload/import/lifetime~~ (done — evidence doc, P0–P5 chain);
 3. prove the current Desktop RGBA8→PSM_8888→RGBA8→wgpu chain and identify the smallest generic PocketJS seam that removes it (done at audit level — seam identified below);
 4. split findings into PocketJS-generic corrections vs PicoView-specific corrections (done — see evidence doc findings table);
-5. implement/review generic PocketJS corrections first: `POCKETJS-DESKTOP-DIRECT-IMAGE-ADMISSION-1` — extend the native image seam so an admissible RGBA8 plane becomes wgpu residency without the portable core-copy detour and without a second handle namespace;
-6. advance `POCKETJS.lock` deliberately;
+5. ~~implement/review generic PocketJS corrections first: `POCKETJS-DESKTOP-DIRECT-IMAGE-ADMISSION-1`~~ (done — jnhu76/pocketjs PR #2, reviewed HEAD `24bab5e`, now the `integration/picoview-desktop` consumer branch);
+6. ~~advance `POCKETJS.lock` deliberately~~ (done — `PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`, 2026-09-16: pin + all Cargo revs to `24bab5e`, PicoView moved to owned admission);
 7. then apply remaining PicoView-specific Product/Image corrections (truthful full-resolution capability, refresh/last-good ordering, generic color/alpha admission).
 
 Do not preserve `PSM_8888` in the native Desktop path merely because the current API already exposes it.

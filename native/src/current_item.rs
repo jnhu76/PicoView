@@ -5,15 +5,15 @@
 //! state over the svc channel. Image bytes never cross QuickJS — the only
 //! guest-facing payloads here are small JSON objects of strings and integers.
 //!
-//! The full-resolution decode is published through the PocketJS native
-//! large-image resource seam (`Ui::register_native_texture`), so ordinary
-//! photographs keep their source resolution in the production resource: fit
-//! to window is GPU minification of the real pixels, not a destructive
-//! pre-shrink. Ordinary images admit the decoder's own RGBA plane — borrowed,
-//! never copied on this side. The seam's admission rule (1..=NATIVE_TEX_MAX_DIM
+//! The full-resolution decode is published through PocketJS owned RGBA8
+//! image admission (`Ui::upload_owned_rgba8`), so ordinary photographs keep
+//! their source resolution in the production resource: fit to window is GPU
+//! minification of the real pixels, not a destructive pre-shrink. The
+//! decoder's own RGBA plane MOVES into the PocketJS logical texture record —
+//! this side never materializes a second full plane, and admission costs no
+//! CPU-to-CPU full-plane copy. The admission rule (1..=NATIVE_TEX_MAX_DIM
 //! per axis) is the only resize a normal image ever sees: none.
 
-use pocketjs_core::spec::psm;
 use anyhow::Result;
 use pocket_ui_surface::UiSurface;
 use serde_json::json;
@@ -24,22 +24,15 @@ pub const SVC_TYPE: &str = "current-item";
 /// guest/app.octane.tsx; the handle travels via svc, the key stays literal).
 #[allow(dead_code)]
 const TEXTURE_KEY_HINT: &str = "picoview-current";
-/// PocketJS seam admission limit (spec::NATIVE_TEX_MAX_DIM). Images above
-/// this on either axis are box-fitted down into it — a bounded degradation
-/// for giant images only, compensating for the seam's dimension ceiling at
-/// the locked PocketJS revision. It is not product resize semantics, and it
-/// is not an image semantic limit; truthful full-resolution capability is
-/// later product work (ARCHITECTURE §15). Normal photos pass through with
-/// source geometry untouched.
+/// PocketJS owned-admission ceiling (`spec::NATIVE_TEX_MAX_DIM`, matched to
+/// the wgpu default max texture dimension the Desktop backend requests).
+/// Images above this on either axis are box-fitted down into it — a bounded
+/// degradation for giant images only, compensating for the admission
+/// dimension ceiling at the pinned PocketJS integration revision. It is not
+/// product resize semantics, and it is not an image semantic limit; truthful
+/// full-resolution capability is later product work (ARCHITECTURE §15).
+/// Normal photos pass through with source geometry untouched.
 const MAX_RESOURCE_DIM: u32 = pocketjs_core::NATIVE_TEX_MAX_DIM;
-/// Format tag the locked PocketJS seam (`Ui::register_native_texture`)
-/// admits 32-bit photo pixels under. PSM_8888 memory bytes are R,G,B,A (the
-/// PocketJS pak compiler is byte-order authority), so the WIC RGBA decode is
-/// admitted verbatim under this tag — no swizzle. The tag is a locked-revision
-/// API constraint, not a Desktop canonical-representation decision
-/// (ADR-0002 §3); the migration target is PocketJS-side direct image
-/// admission (POCKETJS-DESKTOP-DIRECT-IMAGE-ADMISSION-1).
-const ADMISSION_FORMAT: u32 = psm::PSM_8888;
 /// svc is a bounded-semantic channel; error strings are capped.
 const MAX_ERROR_CHARS: usize = 200;
 /// Decode allocation guard: a container may declare absurd frame dimensions
@@ -59,8 +52,10 @@ fn decode_alloc_len(width: u32, height: u32) -> Result<usize, OpenError> {
     Ok(pixels as usize * 4)
 }
 
-/// Full-resolution WIC decode output. Lifetime is fully native: it exists only
-/// between decode and resource registration, inside `CurrentItem::open`.
+/// Full-resolution WIC decode output, and the owned admission body: ordinary
+/// decodes are published exactly as this struct — the `rgba` heap allocation
+/// moves into PocketJS unchanged. Lifetime is fully native: it exists only
+/// between decode and owned admission, inside `CurrentItem::open`.
 pub struct DecodedImage {
     pub width: u32,
     pub height: u32,
@@ -95,44 +90,6 @@ impl OpenError {
             out.push('…');
         }
         out
-    }
-}
-
-/// The image plane handed to PocketJS admission. Ordinary images (both axes
-/// within the seam's admission ceiling) admit the decoder's own RGBA plane,
-/// borrowed as-is — `register_native_texture` performs the single required
-/// copy into core storage, so this side never materializes a second full
-/// plane (ADR-0001 §11). Only giant images above the ceiling produce an
-/// owned, box-fitted reduction with the named reason above.
-enum AdmissionPlane<'a> {
-    /// Decoder-owned plane, admitted verbatim at source resolution.
-    Source(&'a DecodedImage),
-    /// Box-fitted reduction of a giant image, owned here for admission.
-    Fitted {
-        pixels: Vec<u8>,
-        width: u32,
-        height: u32,
-    },
-}
-
-impl AdmissionPlane<'_> {
-    fn pixels(&self) -> &[u8] {
-        match self {
-            AdmissionPlane::Source(image) => &image.rgba,
-            AdmissionPlane::Fitted { pixels, .. } => pixels,
-        }
-    }
-    fn width(&self) -> u32 {
-        match self {
-            AdmissionPlane::Source(image) => image.width,
-            AdmissionPlane::Fitted { width, .. } => *width,
-        }
-    }
-    fn height(&self) -> u32 {
-        match self {
-            AdmissionPlane::Source(image) => image.height,
-            AdmissionPlane::Fitted { height, .. } => *height,
-        }
     }
 }
 
@@ -177,8 +134,8 @@ impl CurrentItem {
         self.push(surface, loading_event(generation, &name));
         match open_decoded(path) {
             Ok(decoded) => {
-                let plane = admission_plane(&decoded);
-                self.publish(surface, generation, name, &plane);
+                let image = prepare_for_admission(decoded);
+                self.publish(surface, generation, name, image);
             }
             Err(error) => {
                 self.retire(surface);
@@ -187,34 +144,34 @@ impl CurrentItem {
         }
     }
 
-    /// Retire the previous resource, register the new one, and publish the
+    /// Retire the previous resource, admit the new one, and publish the
     /// ready event: handles are generation-tagged in the core, so a stale
     /// handle drawn by the guest in the interim renders nothing after free.
-    fn publish(&mut self, surface: &UiSurface, generation: u64, name: String, plane: &AdmissionPlane) {
+    /// The decoded plane MOVES into PocketJS here — this is the single
+    /// ownership transfer on the ordinary path; a rejection (handle < 0)
+    /// drops the plane, it never copies it.
+    fn publish(&mut self, surface: &UiSurface, generation: u64, name: String, image: DecodedImage) {
         self.retire(surface);
+        let DecodedImage {
+            width,
+            height,
+            rgba,
+        } = image;
         // FLAG_LINEAR: bilinear sampling — the resource is frequently
         // displayed at non-integer scale (fit to window), and nearest
         // sampling turns that into visible blockiness.
-        let handle = surface.with_ui(|ui| {
-            ui.register_native_texture(
-                plane.pixels(),
-                plane.width(),
-                plane.height(),
-                ADMISSION_FORMAT,
-                true,
-            )
-        });
+        let handle = surface.with_ui(|ui| ui.upload_owned_rgba8(rgba, width, height, true));
         if handle < 0 {
             self.push(
                 surface,
-                error_event(generation, &OpenError::Admission("resource registration rejected".into())),
+                error_event(generation, &OpenError::Admission("resource admission rejected".into())),
             );
             return;
         }
         self.live = Some(LiveResource { handle });
         self.push(
             surface,
-            ready_event(generation, &name, handle, plane.width(), plane.height()),
+            ready_event(generation, &name, handle, width, height),
         );
     }
 
@@ -273,17 +230,19 @@ fn bounded(s: &str) -> String {
     out
 }
 
-/// Choose the admission plane for a decode. An ordinary image (both axes
-/// within the seam's admission ceiling) admits the decoder's plane verbatim —
-/// borrowed, no copy, no resample. Only images above MAX_RESOURCE_DIM on
-/// either axis are box-fitted down into the ceiling (bounded degradation for
+/// Prepare a decode for owned admission. An ordinary image (both axes within
+/// the admission ceiling) returns unchanged — the decoder's own RGBA plane is
+/// the admission body, verbatim at source resolution, and no second plane is
+/// materialized (ADR-0002 §3 decision order: directly consume the admitted
+/// representation). Only a giant image above MAX_RESOURCE_DIM on either axis
+/// is consumed and box-fitted down into the ceiling (bounded degradation for
 /// giant images; viewport paging is a later-slice concern), and the box-fit
 /// output stays in R,G,B,A byte order.
-fn admission_plane(src: &DecodedImage) -> AdmissionPlane<'_> {
-    if src.width <= MAX_RESOURCE_DIM && src.height <= MAX_RESOURCE_DIM {
-        return AdmissionPlane::Source(src);
+fn prepare_for_admission(decoded: DecodedImage) -> DecodedImage {
+    if decoded.width <= MAX_RESOURCE_DIM && decoded.height <= MAX_RESOURCE_DIM {
+        return decoded;
     }
-    let (w, h) = (src.width.max(1), src.height.max(1));
+    let (w, h) = (decoded.width.max(1), decoded.height.max(1));
     let scale = (MAX_RESOURCE_DIM as f64 / w as f64)
         .min(MAX_RESOURCE_DIM as f64 / h as f64);
     let (cw, ch) = (
@@ -303,10 +262,10 @@ fn admission_plane(src: &DecodedImage) -> AdmissionPlane<'_> {
             for sy in sy0..sy1 {
                 for sx in sx0..sx1 {
                     let at = sy * row + sx * 4;
-                    r += src.rgba[at] as u64;
-                    g += src.rgba[at + 1] as u64;
-                    b += src.rgba[at + 2] as u64;
-                    a += src.rgba[at + 3] as u64;
+                    r += decoded.rgba[at] as u64;
+                    g += decoded.rgba[at + 1] as u64;
+                    b += decoded.rgba[at + 2] as u64;
+                    a += decoded.rgba[at + 3] as u64;
                     n += 1;
                 }
             }
@@ -317,10 +276,10 @@ fn admission_plane(src: &DecodedImage) -> AdmissionPlane<'_> {
             pixels[out + 3] = (a / n) as u8;
         }
     }
-    AdmissionPlane::Fitted {
-        pixels,
+    DecodedImage {
         width: cw,
         height: ch,
+        rgba: pixels,
     }
 }
 
@@ -433,31 +392,32 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_decodes_admit_as_borrowed_source_planes() {
-        // The ordinary path must borrow the decoder's plane at full source
+    fn ordinary_decodes_prepare_as_the_decoder_plane_verbatim() {
+        // The ordinary path must prepare the decoder's plane at full source
         // resolution — never a copy, never a resample, never a pow2 envelope
         // (the old path box-shrank 1153x1198 into a 512 envelope).
-        let image = |w: u32, h: u32| DecodedImage {
-            width: w,
-            height: h,
-            rgba: vec![17u8; (w * h * 4) as usize],
-        };
         for (w, h) in [(1153u32, 1198u32), (1024u32, 1024u32), (1u32, 1u32)] {
-            let decode = image(w, h);
-            let plane = admission_plane(&decode);
-            assert!(
-                matches!(plane, AdmissionPlane::Source(_)),
-                "{w}x{h} is ordinary and must admit the decoder's own plane"
+            let decode = DecodedImage {
+                width: w,
+                height: h,
+                rgba: vec![17u8; (w * h * 4) as usize],
+            };
+            let source_ptr = decode.rgba.as_ptr();
+            let prepared = prepare_for_admission(decode);
+            assert_eq!(
+                (prepared.width, prepared.height),
+                (w, h),
+                "{w}x{h} is ordinary and must keep source geometry"
             );
-            assert_eq!(plane.width(), w);
-            assert_eq!(plane.height(), h);
-            assert!(std::ptr::eq(plane.pixels().as_ptr(), decode.rgba.as_ptr()));
+            // Preparation moves the decode; the heap plane publication will
+            // move into PocketJS is still this one allocation.
+            assert!(std::ptr::eq(prepared.rgba.as_ptr(), source_ptr));
         }
     }
 
     #[test]
-    fn giant_decodes_admit_as_fitted_planes() {
-        // One axis above the seam's ceiling (8192): the resource is
+    fn giant_decodes_prepare_as_fitted_planes() {
+        // One axis above the admission ceiling (8192): the resource is
         // box-fitted into the admission limit, bounded, never rejected, and
         // still large enough that fit-to-window display is GPU minification
         // of real pixels. The fill is channel-asymmetric so the oracle also
@@ -473,15 +433,56 @@ mod tests {
             height: h,
             rgba,
         };
-        let res = admission_plane(&decode);
-        assert!(matches!(res, AdmissionPlane::Fitted { .. }));
-        assert_eq!(res.width(), 8192);
-        assert_eq!(res.height(), (100 * 8192 + w / 2) / w);
-        assert!(res.width() <= pocketjs_core::NATIVE_TEX_MAX_DIM);
-        assert_eq!(res.pixels().len(), (res.width() * res.height() * 4) as usize);
-        for px in res.pixels().chunks_exact(4) {
+        let res = prepare_for_admission(decode);
+        assert_eq!(res.width, 8192);
+        assert_eq!(res.height, (100 * 8192 + w / 2) / w);
+        assert!(res.width <= pocketjs_core::NATIVE_TEX_MAX_DIM);
+        assert_eq!(res.rgba.len(), (res.width * res.height * 4) as usize);
+        for px in res.rgba.chunks_exact(4) {
             assert_eq!(px, &[17, 34, 51, 255], "box-fit output must stay R,G,B,A");
         }
+    }
+
+    #[test]
+    fn decoded_allocation_becomes_the_pocketjs_record_backing() {
+        // Ownership oracle at the real publication seam: the Vec this side
+        // holds before publish is the very allocation PocketJS stores after
+        // it — upload_owned_rgba8 moves it, and the live record's pixels are
+        // observable at the original pointer through Ui::texture. Equal
+        // contents alone would not prove the move.
+        let surface = UiSurface::new((96.0, 64.0));
+        fn expected_byte(i: usize) -> u8 {
+            (i % 251) as u8
+        }
+        let image = DecodedImage {
+            width: 33,
+            height: 17,
+            rgba: (0..33 * 17 * 4).map(expected_byte).collect(),
+        };
+        let source_ptr = image.rgba.as_ptr();
+
+        let mut item = CurrentItem::new();
+        item.publish(&surface, 1, "oracle.png".to_string(), image);
+        let handle = item
+            .live_handle()
+            .expect("admission accepts the moved plane");
+        surface.with_ui(|ui| {
+            let view = ui.texture(handle).expect("live PocketJS record");
+            assert_eq!((view.w, view.h), (33, 17));
+            assert!(view.linear, "publication admits bilinear sampling");
+            // Allocation identity: the record's bytes ARE the decoded Vec's
+            // heap allocation — moved, not copied.
+            assert!(
+                std::ptr::eq(view.pixels.as_ptr(), source_ptr),
+                "PocketJS record must own the decoder's original allocation"
+            );
+            for (i, b) in view.pixels.iter().enumerate() {
+                assert_eq!(*b, expected_byte(i), "byte {i} changed across the move");
+            }
+        });
+        item.retire(&surface);
+        assert_eq!(item.live_handle(), None);
+        surface.with_ui(|ui| assert!(ui.texture(handle).is_none()));
     }
 
     #[cfg(windows)]
@@ -584,16 +585,17 @@ mod tests {
         let first = item.live_handle().expect("first open publishes a live texture");
         surface.with_ui(|ui| assert!(ui.texture(first).is_some()));
 
-        // End-to-end byte oracle through the real seam: the core-stored
+        // End-to-end oracle through the real open path: the core-stored
         // resource must equal the WIC decode byte for byte — full source
         // resolution, RGBA order intact, bilinear admission flag set. A
         // resample, envelope shrink, or channel swizzle anywhere on the
-        // open path breaks this.
+        // open path breaks this. (The internal representation tag behind
+        // the record is PocketJS's own contract; PicoView asserts observable
+        // behavior, not the tag.)
         let expected = open_decoded(&jpg_a).expect("oracle redecode");
         surface.with_ui(|ui| {
             let view = ui.texture(first).expect("live texture view");
             assert_eq!((view.w, view.h), (expected.width, expected.height));
-            assert_eq!(view.psm, psm::PSM_8888);
             assert!(view.linear, "fit-to-window display needs bilinear admission");
             assert_eq!(&view.pixels[..expected.rgba.len()], &expected.rgba[..]);
         });
