@@ -9,8 +9,9 @@
 //! large-image resource seam (`Ui::register_native_texture`), so ordinary
 //! photographs keep their source resolution in the production resource: fit
 //! to window is GPU minification of the real pixels, not a destructive
-//! pre-shrink. The seam's admission rule (1..=NATIVE_TEX_MAX_DIM per axis)
-//! is the only resize a normal image ever sees: none.
+//! pre-shrink. Ordinary images admit the decoder's own RGBA plane — borrowed,
+//! never copied on this side. The seam's admission rule (1..=NATIVE_TEX_MAX_DIM
+//! per axis) is the only resize a normal image ever sees: none.
 
 use pocketjs_core::spec::psm;
 use anyhow::Result;
@@ -23,11 +24,22 @@ pub const SVC_TYPE: &str = "current-item";
 /// guest/app.octane.tsx; the handle travels via svc, the key stays literal).
 #[allow(dead_code)]
 const TEXTURE_KEY_HINT: &str = "picoview-current";
-/// PocketJS native seam admission limit (spec::NATIVE_TEX_MAX_DIM). Images
-/// above this on either axis are box-fitted down into it — a documented
-/// bounded degradation for giant images only; normal photos pass through
-/// byte-identical in geometry.
+/// PocketJS seam admission limit (spec::NATIVE_TEX_MAX_DIM). Images above
+/// this on either axis are box-fitted down into it — a bounded degradation
+/// for giant images only, compensating for the seam's dimension ceiling at
+/// the locked PocketJS revision. It is not product resize semantics, and it
+/// is not an image semantic limit; truthful full-resolution capability is
+/// later product work (ARCHITECTURE §15). Normal photos pass through with
+/// source geometry untouched.
 const MAX_RESOURCE_DIM: u32 = pocketjs_core::NATIVE_TEX_MAX_DIM;
+/// Format tag the locked PocketJS seam (`Ui::register_native_texture`)
+/// admits 32-bit photo pixels under. PSM_8888 memory bytes are R,G,B,A (the
+/// PocketJS pak compiler is byte-order authority), so the WIC RGBA decode is
+/// admitted verbatim under this tag — no swizzle. The tag is a locked-revision
+/// API constraint, not a Desktop canonical-representation decision
+/// (ADR-0002 §3); the migration target is PocketJS-side direct image
+/// admission (POCKETJS-DESKTOP-DIRECT-IMAGE-ADMISSION-1).
+const ADMISSION_FORMAT: u32 = psm::PSM_8888;
 /// svc is a bounded-semantic channel; error strings are capped.
 const MAX_ERROR_CHARS: usize = 200;
 /// Decode allocation guard: a container may declare absurd frame dimensions
@@ -56,26 +68,16 @@ pub struct DecodedImage {
     pub rgba: Vec<u8>,
 }
 
-/// The native image resource body handed to `register_native_texture`.
-/// For ordinary images (both axes <= MAX_RESOURCE_DIM) this is the canonical
-/// WIC RGBA decode verbatim: PSM_8888 memory bytes ARE R,G,B,A order (the
-/// PocketJS pak compiler is authority — "RGBA byte order IS the ABGR u32 LE
-/// layout"), so content resolution is the source resolution and content bytes
-/// are the decoded bytes, full stop. Only giant images above the seam's
-/// admission ceiling are box-fitted down into it.
-pub struct NativeResource {
-    /// Canonical PSM_8888 bytes (R,G,B,A per pixel), `width * height * 4`.
-    pub pixels: Vec<u8>,
-    pub width: u32,
-    pub height: u32,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpenError {
     MissingPath,
     NotAFile,
     Open(String),
     Decode(String),
+    /// PocketJS resource admission rejected the decoded plane. Kept distinct
+    /// from `Decode` so an admission failure is never reported to the user
+    /// as a decode failure (ARCHITECTURE §16).
+    Admission(String),
 }
 
 impl OpenError {
@@ -86,12 +88,51 @@ impl OpenError {
             OpenError::NotAFile => "image path is not a regular file".to_string(),
             OpenError::Open(m) => format!("could not read image: {m}"),
             OpenError::Decode(m) => format!("could not decode image: {m}"),
+            OpenError::Admission(m) => format!("could not admit image resource: {m}"),
         };
         let mut out: String = raw.chars().take(MAX_ERROR_CHARS).collect();
         if raw.chars().count() > MAX_ERROR_CHARS {
             out.push('…');
         }
         out
+    }
+}
+
+/// The image plane handed to PocketJS admission. Ordinary images (both axes
+/// within the seam's admission ceiling) admit the decoder's own RGBA plane,
+/// borrowed as-is — `register_native_texture` performs the single required
+/// copy into core storage, so this side never materializes a second full
+/// plane (ADR-0001 §11). Only giant images above the ceiling produce an
+/// owned, box-fitted reduction with the named reason above.
+enum AdmissionPlane<'a> {
+    /// Decoder-owned plane, admitted verbatim at source resolution.
+    Source(&'a DecodedImage),
+    /// Box-fitted reduction of a giant image, owned here for admission.
+    Fitted {
+        pixels: Vec<u8>,
+        width: u32,
+        height: u32,
+    },
+}
+
+impl AdmissionPlane<'_> {
+    fn pixels(&self) -> &[u8] {
+        match self {
+            AdmissionPlane::Source(image) => &image.rgba,
+            AdmissionPlane::Fitted { pixels, .. } => pixels,
+        }
+    }
+    fn width(&self) -> u32 {
+        match self {
+            AdmissionPlane::Source(image) => image.width,
+            AdmissionPlane::Fitted { width, .. } => *width,
+        }
+    }
+    fn height(&self) -> u32 {
+        match self {
+            AdmissionPlane::Source(image) => image.height,
+            AdmissionPlane::Fitted { height, .. } => *height,
+        }
     }
 }
 
@@ -134,8 +175,11 @@ impl CurrentItem {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         self.push(surface, loading_event(generation, &name));
-        match open_decoded(path).and_then(|decoded| native_resource(&decoded)) {
-            Ok(resource) => self.publish(surface, generation, name, &resource),
+        match open_decoded(path) {
+            Ok(decoded) => {
+                let plane = admission_plane(&decoded);
+                self.publish(surface, generation, name, &plane);
+            }
             Err(error) => {
                 self.retire(surface);
                 self.push(surface, error_event(generation, &error));
@@ -146,25 +190,31 @@ impl CurrentItem {
     /// Retire the previous resource, register the new one, and publish the
     /// ready event: handles are generation-tagged in the core, so a stale
     /// handle drawn by the guest in the interim renders nothing after free.
-    fn publish(&mut self, surface: &UiSurface, generation: u64, name: String, res: &NativeResource) {
+    fn publish(&mut self, surface: &UiSurface, generation: u64, name: String, plane: &AdmissionPlane) {
         self.retire(surface);
         // FLAG_LINEAR: bilinear sampling — the resource is frequently
         // displayed at non-integer scale (fit to window), and nearest
         // sampling turns that into visible blockiness.
         let handle = surface.with_ui(|ui| {
-            ui.register_native_texture(&res.pixels, res.width, res.height, psm::PSM_8888, true)
+            ui.register_native_texture(
+                plane.pixels(),
+                plane.width(),
+                plane.height(),
+                ADMISSION_FORMAT,
+                true,
+            )
         });
         if handle < 0 {
             self.push(
                 surface,
-                error_event(generation, &OpenError::Decode("resource registration rejected".into())),
+                error_event(generation, &OpenError::Admission("resource registration rejected".into())),
             );
             return;
         }
         self.live = Some(LiveResource { handle });
         self.push(
             surface,
-            ready_event(generation, &name, handle, res.width, res.height),
+            ready_event(generation, &name, handle, plane.width(), plane.height()),
         );
     }
 
@@ -185,9 +235,10 @@ fn error_event(generation: u64, error: &OpenError) -> serde_json::Value {
 }
 
 /// Pure svc event constructors. The guest-facing wire contract is exactly
-/// these three shapes — bounded scalars only, never pixel bytes.
+/// these three shapes — bounded scalars only, never pixel bytes — so the
+/// constructors themselves enforce the channel's text cap.
 fn loading_event(generation: u64, name: &str) -> serde_json::Value {
-    json!({"t": SVC_TYPE, "g": generation, "status": "loading", "name": name})
+    json!({"t": SVC_TYPE, "g": generation, "status": "loading", "name": bounded(name)})
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -199,7 +250,7 @@ fn ready_event(generation: u64, name: &str, handle: i32, width: u32, height: u32
         "handle": handle,
         "width": width,
         "height": height,
-        "name": name,
+        "name": bounded(name),
     })
 }
 
@@ -222,20 +273,15 @@ fn bounded(s: &str) -> String {
     out
 }
 
-/// Convert the full decode into the native resource body. An ordinary image
-/// (both axes within the seam's admission ceiling) registers the canonical
-/// WIC RGBA bytes verbatim — no conversion, no resample: the resource IS the
-/// decode. Only images above MAX_RESOURCE_DIM on either axis are box-fitted
-/// down into the ceiling (documented bounded degradation for giant images;
-/// viewport paging is a later-slice concern), and the box-fit output stays
-/// in canonical R,G,B,A byte order.
-pub fn native_resource(src: &DecodedImage) -> Result<NativeResource, OpenError> {
+/// Choose the admission plane for a decode. An ordinary image (both axes
+/// within the seam's admission ceiling) admits the decoder's plane verbatim —
+/// borrowed, no copy, no resample. Only images above MAX_RESOURCE_DIM on
+/// either axis are box-fitted down into the ceiling (bounded degradation for
+/// giant images; viewport paging is a later-slice concern), and the box-fit
+/// output stays in R,G,B,A byte order.
+fn admission_plane(src: &DecodedImage) -> AdmissionPlane<'_> {
     if src.width <= MAX_RESOURCE_DIM && src.height <= MAX_RESOURCE_DIM {
-        return Ok(NativeResource {
-            pixels: src.rgba.clone(),
-            width: src.width,
-            height: src.height,
-        });
+        return AdmissionPlane::Source(src);
     }
     let (w, h) = (src.width.max(1), src.height.max(1));
     let scale = (MAX_RESOURCE_DIM as f64 / w as f64)
@@ -271,11 +317,11 @@ pub fn native_resource(src: &DecodedImage) -> Result<NativeResource, OpenError> 
             pixels[out + 3] = (a / n) as u8;
         }
     }
-    Ok(NativeResource {
+    AdmissionPlane::Fitted {
         pixels,
         width: cw,
         height: ch,
-    })
+    }
 }
 
 #[cfg(windows)]
@@ -375,6 +421,8 @@ mod tests {
         event_values(&loading_event(1, "a.jpg"));
         event_values(&ready_event(2, "a.jpg", 3, 1920, 1080));
         event_values(&error_event(3, &OpenError::Decode("x".repeat(500).into())));
+        // File names cap on the same channel as error text.
+        event_values(&loading_event(4, &"x".repeat(500)));
     }
 
     #[test]
@@ -385,90 +433,30 @@ mod tests {
     }
 
     #[test]
-    fn native_resource_preserves_source_resolution_and_pixels() {
-        // Dimension + byte oracle: the exact image from the corrective brief.
-        // The registered native resource must carry the FULL source
-        // resolution — the old path box-shrank it into a 512x512 pow2
-        // envelope (1153x1198 -> 493x512), destroying detail before display.
-        let (w, h) = (1153u32, 1198u32);
-        let mut rgba = vec![0u8; (w * h * 4) as usize];
-        for y in 0..h {
-            for x in 0..w {
-                let at = ((y * w + x) * 4) as usize;
-                rgba[at] = (x % 256) as u8;
-                rgba[at + 1] = (y % 256) as u8;
-                rgba[at + 2] = ((x + y) % 256) as u8;
-                rgba[at + 3] = 255;
-            }
-        }
-        let res = native_resource(&DecodedImage {
+    fn ordinary_decodes_admit_as_borrowed_source_planes() {
+        // The ordinary path must borrow the decoder's plane at full source
+        // resolution — never a copy, never a resample, never a pow2 envelope
+        // (the old path box-shrank 1153x1198 into a 512 envelope).
+        let image = |w: u32, h: u32| DecodedImage {
             width: w,
             height: h,
-            rgba: rgba.clone(),
-        })
-        .expect("ordinary image passes through");
-        assert_eq!(res.width, w, "resource width must equal source width");
-        assert_eq!(res.height, h, "resource height must equal source height");
-        assert_eq!(res.pixels.len(), (w * h * 4) as usize);
-        // Strongest ordinary-path oracle: canonical PSM_8888 bytes ARE RGBA,
-        // so the resource must equal the decode byte for byte — no swap, no
-        // resample. (The old path emitted B,G,R,A toward a misread BGRA
-        // convention; asymmetric colors make any channel swap impossible to
-        // miss.)
-        assert_eq!(res.pixels, rgba, "ordinary image bytes must be verbatim");
-
-        // Explicit asymmetric channel oracle: red / blue / green / magenta,
-        // asserted per channel so a failure names the swapped channel.
-        let mut asymmetric = Vec::new();
-        for color in [[255u8, 0, 0, 255], [0, 0, 255, 255], [0, 255, 0, 255], [255, 0, 255, 255]] {
-            asymmetric.extend_from_slice(&color);
+            rgba: vec![17u8; (w * h * 4) as usize],
+        };
+        for (w, h) in [(1153u32, 1198u32), (1024u32, 1024u32), (1u32, 1u32)] {
+            let decode = image(w, h);
+            let plane = admission_plane(&decode);
+            assert!(
+                matches!(plane, AdmissionPlane::Source(_)),
+                "{w}x{h} is ordinary and must admit the decoder's own plane"
+            );
+            assert_eq!(plane.width(), w);
+            assert_eq!(plane.height(), h);
+            assert!(std::ptr::eq(plane.pixels().as_ptr(), decode.rgba.as_ptr()));
         }
-        let res2 = native_resource(&DecodedImage {
-            width: 4,
-            height: 1,
-            rgba: asymmetric.clone(),
-        })
-        .expect("asymmetric oracle passes through");
-        let [red, blue, green, magenta] = [
-            &res2.pixels[0..4],
-            &res2.pixels[4..8],
-            &res2.pixels[8..12],
-            &res2.pixels[12..16],
-        ];
-        assert_eq!(red, &[255, 0, 0, 255], "red must stay R,G,B,A");
-        assert_eq!(blue, &[0, 0, 255, 255], "blue must keep blue in byte 2");
-        assert_eq!(green, &[0, 255, 0, 255], "green must keep green in byte 1");
-        assert_eq!(magenta, &[255, 0, 255, 255], "magenta must keep R and B distinct");
-        assert_eq!(res2.pixels, asymmetric);
-
-        // High-frequency oracle: a 1px checkerboard at 1024x1024. An ordinary
-        // image must keep its dimensions AND its bytes — the old path averaged
-        // every 2x2 block into uniform mush on its way into the 512 envelope.
-        let (cw, chh) = (1024u32, 1024u32);
-        let mut check = vec![0u8; (cw * chh * 4) as usize];
-        for y in 0..chh {
-            for x in 0..cw {
-                let at = ((y * cw + x) * 4) as usize;
-                let v = if (x + y) % 2 == 0 { 0u8 } else { 255u8 };
-                check[at] = v;
-                check[at + 1] = v;
-                check[at + 2] = v;
-                check[at + 3] = 255;
-            }
-        }
-        let res3 = native_resource(&DecodedImage {
-            width: cw,
-            height: chh,
-            rgba: check.clone(),
-        })
-        .expect("checkerboard passes through");
-        assert_eq!(res3.width, cw);
-        assert_eq!(res3.height, chh);
-        assert_eq!(res3.pixels, check, "checkerboard bytes must be verbatim");
     }
 
     #[test]
-    fn giant_images_are_admission_fitted_bounded() {
+    fn giant_decodes_admit_as_fitted_planes() {
         // One axis above the seam's ceiling (8192): the resource is
         // box-fitted into the admission limit, bounded, never rejected, and
         // still large enough that fit-to-window display is GPU minification
@@ -480,17 +468,18 @@ mod tests {
         for px in rgba.chunks_exact_mut(4) {
             px.copy_from_slice(&[17, 34, 51, 255]);
         }
-        let res = native_resource(&DecodedImage {
+        let decode = DecodedImage {
             width: w,
             height: h,
             rgba,
-        })
-        .expect("giant image is admission-fitted");
-        assert_eq!(res.width, 8192);
-        assert_eq!(res.height, (100 * 8192 + w / 2) / w);
-        assert!(res.width <= pocketjs_core::NATIVE_TEX_MAX_DIM);
-        assert_eq!(res.pixels.len(), (res.width * res.height * 4) as usize);
-        for px in res.pixels.chunks_exact(4) {
+        };
+        let res = admission_plane(&decode);
+        assert!(matches!(res, AdmissionPlane::Fitted { .. }));
+        assert_eq!(res.width(), 8192);
+        assert_eq!(res.height(), (100 * 8192 + w / 2) / w);
+        assert!(res.width() <= pocketjs_core::NATIVE_TEX_MAX_DIM);
+        assert_eq!(res.pixels().len(), (res.width() * res.height() * 4) as usize);
+        for px in res.pixels().chunks_exact(4) {
             assert_eq!(px, &[17, 34, 51, 255], "box-fit output must stay R,G,B,A");
         }
     }
@@ -594,6 +583,20 @@ mod tests {
         item.open(&surface, &jpg_a);
         let first = item.live_handle().expect("first open publishes a live texture");
         surface.with_ui(|ui| assert!(ui.texture(first).is_some()));
+
+        // End-to-end byte oracle through the real seam: the core-stored
+        // resource must equal the WIC decode byte for byte — full source
+        // resolution, RGBA order intact, bilinear admission flag set. A
+        // resample, envelope shrink, or channel swizzle anywhere on the
+        // open path breaks this.
+        let expected = open_decoded(&jpg_a).expect("oracle redecode");
+        surface.with_ui(|ui| {
+            let view = ui.texture(first).expect("live texture view");
+            assert_eq!((view.w, view.h), (expected.width, expected.height));
+            assert_eq!(view.psm, psm::PSM_8888);
+            assert!(view.linear, "fit-to-window display needs bilinear admission");
+            assert_eq!(&view.pixels[..expected.rgba.len()], &expected.rgba[..]);
+        });
 
         item.open(&surface, &jpg_b);
         let second = item.live_handle().expect("second open publishes a live texture");

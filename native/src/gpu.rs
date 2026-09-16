@@ -2,6 +2,13 @@
 //! submits rendering; the window thread presents a retained GPU image.
 //! (Adapted from the PocketJS portable desktop host for PicoView's
 //! single-package runtime — no AppSupervisor child surfaces.)
+//!
+//! Boundary note: all actual rendering is the shared `pocket-ui-wgpu` stack
+//! (`UiRenderer` records the UI, `Blit` presents the retained target) — this
+//! module is window/swapchain plumbing only, not a PicoView renderer. The
+//! adaptation exists because `hosts/desktop` at the locked PocketJS revision
+//! is a binary crate; consolidating onto a reusable shared desktop host
+//! belongs upstream (ADR-0002 §1), not here.
 use anyhow::Result;
 use pocket_ui_wgpu::{Blit, UiRenderer};
 use pocket3d::gpu::Gpu;

@@ -797,16 +797,14 @@ Codec-specific frame/disposal semantics remain in Image; committed generic resou
 
 These are migration targets, not accepted design:
 
-- PicoView currently imports PocketJS PSM representation for native image registration;
-- ordinary decoded images are cloned into `NativeResource` instead of ownership-moving;
+- PicoView still admits decoded images through the locked-revision PSM-tagged core seam; its former PicoView-side full-plane clone before registration is removed (ordinary decodes now admit the decoder's own RGBA plane by borrow);
 - PocketJS core currently materializes CPU-owned aligned texture storage before wgpu;
 - the wgpu path currently materializes another RGBA vector even for `PSM_8888`;
 - current sampling preference is partly stored as texture state rather than purely generic draw policy;
 - current `NATIVE_TEX_MAX_DIM` embeds a wgpu-default-class limit in core and PicoView uses it as an admission/downsample trigger;
 - current giant-image path silently creates a reduced resource, so full-resolution capability needs truthful separation;
-- current resource-admission failure can be mapped as decode failure;
 - current refresh/publication ordering may retire the previous resource before replacement admission succeeds;
-- renderer/presentation authority is still partly implemented in PicoView host code;
+- renderer/presentation authority is still partly implemented in PicoView host code (window/swapchain plumbing adapted from the portable desktop host; rendering itself is `pocket-ui-wgpu`);
 - current Windows presentation path has no proved software renderer fallback;
 - current color/alpha boundary is effectively RGBA8/PSM-oriented rather than the generic admission contract;
 - current decode path always materializes CPU RGBA even though future accelerator-direct/import paths are allowed;

@@ -183,7 +183,7 @@ For PicoView Windows/Desktop, stop implementation and repair the design if conti
 
 ## Current implementation differential
 
-At the locked PocketJS revision used during the architecture reset, the desktop/wgpu path still expands Core PSM textures through a temporary RGBA buffer; `PSM_8888` therefore incurs an unnecessary full-plane copy before `wgpu` upload. PicoView also currently copies decoded pixels into its/native/core registration path before that stage.
+At the locked PocketJS revision used during the architecture reset, the desktop/wgpu path still expands Core PSM textures through a temporary RGBA buffer; `PSM_8888` therefore incurs an unnecessary full-plane copy before `wgpu` upload. PicoView's own decoded-pixels copy before registration was removed on 2026-09-16 (`PICOVIEW-DESKTOP-WGPU-CONFORMANCE-CLEANUP-1`): ordinary decodes now admit the decoder's RGBA plane by borrow. The remaining full-plane copies live inside the locked PocketJS revision and migrate only with the upstream direct-admission campaign.
 
 Those behaviors are migration targets. They must not be cited as authority for new code.
 
