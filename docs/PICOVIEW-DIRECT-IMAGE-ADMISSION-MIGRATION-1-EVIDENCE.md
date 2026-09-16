@@ -186,10 +186,28 @@ CI:                  NOT RUN (no CI run requested/performed)
 
 ## L. Adversarial review
 
-Fresh-context reviewer dispatched against the committed branch with the
-campaign's attack checklist. Result: recorded in the PR description and the
-final campaign report; unresolved MAJOR count at close: 0 (see report section L
-for findings and dispositions).
+Fresh-context reviewer, goal: disprove migration completion. Checklist: the
+campaign §37 attack list (hidden clones/to_vec, reachable
+register_native_texture, PSM authority, AdmissionPlane/NativeResource
+survivors, mixed revisions, lock/manifest/lockfile disagreement, floating
+branch, wgpu leakage, second namespace, Windows-only API, giant-fit
+deletion, #55 evidence retcon, last-good scope creep, event-contract
+regressions, Cargo.lock churn, weakened tests, doc contradictions,
+PocketJS-side semantics at `24bab5e`).
+
+**Verdict: PASS — zero unresolved MAJOR/BLOCKER, zero MINOR.** All 22
+checklist items verified OK with file/line/mechanism evidence, including
+live re-execution of the test suites, `cargo check --locked`,
+`ls-remote` pin equality, and PR #2 `refs/pull/2/head` = `24bab5e`.
+Reviewer notes (non-blocking):
+
+- untracked `bun.lock` / `package.json` / `tsconfig.json` at the repo root
+  pre-date this campaign, are not part of the branch, and are left for the
+  owner;
+- the §K real-smoke GUI log line was not independently re-executed by the
+  reviewer (all neighboring claims were);
+- `df869a5` appears only inside the labeled `# HISTORY` comment block of
+  `POCKETJS.lock` — intentional documentation, not an active reference.
 
 ## M. Residual differentials (explicit, out of scope)
 
