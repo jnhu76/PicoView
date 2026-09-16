@@ -3,25 +3,44 @@
 # `revision` is the dependency authority. `branch_hint` is informational only
 # and may drift; the revision never does. Verify before bumping:
 #
-#   git ls-remote https://github.com/jnhu76/pocketjs.git refs/heads/feat/windows-desktop-parity
+#   git ls-remote https://github.com/jnhu76/pocketjs.git refs/heads/integration/picoview-desktop
 
 repository = https://github.com/jnhu76/pocketjs.git
-revision = df869a51225df5e310b84612c9195030c058b6d9
-branch_hint = feat/windows-desktop-parity
-purpose = PicoView Windows UI/runtime foundation
+revision = 24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb
+branch_hint = integration/picoview-desktop
+purpose = PicoView Windows Desktop runtime integration
 
-# V1 image-quality corrective advanced this pin from 6e631f463016a258e63fc9a5f922117b94d4f89f
-# to df869a5 (jnhu76/pocketjs#1): Ui::register_native_texture and
-# Ui::texture_live_bytes — the generic host-side large-image seam. No new
-# DrawList opcode, no guest ABI change; the JS-facing small-texture contract
-# is untouched.
+# This revision is the reviewed HEAD of jnhu76/pocketjs:integration/picoview-desktop,
+# the append-only consumer branch PicoView depends on. It provides:
+#
+# - Windows Desktop parity in the shared hosts/desktop + pocket-ui-wgpu family;
+# - owned RGBA8 logical-resource admission (Ui::upload_owned_rgba8): a host
+#   decoder's Vec moves into the existing PocketJS texture record — one
+#   logical handle namespace, unchanged generation/revision/free semantics;
+# - a direct pocket-ui-wgpu upload path that borrows those RGBA8 bytes for
+#   Queue::write_texture with no intermediate canonical CPU plane.
+#
+# These capabilities live on the integration branch; PocketJS main does not
+# contain them yet.
+
+# HISTORY
+# - 6e631f463016a258e63fc9a5f922117b94d4f89f → df869a51225df5e310b84612c9195030c058b6d9
+#   (jnhu76/pocketjs#1, the V1 image-quality corrective): introduced
+#   Ui::register_native_texture / Ui::texture_live_bytes — the host-side
+#   large-image seam PicoView consumed through PR #49..#55. Superseded by the
+#   owned-admission revision above; see
+#   docs/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md.
 
 # Policy
 # - PicoView consumes PocketJS at exactly this revision.
 # - No git submodule, no vendoring, no copying PocketJS source into PicoView.
-# - Runtime-generic capability work is implemented in jnhu76/pocketjs first,
-#   reviewed/merged there, and only then is this lock advanced deliberately.
-# - The archive/picoview-20260914/* refs on jnhu76/pocketjs are museum/history
-#   only and must never be used as an active dependency.
-# - Historical campaign baselines (e.g. pocket-stack/pocketjs a5a8535…) are
-#   research history; see docs/history/README.md.
+# - Runtime-generic capability work is implemented and reviewed in
+#   jnhu76/pocketjs first, then frozen on integration/picoview-desktop at an
+#   exact reviewed commit before this lock is advanced deliberately.
+# - Neither jnhu76/pocketjs main nor pocket-stack/pocketjs main is an
+#   integration target for PicoView-specific dependency advancement.
+# - Future upstream synchronization flows through sync/* children of
+#   integration/picoview-desktop, never reverse into any main.
+# - Historical campaign baselines (e.g. pocket-stack/pocketjs a5a8535…,
+#   the archive/picoview-20260914/* museum refs) are research/history only
+#   and must never be used as an active dependency.

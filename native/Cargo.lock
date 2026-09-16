@@ -1713,7 +1713,7 @@ dependencies = [
 [[package]]
 name = "pocket-mod"
 version = "0.1.0"
-source = "git+https://github.com/jnhu76/pocketjs.git?rev=df869a51225df5e310b84612c9195030c058b6d9#df869a51225df5e310b84612c9195030c058b6d9"
+source = "git+https://github.com/jnhu76/pocketjs.git?rev=24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb#24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb"
 dependencies = [
  "anyhow",
  "log",
@@ -1724,7 +1724,7 @@ dependencies = [
 [[package]]
 name = "pocket-text"
 version = "0.1.0"
-source = "git+https://github.com/jnhu76/pocketjs.git?rev=df869a51225df5e310b84612c9195030c058b6d9#df869a51225df5e310b84612c9195030c058b6d9"
+source = "git+https://github.com/jnhu76/pocketjs.git?rev=24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb#24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb"
 dependencies = [
  "base64 0.22.1",
  "cosmic-text",
@@ -1736,7 +1736,7 @@ dependencies = [
 [[package]]
 name = "pocket-ui-surface"
 version = "0.1.0"
-source = "git+https://github.com/jnhu76/pocketjs.git?rev=df869a51225df5e310b84612c9195030c058b6d9#df869a51225df5e310b84612c9195030c058b6d9"
+source = "git+https://github.com/jnhu76/pocketjs.git?rev=24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb#24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb"
 dependencies = [
  "anyhow",
  "log",
@@ -1747,7 +1747,7 @@ dependencies = [
 [[package]]
 name = "pocket-ui-wgpu"
 version = "0.1.0"
-source = "git+https://github.com/jnhu76/pocketjs.git?rev=df869a51225df5e310b84612c9195030c058b6d9#df869a51225df5e310b84612c9195030c058b6d9"
+source = "git+https://github.com/jnhu76/pocketjs.git?rev=24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb#24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1763,7 +1763,7 @@ dependencies = [
 [[package]]
 name = "pocket3d"
 version = "0.1.0"
-source = "git+https://github.com/jnhu76/pocketjs.git?rev=df869a51225df5e310b84612c9195030c058b6d9#df869a51225df5e310b84612c9195030c058b6d9"
+source = "git+https://github.com/jnhu76/pocketjs.git?rev=24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb#24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1784,7 +1784,7 @@ dependencies = [
 [[package]]
 name = "pocket3d-anim"
 version = "0.1.0"
-source = "git+https://github.com/jnhu76/pocketjs.git?rev=df869a51225df5e310b84612c9195030c058b6d9#df869a51225df5e310b84612c9195030c058b6d9"
+source = "git+https://github.com/jnhu76/pocketjs.git?rev=24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb#24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb"
 dependencies = [
  "glam",
 ]
@@ -1792,7 +1792,7 @@ dependencies = [
 [[package]]
 name = "pocket3d-bsp"
 version = "0.1.0"
-source = "git+https://github.com/jnhu76/pocketjs.git?rev=df869a51225df5e310b84612c9195030c058b6d9#df869a51225df5e310b84612c9195030c058b6d9"
+source = "git+https://github.com/jnhu76/pocketjs.git?rev=24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb#24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb"
 dependencies = [
  "anyhow",
  "glam",
@@ -1802,7 +1802,7 @@ dependencies = [
 [[package]]
 name = "pocket3d-mesh"
 version = "0.1.0"
-source = "git+https://github.com/jnhu76/pocketjs.git?rev=df869a51225df5e310b84612c9195030c058b6d9#df869a51225df5e310b84612c9195030c058b6d9"
+source = "git+https://github.com/jnhu76/pocketjs.git?rev=24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb#24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb"
 dependencies = [
  "glam",
  "pocket3d-anim",
@@ -1811,7 +1811,7 @@ dependencies = [
 [[package]]
 name = "pocketjs-core"
 version = "0.1.0"
-source = "git+https://github.com/jnhu76/pocketjs.git?rev=df869a51225df5e310b84612c9195030c058b6d9#df869a51225df5e310b84612c9195030c058b6d9"
+source = "git+https://github.com/jnhu76/pocketjs.git?rev=24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb#24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb"
 dependencies = [
  "taffy",
 ]

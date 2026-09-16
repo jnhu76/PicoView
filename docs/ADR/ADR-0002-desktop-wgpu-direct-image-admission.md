@@ -183,9 +183,28 @@ For PicoView Windows/Desktop, stop implementation and repair the design if conti
 
 ## Current implementation differential
 
-At the locked PocketJS revision used during the architecture reset, the desktop/wgpu path still expands Core PSM textures through a temporary RGBA buffer; `PSM_8888` therefore incurs an unnecessary full-plane copy before `wgpu` upload. PicoView's own decoded-pixels copy before registration was removed on 2026-09-16 (`PICOVIEW-DESKTOP-WGPU-CONFORMANCE-CLEANUP-1`): ordinary decodes now admit the decoder's RGBA plane by borrow. The remaining full-plane copies live inside the locked PocketJS revision and migrate only with the upstream direct-admission campaign.
+**Resolved 2026-09-16.** The differential below existed at the PocketJS
+revision used during the architecture reset. `POCKETJS-DESKTOP-DIRECT-IMAGE-ADMISSION-1`
+(jnhu76/pocketjs PR #2, reviewed HEAD `24bab5e`) added
+`Ui::upload_owned_rgba8`: a host decoder's tight RGBA8 plane MOVES into the
+existing logical texture record (`TexBacking::Owned`), and `pocket-ui-wgpu`
+borrows `PSM_8888`/Owned planes directly into `Queue::write_texture` with no
+conversion or staging plane. `PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`
+consumed that revision — `POCKETJS.lock` and every PicoView Cargo git
+dependency pin `24bab5e` on `integration/picoview-desktop`, and PicoView
+publishes ordinary decodes through the owned API. The ordinary image path now
+creates zero repository CPU-to-CPU full-plane copies after decode. Evidence:
+`docs/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md`.
 
-Those behaviors are migration targets. They must not be cited as authority for new code.
+Historical differential (for the record): at the locked PocketJS revision
+used during the architecture reset, the desktop/wgpu path expanded Core PSM
+textures through a temporary RGBA buffer, so `PSM_8888` incurred an
+unnecessary full-plane copy before `wgpu` upload; PicoView's own
+decoded-pixels copy had been removed earlier on 2026-09-16
+(`PICOVIEW-DESKTOP-WGPU-CONFORMANCE-CLEANUP-1`), admitting the decoder's
+RGBA plane by borrow into the legacy seam.
+
+Those historical behaviors must not be cited as authority for new code.
 
 The correction should be evaluated first against the existing macOS/Linux shared desktop implementation because that is the PocketJS family Windows joins. Device-specific backends are comparative evidence, not the Desktop authority source.
 

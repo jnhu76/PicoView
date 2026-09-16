@@ -795,11 +795,16 @@ Codec-specific frame/disposal semantics remain in Image; committed generic resou
 
 # 20. Current known implementation differentials
 
-These are migration targets, not accepted design:
+These are migration targets, not accepted design. Resolved 2026-09-16
+(`PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`, PocketJS integration revision
+`24bab5e`): ordinary decodes now MOVE the decoder's own RGBA plane into
+`Ui::upload_owned_rgba8` — no PSM-tagged seam on the PicoView path, no
+aligned CPU texture storage for image admission (`TexBacking::Owned`), and
+`pocket-ui-wgpu` borrows the Owned plane directly into `Queue::write_texture`
+(no second RGBA vector). The ordinary Desktop image path satisfies ADR-0002.
 
-- PicoView still admits decoded images through the locked-revision PSM-tagged core seam; its former PicoView-side full-plane clone before registration is removed (ordinary decodes now admit the decoder's own RGBA plane by borrow);
-- PocketJS core currently materializes CPU-owned aligned texture storage before wgpu;
-- the wgpu path currently materializes another RGBA vector even for `PSM_8888`;
+Still open:
+
 - current sampling preference is partly stored as texture state rather than purely generic draw policy;
 - current `NATIVE_TEX_MAX_DIM` embeds a wgpu-default-class limit in core and PicoView uses it as an admission/downsample trigger;
 - current giant-image path silently creates a reduced resource, so full-resolution capability needs truthful separation;
