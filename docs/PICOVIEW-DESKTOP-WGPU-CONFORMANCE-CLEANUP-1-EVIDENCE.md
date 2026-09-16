@@ -72,26 +72,30 @@ No PSM noun remains in PicoView guest/TSX or product-visible contracts.
 
 ## E. Image-plane audit (ordinary still-image path)
 
-Before cleanup (5 full-plane allocations, 3 avoidable copies):
+Counting rule: a "plane" is one full-image-sized allocation, CPU or GPU; "copies" are plane-producing transitions that duplicate an existing plane. The wgpu texture (GPU) is a plane but not a CPU copy.
+
+Before cleanup — 6 planes (5 CPU + 1 GPU), 3 avoidable-class CPU copies:
 
 ```text
-P0 encoded bytes            fs::read → Vec<u8>                    mandatory input (WIC memory stream)
-P1 decoder RGBA             WIC → DecodedImage.rgba               mandatory decode output
-P2 NativeResource.pixels    src.rgba.clone()                      AVOIDABLE — deleted
-P3 core aligned store       register_native_texture → copy_aligned Vec<u128>   UPSTREAM (PSM portable detour)
-P4 wgpu temp RGBA           pocket-ui-wgpu to_rgba8 → to_vec()    UPSTREAM (re-expansion)
-P5 wgpu::Texture            write_texture                          mandatory CPU→GPU transfer
+P0 CPU  encoded bytes        fs::read → Vec<u8>                          mandatory input (WIC memory stream)
+P1 CPU  decoder RGBA         WIC → DecodedImage.rgba                     mandatory decode output
+P2 CPU  NativeResource       src.rgba.clone()                            AVOIDABLE — deleted by this campaign
+P3 CPU  core aligned store   register_native_texture → copy_aligned      UPSTREAM-owned detour (PSM portable store)
+P4 CPU  wgpu temp RGBA       pocket-ui-wgpu to_rgba8 → to_vec()          UPSTREAM-owned detour (re-expansion)
+P5 GPU  wgpu::Texture        write_texture                                mandatory CPU→GPU transfer
 ```
 
-After cleanup (4 full-plane allocations, 2 copies remain, both upstream):
+After cleanup — 5 planes (4 CPU + 1 GPU), 2 upstream-owned CPU copies remain, 0 PicoView-side:
 
 ```text
-P0 encoded bytes            fs::read → Vec<u8>                    mandatory
-P1 decoder RGBA             WIC → DecodedImage.rgba               mandatory; lived only inside CurrentItem::open
-P2 core aligned store       register_native_texture (borrowed &[u8] in, full copy)   UPSTREAM — migrates with direct admission
-P3 wgpu temp RGBA           to_rgba8().to_vec()                   UPSTREAM — disappears with direct admission
-P4 wgpu::Texture            write_texture                          mandatory transfer
+P0 CPU  encoded bytes        fs::read → Vec<u8>                          mandatory
+P1 CPU  decoder RGBA         WIC → DecodedImage.rgba                     mandatory; lived only inside CurrentItem::open
+P2 CPU  core aligned store   register_native_texture (borrowed &[u8] in) UPSTREAM — migrates with direct admission
+P3 CPU  wgpu temp RGBA       to_rgba8().to_vec()                         UPSTREAM — disappears with direct admission
+P4 GPU  wgpu::Texture        write_texture                                mandatory transfer
 ```
+
+(The before-table's P4/P5 and after-table's P3/P4 are the same stages; numbering restarts after the deleted row.)
 
 Zero-copy proof on the PicoView side: `AdmissionPlane::Source` borrows the decode (`std::ptr::eq` oracle in `ordinary_decodes_admit_as_borrowed_source_planes`); the core-stored bytes equal the WIC decode byte-for-byte through the real seam (`current_item_opens_replaces_and_retires_native_handles`).
 
@@ -122,7 +126,26 @@ Rust identity: `rustc 1.98.1 (48a229cea 2026-09-01)`; host `x86_64-pc-windows-ms
 
 ## H. Fresh adversarial review
 
-Pending — filled below after the fresh-context review pass.
+Fresh-context reviewer (independent agent, goal: disprove conformance), against HEAD `16fab9d` + locked sibling checkout `df869a5`, including a fresh `cargo test` run (9/9 green):
+
+- Hidden second renderer / Windows-only graphics path: **none** — `gpu.rs` verified as a near-verbatim adaptation of `hosts/desktop/src/gpu.rs`; all rasterization is `pocket_ui_wgpu::UiRenderer`, all presentation is `Blit`; image `wgpu::Texture` creation happens only in `pocket-ui-wgpu`.
+- PSM authority leaking: **none** — three code occurrences, all in the §D audit table; zero in guest; no live doc calls PSM canonical.
+- Remaining PicoView-side ordinary-path full-plane copies: **none** — exhaustive `.clone()/to_vec()/vec!/copy_from_slice` sweep; only mandatory decode output and the named-reason giant fitted plane remain.
+- PicoView-owned wgpu identity in product/image code: **none** (`current_item.rs`/`main.rs` have no wgpu imports; `gpu.rs` is the documented host-plumbing differential).
+- View-change re-admission/re-upload: **none** — `registerTexture` fires only on new ready generations; upstream `sync_textures` caches on `{handle, revision}`.
+- Tests weakened for green: **no** — the removed byte-verbatim oracles tested a conversion stage that no longer exists; replaced by the strictly stronger pointer-identity oracle plus the end-to-end seam byte oracle (with `psm`/`linear` assertions added).
+- `AdmissionPlane` as disguised `NativeResource`: **no** — real semantic delta (borrow vs clone), private, no new seam.
+- Docs tell one story: **confirmed** across all five doc edits; no differential listed as fixed while still present.
+
+Verdict: **MAJORS: 0.** Five MINOR findings, dispositions:
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | Worktree carries untracked `package.json`/`tsconfig.json`/`bun.lock` (V1 bun scaffolding, deliberately pruned from main by PR #49's prune round); the JS guest build consumes the live sibling directory, so guest-side PocketJS identity is positional, not structurally pinned | Recorded here. Files pre-date the campaign and may still serve local guest bundle rebuilds, so they were left in place rather than deleted; the native side is pinned by Cargo `rev =`. Structural guest-side pinning belongs with the next guest-build change |
+| 2 | `publish()` retires the previous resource before registration is known-good (last-good ordering) | Pre-existing, documented differential (§I.3, R3 migration target); out of this campaign's subtractive scope |
+| 3 | Giant-image ready event publishes fitted dimensions as the image's dimensions (no 100% claim made in V1, so no §15 violation today) | Pre-existing, documented differential (§I.2, R3 truthful-capability target) |
+| 4 | svc `name` field was uncapped while error text is capped | **Fixed by this campaign** — `name` now runs through the same `bounded()` cap; long-name case added to the bounded-scalar test |
+| 5 | §E plane-counting presentation was ambiguous | **Fixed** — §E rewritten with explicit CPU/GPU plane counting rule and renumbering note |
 
 ## I. Residual differentials (intentional, migration-pending)
 

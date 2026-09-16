@@ -235,9 +235,10 @@ fn error_event(generation: u64, error: &OpenError) -> serde_json::Value {
 }
 
 /// Pure svc event constructors. The guest-facing wire contract is exactly
-/// these three shapes — bounded scalars only, never pixel bytes.
+/// these three shapes — bounded scalars only, never pixel bytes — so the
+/// constructors themselves enforce the channel's text cap.
 fn loading_event(generation: u64, name: &str) -> serde_json::Value {
-    json!({"t": SVC_TYPE, "g": generation, "status": "loading", "name": name})
+    json!({"t": SVC_TYPE, "g": generation, "status": "loading", "name": bounded(name)})
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -249,7 +250,7 @@ fn ready_event(generation: u64, name: &str, handle: i32, width: u32, height: u32
         "handle": handle,
         "width": width,
         "height": height,
-        "name": name,
+        "name": bounded(name),
     })
 }
 
@@ -420,6 +421,8 @@ mod tests {
         event_values(&loading_event(1, "a.jpg"));
         event_values(&ready_event(2, "a.jpg", 3, 1920, 1080));
         event_values(&error_event(3, &OpenError::Decode("x".repeat(500).into())));
+        // File names cap on the same channel as error text.
+        event_values(&loading_event(4, &"x".repeat(500)));
     }
 
     #[test]
