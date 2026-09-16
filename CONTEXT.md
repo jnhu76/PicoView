@@ -19,9 +19,15 @@ reviewed HEAD of `jnhu76/pocketjs:integration/picoview-desktop`
 now publishes ordinary decodes by MOVING the WIC RGBA plane into
 `Ui::upload_owned_rgba8` — no PSM tag, no borrow seam, no second CPU plane.
 
+Campaign `PICOVIEW-LAST-GOOD-PUBLICATION-1` (2026-09-17) fixed the
+publication ordering: candidates are admitted before the previous
+publication is released, refresh failures preserve the last-good
+publication, new-item failures deliberately publish the error item
+(PRD §2.10), and the guest observer splits request state from publication
+state.
+
 The next work is the remaining PicoView-side corrections (R3): truthful
-full-resolution capability, refresh/last-good ordering, generic color/alpha
-admission.
+full-resolution capability, generic color/alpha admission.
 
 ---
 
@@ -119,7 +125,7 @@ Remaining differentials after `PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`
 - sampling is partly stored with texture state rather than generic draw state;
 - `NATIVE_TEX_MAX_DIM`/8192 leaks backend/default assumptions into image admission;
 - giant images are reduced before publication without a fully separated full-resolution capability;
-- refresh/publication ordering currently risks retiring old state before replacement admission succeeds;
+- ~~refresh/publication ordering currently risks retiring old state before replacement admission succeeds~~ — resolved 2026-09-17 (`PICOVIEW-LAST-GOOD-PUBLICATION-1`): admit-then-commit ordering, intent-split failure policy (refresh preserves last-good, new-item publishes the error item), guest publication/request state split;
 - renderer/presentation authority is still partly in PicoView host code (window/swapchain plumbing adapted from the portable desktop host; rendering itself is `pocket-ui-wgpu`);
 - current Windows path has no proved software fallback;
 - current color/alpha admission is effectively PSM/RGBA8-oriented rather than the generic architecture contract;

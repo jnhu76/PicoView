@@ -3,57 +3,64 @@ import { Text, View, Image } from "@pocketjs/framework/octane/components";
 import { registerTexture } from "@pocketjs/framework/octane/renderer";
 import { getOps } from "@pocketjs/framework/host";
 import { useFrame } from "@pocketjs/framework/octane/lifecycle";
+import {
+  displayVerdict,
+  initialObserverState,
+  reduceObserver,
+  type ObserverState,
+  type Publication,
+} from "./observer.ts";
 
-// PicoView product shell (ROADMAP V1: Open One Image).
+// PicoView product shell (ROADMAP V1: Open One Image; last-good publication
+// ordering: PICOVIEW-LAST-GOOD-PUBLICATION-1).
 //
 // The guest is a bounded observer of native Current Item state. It receives
-// svc events carrying only scalars (status, generation, texture handle,
-// dimensions, error text); the pixels stay in the native texture registry
-// ("O(image-bytes) never crosses QuickJS"). On a ready event the handle is
-// bound under a stable key and an <Image> node references it; on error the
-// shell stays usable with a bounded message. No filesystem, decode, or
-// texture-lifetime authority lives here.
+// svc events carrying only scalars (status, generation, intent, texture
+// handle, dimensions, error text); the pixels stay in the native texture
+// registry ("O(image-bytes) never crosses QuickJS"). The observation state is
+// split into publication (last-good, stays visible across a refresh's
+// loading/failure) and request (progress/failure, carrying the Product
+// intent); see observer.ts. No filesystem, decode, or texture-lifetime
+// authority lives here.
 
 const TEXTURE_KEY = "picoview-current";
 
-interface CurrentItemState {
-  generation: number;
-  status: "idle" | "loading" | "ready" | "error";
-  name?: string;
-  handle?: number;
-  width?: number;
-  height?: number;
-  error?: string;
-  viewport?: { w: number; h: number };
+// The texture key flips per publication commit: setProp skips an unchanged
+// src, so a mounted Image only re-resolves its handle when the key string
+// changes. Two alternating keys keep the framework key→handle map bounded.
+function textureKeyFor(slot: 0 | 1): string {
+  return `${TEXTURE_KEY}-${slot}`;
 }
 
-function fit(item: CurrentItemState): { w: number; h: number } | null {
-  if (item.status !== "ready" || !item.viewport || !item.width || !item.height) return null;
-  const availW = Math.max(32, item.viewport.w - 32);
-  const availH = Math.max(32, item.viewport.h - 64);
+function fit(
+  publication: Publication,
+  viewport?: { w: number; h: number },
+): { w: number; h: number } | null {
+  if (!viewport) return null;
+  const availW = Math.max(32, viewport.w - 32);
+  const availH = Math.max(32, viewport.h - 64);
   // Fit-to-window minification of the full-resolution native resource. The
   // resource keeps the source resolution (the old pow2 <=512 envelope is
   // gone), so this scale is GPU minification of real pixels; V1 has no
   // zoom/100% semantics, and the pixels are intact for when it does.
-  const s = Math.min(1, availW / item.width, availH / item.height);
+  const s = Math.min(1, availW / publication.width, availH / publication.height);
   if (!(s > 0)) return null;
   return {
-    w: Math.max(1, Math.floor(item.width * s)),
-    h: Math.max(1, Math.floor(item.height * s)),
+    w: Math.max(1, Math.floor(publication.width * s)),
+    h: Math.max(1, Math.floor(publication.height * s)),
   };
 }
 
 export default function App() {
-  // Current Item observations live in a plain ref that svc events mutate in
-  // place: one frame's svcPoll batch applies all its lines sequentially, so
-  // per-event setState snapshots would clobber each other. The tick counter
-  // only schedules the re-render.
-  const item = useRef<CurrentItemState>({ generation: 0, status: "idle" });
+  // Current Item observations live in a plain ref that the pure reducer
+  // folds per svc line: one frame's svcPoll batch applies all its lines in
+  // order. The tick counter only schedules the re-render.
+  const item = useRef<ObserverState>(initialObserverState());
   const revision = useRef(0);
   const [, setRevision] = useState(0);
-  // Generation whose ready handle is bound under TEXTURE_KEY. One slot, not a
-  // growing set: rebinding on a newer generation implicitly supersedes the old.
-  const registeredGeneration = useRef(0);
+  // Bind slot whose handle is registered under its texture key. Two slots
+  // total; rebinding on a newer publication implicitly supersedes the old.
+  const registeredSlot = useRef<number>(-1);
 
   useFrame(() => {
     const ops = getOps();
@@ -66,44 +73,23 @@ export default function App() {
       let changed = false;
       for (const line of batch.split("\n")) {
         if (!line) continue;
-        let v: Partial<Record<"t" | "status" | "name" | "error", string>> &
-          Partial<Record<"g" | "handle" | "width" | "height" | "w" | "h", number>>;
+        let v: Parameters<typeof reduceObserver>[1];
         try {
           v = JSON.parse(line);
         } catch {
           continue;
         }
         if (!v || typeof v !== "object") continue;
-        if (v.t === "current-item") {
-          // A stale event generation may never publish over a newer one.
-          if (typeof v.g === "number" && v.g < item.current.generation) continue;
-          if (
-            v.status === "ready" &&
-            typeof v.handle === "number" &&
-            typeof v.g === "number" &&
-            registeredGeneration.current !== v.g
-          ) {
-            registerTexture(TEXTURE_KEY, v.handle);
-            registeredGeneration.current = v.g;
-          }
-          const status =
-            v.status === "ready" || v.status === "loading" || v.status === "error"
-              ? v.status
-              : "error";
-          item.current = {
-            generation: typeof v.g === "number" ? v.g : item.current.generation,
-            status,
-            name: v.name,
-            handle: v.handle,
-            width: v.width,
-            height: v.height,
-            error: v.error,
-            viewport: item.current.viewport,
-          };
-          changed = true;
-        } else if ((v.t === "hello" || v.t === "resize") && typeof v.w === "number" && typeof v.h === "number") {
-          item.current = { ...item.current, viewport: { w: v.w, h: v.h } };
-          changed = true;
+        const next = reduceObserver(item.current, v);
+        if (next === item.current) continue;
+        item.current = next;
+        changed = true;
+        // Register the new publication's handle before the re-render flush:
+        // setSrc resolves the key against this map during the flush.
+        const publication = next.publication;
+        if (publication && publication.bindSlot !== registeredSlot.current) {
+          registerTexture(textureKeyFor(publication.bindSlot), publication.handle);
+          registeredSlot.current = publication.bindSlot;
         }
       }
       if (changed) {
@@ -113,37 +99,66 @@ export default function App() {
     }
   });
 
-  const box = fit(item.current);
-  const cur = item.current;
+  const state = item.current;
+  const verdict = displayVerdict(state);
+  const publication = state.publication;
+  const request = state.request;
+  const box = publication && verdict === "image" ? fit(publication, state.viewport) : null;
+  // A refresh keeps the last-good image on screen; its progress/failure is
+  // reported truthfully in the status area without displacing the image.
+  const refreshIndicator =
+    verdict === "image" && request
+      ? request.status === "loading"
+        ? "Refreshing…"
+        : "Refresh failed"
+      : null;
+  const statusText =
+    refreshIndicator ??
+    (verdict === "error"
+      ? "Error"
+      : verdict === "loading"
+        ? "Opening…"
+        : "Ready");
+  const shownName =
+    verdict === "image"
+      ? publication?.name
+      : verdict === "loading" || verdict === "error"
+        ? request?.name
+        : undefined;
   return (
     <View class="w-full h-full flex-col bg-slate-900">
       <View class="flex-row items-center justify-between px-4 py-2 bg-slate-900">
         <Text class="text-sm text-white font-bold">PicoView</Text>
-        {cur.name ? <Text class="text-xs text-slate-400">{cur.name}</Text> : null}
+        {shownName ? <Text class="text-xs text-slate-400">{shownName}</Text> : null}
       </View>
       <View class="flex-1 flex-col items-center justify-center bg-slate-800 overflow-hidden">
-        {box ? (
+        {verdict === "image" && box && publication ? (
           <Image
-            src={TEXTURE_KEY}
+            src={textureKeyFor(publication.bindSlot)}
             class="overflow-hidden"
             style={{ width: box.w, height: box.h }}
           />
-        ) : cur.status === "loading" ? (
-          <Text class="text-sm text-slate-400">{`Opening ${cur.name ?? "image"}…`}</Text>
-        ) : cur.status === "error" ? (
-          <Text class="text-sm text-red-400">{cur.error ?? "Could not open image"}</Text>
-        ) : cur.status === "ready" ? (
+        ) : verdict === "image" ? (
           <Text class="text-sm text-slate-400">Preparing image…</Text>
+        ) : verdict === "loading" ? (
+          <Text class="text-sm text-slate-400">{`Opening ${request?.name ?? "image"}…`}</Text>
+        ) : verdict === "error" ? (
+          <Text class="text-sm text-red-400">{request?.error ?? "Could not open image"}</Text>
         ) : (
           <Text class="text-sm text-slate-400">No image open</Text>
         )}
       </View>
+      {refreshIndicator === "Refresh failed" && request?.error ? (
+        <View class="px-4 py-1 bg-slate-900 overflow-hidden">
+          <Text class="text-xs text-red-400">{request.error}</Text>
+        </View>
+      ) : null}
       <View class="flex-row items-center justify-between px-4 py-1 bg-slate-900">
-        <Text class="text-xs text-slate-500">
-          {cur.status === "error" ? "Error" : cur.status === "loading" ? "Opening…" : "Ready"}
-        </Text>
-        {cur.status === "ready" && cur.width ? (
-          <Text class="text-xs text-slate-500">{`${cur.width} x ${cur.height}`}</Text>
+        <Text class="text-xs text-slate-500">{statusText}</Text>
+        {verdict === "image" && publication ? (
+          <Text class="text-xs text-slate-500">
+            {`${publication.width} x ${publication.height}`}
+          </Text>
         ) : null}
       </View>
     </View>

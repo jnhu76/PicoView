@@ -21,7 +21,7 @@ use winit::window::{Window, WindowId};
 
 mod current_item;
 mod gpu;
-use current_item::CurrentItem;
+use current_item::{CurrentItem, OpenIntent};
 
 const HOST_ID: &str = "windows-app";
 const HOST_ABI: u32 = 4;
@@ -149,7 +149,9 @@ impl Runtime {
         );
         let mut current = CurrentItem::new();
         if let Some(path) = &args.image {
-            current.open(&surface, path);
+            // V1's only open: the boot image is a new item (there is no prior
+            // publication to preserve).
+            current.open(&surface, path, OpenIntent::NewItem);
             log::info!(
                 "current item: generation={} handle={:?} path={}",
                 current.generation(),

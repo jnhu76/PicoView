@@ -1,0 +1,127 @@
+// Observer reducer tests (PICOVIEW-LAST-GOOD-PUBLICATION-1 §19).
+//
+// These drive the pure guest observation state machine through the same
+// event sequences the native side emits. Run: `bun test guest/`.
+// The native CurrentItem stays the publication authority; these tests pin
+// the observer's preserve-vs-replace policy only.
+import { expect, test } from "bun:test";
+import {
+  displayVerdict,
+  initialObserverState,
+  reduceObserver,
+  type ObserverState,
+} from "./observer.ts";
+
+function ready(g: number, handle: number, w: number, h: number, name = "a.jpg") {
+  return { t: "current-item", status: "ready", g, handle, width: w, height: h, name };
+}
+function loading(g: number, intent: "new-item" | "refresh", name = "b.jpg") {
+  return { t: "current-item", status: "loading", g, intent, name };
+}
+function error(g: number, intent: "new-item" | "refresh", errorMsg = "could not decode image") {
+  return { t: "current-item", status: "error", g, intent, error: errorMsg };
+}
+
+function fold(...events: ReturnType<typeof ready | typeof loading | typeof error>[]): ObserverState {
+  let state = initialObserverState();
+  for (const v of events) state = reduceObserver(state, v);
+  return state;
+}
+
+test("initial open success publishes and clears the request", () => {
+  const s = fold(loading(1, "new-item", "a.jpg"), ready(1, 11, 1920, 1080, "a.jpg"));
+  expect(s.publication).toMatchObject({ handle: 11, width: 1920, height: 1080, generation: 1 });
+  expect(s.request).toBeNull();
+  expect(displayVerdict(s)).toBe("image");
+});
+
+test("initial open failure leaves no publication", () => {
+  const s = fold(loading(1, "new-item"), error(1, "new-item"));
+  expect(s.publication).toBeNull();
+  expect(s.request).toMatchObject({ status: "error", intent: "new-item" });
+  expect(displayVerdict(s)).toBe("error");
+});
+
+test("refresh loading keeps the last-good publication visible", () => {
+  // READY(A) + REFRESH_LOADING(B): A keeps rendering; the refresh surfaces
+  // as an indicator, never as a displaced main content.
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"));
+  expect(s.publication).toMatchObject({ handle: 11 });
+  expect(s.request).toMatchObject({ status: "loading", intent: "refresh" });
+  expect(displayVerdict(s)).toBe("image");
+});
+
+test("refresh error keeps the last-good publication and stays observable", () => {
+  // READY(A) + REFRESH_LOADING(B) + REFRESH_ERROR(B): A still renders, the
+  // failure remains observable.
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), error(2, "refresh"));
+  expect(s.publication).toMatchObject({ handle: 11, width: 1920 });
+  expect(s.request).toMatchObject({ status: "error", intent: "refresh", error: "could not decode image" });
+  expect(displayVerdict(s)).toBe("image");
+});
+
+test("refresh success switches the publication to the candidate", () => {
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), ready(2, 22, 640, 480, "b.jpg"));
+  expect(s.publication).toMatchObject({ handle: 22, width: 640, height: 480, generation: 2 });
+  expect(s.request).toBeNull();
+  expect(displayVerdict(s)).toBe("image");
+});
+
+test("new-item failure deliberately publishes the error item, not last-good", () => {
+  // PRD §2.10: corrupt NEW item navigation is intentionally different from
+  // refresh — the previous image is NOT preserved.
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "new-item"), error(2, "new-item"));
+  expect(s.publication).toBeNull();
+  expect(s.request).toMatchObject({ status: "error", intent: "new-item" });
+  expect(displayVerdict(s)).toBe("error");
+});
+
+test("new-item loading displaces the previous image while opening", () => {
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "new-item"));
+  expect(displayVerdict(s)).toBe("loading");
+  // The native resource is still live at this point (retire happens at
+  // publish); the observer keeps it but the view policy hides it.
+  expect(s.publication).toMatchObject({ handle: 11 });
+});
+
+test("stale generations never win", () => {
+  const s = fold(ready(5, 55, 100, 100), ready(4, 44, 200, 200), error(4, "refresh"), loading(5, "new-item"));
+  expect(s.publication).toMatchObject({ handle: 55 });
+  // g=5 loading is not stale (equal to seenGeneration is stale too — the
+  // native side never repeats a generation, so only strictly newer g wins).
+  expect(displayVerdict(s)).toBe("image");
+  const newer = reduceObserver(s, ready(6, 66, 300, 300));
+  expect(newer.publication).toMatchObject({ handle: 66 });
+});
+
+test("unknown intent narrows to new-item so preservation stays deliberate", () => {
+  const s = fold(ready(1, 11, 100, 100), error(2, "corrupted-intent" as never));
+  expect(s.publication).toBeNull();
+  expect(displayVerdict(s)).toBe("error");
+});
+
+test("publication bind slot alternates so a mounted image rebinds", () => {
+  const first = fold(ready(1, 11, 100, 100));
+  const second = fold(ready(1, 11, 100, 100), ready(2, 22, 200, 200));
+  const third = fold(ready(1, 11, 100, 100), ready(2, 22, 200, 200), ready(3, 33, 300, 300));
+  expect(first.publication?.bindSlot).toBe(0);
+  expect(second.publication?.bindSlot).toBe(1);
+  expect(third.publication?.bindSlot).toBe(0);
+});
+
+test("viewport events update fit input without touching publication", () => {
+  let s = reduceObserver(initialObserverState(), { t: "hello", w: 960, h: 640 });
+  expect(s.viewport).toEqual({ w: 960, h: 640 });
+  s = reduceObserver(s, ready(1, 11, 1920, 1080));
+  expect(s.viewport).toEqual({ w: 960, h: 640 });
+  s = reduceObserver(s, { t: "resize", w: 1280, h: 720 });
+  expect(s.viewport).toEqual({ w: 1280, h: 720 });
+  expect(s.publication).toMatchObject({ handle: 11 });
+});
+
+test("malformed and foreign lines are ignored", () => {
+  const state = initialObserverState();
+  expect(reduceObserver(state, { t: "something-else" })).toBe(state);
+  expect(reduceObserver(state, { t: "current-item" })).toBe(state);
+  expect(reduceObserver(state, { t: "current-item", g: "nope" })).toBe(state);
+});
