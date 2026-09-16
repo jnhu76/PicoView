@@ -34,8 +34,11 @@ purpose = PicoView Windows Desktop runtime integration
 # Policy
 # - PicoView consumes PocketJS at exactly this revision.
 # - No git submodule, no vendoring, no copying PocketJS source into PicoView.
-# - Runtime-generic capability work is implemented in jnhu76/pocketjs first,
-#   reviewed/merged there, and only then is this lock advanced deliberately.
+# - Runtime-generic capability work is implemented and reviewed in
+#   jnhu76/pocketjs first, then frozen on integration/picoview-desktop at an
+#   exact reviewed commit before this lock is advanced deliberately.
+# - Neither jnhu76/pocketjs main nor pocket-stack/pocketjs main is an
+#   integration target for PicoView-specific dependency advancement.
 # - Future upstream synchronization flows through sync/* children of
 #   integration/picoview-desktop, never reverse into any main.
 # - Historical campaign baselines (e.g. pocket-stack/pocketjs a5a8535…,
