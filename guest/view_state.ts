@@ -314,7 +314,8 @@ export function displayScale(
   geo?: ViewGeometry,
 ): string {
   if (state.mode === "fit") {
-    if (geo) {
+    // Avoid claiming a fit percentage when there is no usable image geometry.
+    if (geo && geo.imageW > 0 && geo.imageH > 0) {
       const pct = Math.round(effectiveScale(state, geo) * 100);
       return `Fit (${pct}%)`;
     }

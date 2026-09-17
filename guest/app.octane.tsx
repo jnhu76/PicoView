@@ -80,14 +80,14 @@ function processKeyEvents(
         setView(s => resetToFit(s));
         break;
       case "1":
-        if (can100) setView(s => set100Percent(s));
+        if (can100) setView(s => clampPan(set100Percent(s), geo.imageW, geo.imageH, geo.viewportW, geo.viewportH));
         break;
       case "=":
       case "+":
-        setView(s => zoomIn(s, geo));
+        setView(s => clampPan(zoomIn(s, geo), geo.imageW, geo.imageH, geo.viewportW, geo.viewportH));
         break;
       case "-":
-        setView(s => zoomOut(s, geo));
+        setView(s => clampPan(zoomOut(s, geo), geo.imageW, geo.imageH, geo.viewportW, geo.viewportH));
         break;
     }
   }
@@ -269,8 +269,9 @@ export default function App() {
         {verdict === "image" && bound ? (
           <Image
             src={textureKeyFor(bound.slot)}
-            class="absolute"
             style={{
+              // PocketJS PROP contract (not CSS): posType Absolute + insets.
+              posType: 1,
               insetL: imgLeft,
               insetT: imgTop,
               width: displayW,
@@ -322,9 +323,9 @@ export default function App() {
           label="−"
           disabled={verdict !== "image"}
           onPress={() => {
-            const next = zoomOut(viewRef.current, geo);
+            const next = clampPan(zoomOut(viewRef.current, geo), imgW, imgH, containerW, containerH);
             viewRef.current = next;
-            setViewState(clampPan(next, imgW, imgH, containerW, containerH));
+            setViewState(next);
           }}
         />
         <Text class="text-xs text-slate-300 w-16 text-center">{zoomText}</Text>
@@ -332,9 +333,9 @@ export default function App() {
           label="+"
           disabled={verdict !== "image"}
           onPress={() => {
-            const next = zoomIn(viewRef.current, geo);
+            const next = clampPan(zoomIn(viewRef.current, geo), imgW, imgH, containerW, containerH);
             viewRef.current = next;
-            setViewState(clampPan(next, imgW, imgH, containerW, containerH));
+            setViewState(next);
           }}
         />
         <Separator />

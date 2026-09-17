@@ -1,6 +1,6 @@
 ---
 feature: real-viewer-train-1-closeout
-status: in-progress
+status: delivered
 updated: 2026-09-17
 branch: feat/real-viewer-train-1
 commits: 7a0a5e8..HEAD
@@ -9,6 +9,40 @@ commits: 7a0a5e8..HEAD
 # Real Viewer Train 1 — Current-Capability Closeout
 
 ## Report
+
+**What was built** — PR #58 is closed to the strongest truthful viewer the
+pinned PocketJS revision (`24bab5e8…`) supports. `set100Percent` now forces
+manual scale exactly 1.0 with pan 0,0 (only claimed when
+`fullResolution`). Zoom from Fit materializes the real `fitScale` before
+stepping (Fit~49% → 0.5, not 125%). Previous/Next resets presentation to
+Fit/pan0,0 via a guest-side publication-identity reconcile; refresh of the
+same usable geometry preserves view. Rotate/Flip toolbar controls and CSS
+transform emission were removed — pure helpers remain as PocketJS precursor
+only. Pan helpers stay documented
+`PAN_STATE_READY` / `USER_GESTURE_PRECURSOR_REQUIRED`. BrowseSession
+ordering uses lowercased name → original name → path; `rebuild()` captures
+the old current path before replacing the list. The Windows host now
+forwards keyboard events as `{"t":"key",…}` svc lines so Left/Right/R/0/1/+/- are real product operations. Image layout uses PocketJS
+`posType: 1` + `insetL`/`insetT` (not CSS `position`).
+
+**Verification** — `bun test guest/` 76 pass; `cargo test` 29 pass;
+`cargo build --release` OK; `pocket.ts compile` OK; Windows smoke
+A/B/corrupt/D keyboard sequence process-alive with
+`next×3 previous×2 refresh` logged, no panic
+(`experiments/real-viewer-closeout-1/`). Adversarial review PASS with one
+medium (absolute style API) actioned to `posType: 1`.
+
+**Journey log**
+- CSS-style `position/left/top` and `transform: rotate()` are not the
+  PocketJS PROP contract; wrong style props throw at first Image frame.
+- PicoView's own winit host must forward keys — guest shortcuts alone are
+  dead code without a host→svc path.
+- NTFS cannot host case-fold-colliding filenames; prove `compare_candidates`
+  with constructed candidates instead.
+- Fit must materialize effective scale before zoom steps, or 1:1/Fit
+  placeholders lie about the next step.
+- Reviewer medium on `class="absolute"` vs `posType: 1` — prefer the proven
+  in-repo pattern.
 
 ## [S1] Problem
 
@@ -29,6 +63,7 @@ PocketJS revision (`24bab5e`). Concrete defects:
    own bytes — it cannot distinguish names that collide under case folding.
 7. `rebuild()` replaces `candidates` before capturing the old current path,
    then uses `index_path()` which now names the new occupant at that index.
+8. The Windows host never forwarded keyboard events to the guest.
 
 ## [S2] Design
 
@@ -91,6 +126,12 @@ USER_GESTURE_PRECURSOR_REQUIRED
   index. Refresh of the current image does not itself rebuild the directory
   listing unless Product asks.
 
+### Host keyboard
+
+PicoView `native/src/main.rs` maps pressed logical keys to guest names
+(`left`/`right`/`r`/`0`/`1`/`+`/`-`/…) and pushes
+`{"t":"key","k":…,"cmd":…,"ctl":…}` on the svc queue.
+
 ## [S3] Out of Scope
 
 - Any PocketJS revision change (`POCKETJS.lock` stays `24bab5e8…`).
@@ -100,9 +141,9 @@ USER_GESTURE_PRECURSOR_REQUIRED
 
 ## Tasks
 
-- [ ] T1: Fix `set100Percent` + Fit materialized zoom + regressions — acceptance: unit tests from 200%/50%/400%/Fit land exactly 100%; Fit 49% Zoom+ is nearest step >49% (covers: S2)
-- [ ] T2: Guest navigation view reset keyed by publication identity — acceptance: pure reconcile tests for A→B Fit, refresh preserve, geometry revalidate (covers: S2; depends: T1)
-- [ ] T3: Remove Rotate/Flip product wiring; document pan precursor — acceptance: toolbar has no rotate/flip; no CSS transform emission; pan labeled precursor (covers: S2)
-- [ ] T4: Fix BrowseSession compare + rebuild path capture — acceptance: case-fold tie test + rebuild preserves b.jpg after insert aa.jpg (covers: S2)
-- [ ] T5: Native + guest tests, release build, Windows smoke of A/B/corrupt/D flow — acceptance: smoke sequence no crash, 1:1 exact, navigation Fit (covers: S1; depends: T1, T2, T3, T4)
-- [ ] T6: PR #58 description truthfulness + closeout — acceptance: features list excludes rotate/flip/wheel/drag; residuals named as PocketJS gaps (covers: S2; depends: T5)
+- [x] T1: Fix `set100Percent` + Fit materialized zoom + regressions — acceptance: unit tests from 200%/50%/400%/Fit land exactly 100%; Fit 49% Zoom+ is nearest step >49% (covers: S2)
+- [x] T2: Guest navigation view reset keyed by publication identity — acceptance: pure reconcile tests for A→B Fit, refresh preserve, geometry revalidate (covers: S2; depends: T1)
+- [x] T3: Remove Rotate/Flip product wiring; document pan precursor — acceptance: toolbar has no rotate/flip; no CSS transform emission; pan labeled precursor (covers: S2)
+- [x] T4: Fix BrowseSession compare + rebuild path capture — acceptance: case-fold tie test + rebuild preserves b.jpg after insert aa.jpg (covers: S2)
+- [x] T5: Native + guest tests, release build, Windows smoke of A/B/corrupt/D flow — acceptance: smoke sequence no crash, 1:1 exact, navigation Fit (covers: S1; depends: T1, T2, T3, T4)
+- [x] T6: PR #58 description truthfulness + closeout — acceptance: features list excludes rotate/flip/wheel/drag; residuals named as PocketJS gaps (covers: S2; depends: T5)

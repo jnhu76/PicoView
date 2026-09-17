@@ -6,13 +6,13 @@
 //! (ARCHITECTURE §18). Current-image work outranks BrowseSession background
 //! work.
 //!
-//! Ordering: case-insensitive filename sort with deterministic tie-breaking
-//! by raw byte sequence (lowercase UTF-8). This produces a stable order
-//! across runs on the same filesystem content.
+//! Ordering: case-insensitive filename sort, then original filename
+//! representation, then full path — a stable total order across runs on the
+//! same filesystem content.
 //!
-//! The session is rebuilt from scratch when the directory content changes
-//! (Refresh). There is no persistent index, no thumbnail database, and no
-//! filesystem watcher.
+//! `rebuild()` re-reads the directory and preserves the current path when it
+//! still exists. Refreshing the CURRENT IMAGE alone does not rebuild the
+//! listing; a directory rebuild is a separate Product operation.
 
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
