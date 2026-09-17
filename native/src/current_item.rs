@@ -1,4 +1,4 @@
-//! Current Item authority (V1).
+//! Current Item authority.
 //!
 //! Rust owns the truth: one explicit local path, decoded through Windows WIC,
 //! published to the guest as a native texture handle plus bounded semantic
@@ -32,11 +32,17 @@
 //! this side never materializes a second full plane, and admission costs no
 //! CPU-to-CPU full-plane copy. The admission rule (1..=NATIVE_TEX_MAX_DIM
 //! per axis) is the only resize a normal image ever sees: none.
+//!
+//! BrowseSession owns the directory listing and navigation state. Commands
+//! from the guest (Previous/Next/Refresh) update the BrowseSession and
+//! trigger item opens through the existing Publication path.
 
 use anyhow::Result;
 use pocket_ui_surface::UiSurface;
 use serde_json::json;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+pub use crate::browse_session::BrowseSession;
 
 pub const SVC_TYPE: &str = "current-item";
 /// Texture key prefix the guest binds ready handles under (mirrored in
@@ -60,6 +66,16 @@ const MAX_ERROR_CHARS: usize = 200;
 /// 80 megapixels comfortably covers real photographs (the seam's 8192^2
 /// admission ceiling is 67 MP, so this guard binds first).
 const MAX_DECODE_PIXELS: u64 = 80_000_000;
+
+/// Product commands the guest can issue via svcSend.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Command {
+    Previous,
+    Next,
+    Refresh,
+    /// Open a specific path (for boot image or future direct-open).
+    Open(PathBuf),
+}
 
 /// Pure allocation guard for a decoded frame: the byte length a WIC RGBA
 /// conversion needs, or a bounded decode error.
@@ -143,6 +159,9 @@ impl OpenIntent {
 
 struct LiveResource {
     handle: i32,
+    /// Source dimensions (before any resource-level downsampling).
+    source_width: u32,
+    source_height: u32,
 }
 
 /// Zero-sized proof token for the release boundary. It can only be
@@ -217,6 +236,9 @@ pub struct CurrentItem {
     /// one open per drained input) it is empty at rest and holds at most
     /// the opens coalesced into one input phase in the worst case.
     superseded: Vec<i32>,
+    /// BrowseSession: directory enumeration and navigation. Present only
+    /// when the viewer is in browse mode (an initial image was provided).
+    browse: Option<BrowseSession>,
 }
 
 impl CurrentItem {
@@ -225,7 +247,22 @@ impl CurrentItem {
             next_generation: 1,
             live: None,
             superseded: Vec::new(),
+            browse: None,
         }
+    }
+
+    /// Create a CurrentItem with a BrowseSession for the directory
+    /// containing `path`. The initial item is `path`.
+    pub fn with_browse(path: &Path) -> Self {
+        let browse = BrowseSession::new(path);
+        let mut item = Self {
+            next_generation: 1,
+            live: None,
+            superseded: Vec::new(),
+            browse: Some(browse),
+        };
+        // Emit the initial browse state.
+        item
     }
 
     pub fn generation(&self) -> u64 {
@@ -235,6 +272,88 @@ impl CurrentItem {
     /// Texture handle of the live Current Item resource, if any.
     pub fn live_handle(&self) -> Option<i32> {
         self.live.as_ref().map(|l| l.handle)
+    }
+
+    /// Source dimensions of the live resource, if any.
+    pub fn live_source_dimensions(&self) -> Option<(u32, u32)> {
+        self.live.as_ref().map(|l| (l.source_width, l.source_height))
+    }
+
+    /// Access the browse session.
+    pub fn browse(&self) -> Option<&BrowseSession> {
+        self.browse.as_ref()
+    }
+
+    /// Access the browse session mutably.
+    pub fn browse_mut(&mut self) -> Option<&mut BrowseSession> {
+        self.browse.as_mut()
+    }
+
+    /// Handle a product command from the guest. Must be called with a
+    /// `RequestPhase` (before the tick's guest frame).
+    ///
+    /// Returns `true` if the command triggered a navigation/refresh.
+    pub fn handle_command(
+        &mut self,
+        surface: &UiSurface,
+        _phase: RequestPhase,
+        command: Command,
+    ) -> bool {
+        match command {
+            Command::Previous => {
+                if let Some(browse) = &mut self.browse {
+                    if browse.previous() {
+                        if let Some(path) = browse.current_path().map(|p| p.to_path_buf()) {
+                            self.open(surface, _phase, &path, OpenIntent::NewItem);
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            Command::Next => {
+                if let Some(browse) = &mut self.browse {
+                    if browse.next() {
+                        if let Some(path) = browse.current_path().map(|p| p.to_path_buf()) {
+                            self.open(surface, _phase, &path, OpenIntent::NewItem);
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            Command::Refresh => {
+                if let Some(path) = self.current_path_for_refresh() {
+                    self.open(surface, _phase, &path, OpenIntent::Refresh);
+                    return true;
+                }
+                false
+            }
+            Command::Open(path) => {
+                // If we have a browse session, try to locate the path within it.
+                if let Some(browse) = &mut self.browse {
+                    let path_clone = path.clone();
+                    // Rebuild browse session from the parent directory.
+                    *browse = BrowseSession::new(&path_clone);
+                    self.open(surface, _phase, &path_clone, OpenIntent::NewItem);
+                } else {
+                    self.open(surface, _phase, &path, OpenIntent::NewItem);
+                }
+                true
+            }
+        }
+    }
+
+    fn current_path_for_refresh(&self) -> Option<PathBuf> {
+        self.browse
+            .as_ref()
+            .and_then(|b| b.current_path().map(|p| p.to_path_buf()))
+            .or_else(|| {
+                self.live.as_ref().and_then(|_| None)
+                // Without a browse session and without a stored path,
+                // refresh is not possible. The initial open path is stored
+                // only via the browse session.
+            })
     }
 
     /// Open an explicit local path: decode with WIC, then publish per the
@@ -258,17 +377,37 @@ impl CurrentItem {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        self.push(surface, loading_event(generation, intent, &name));
+        let browse_snapshot = self.browse_snapshot();
+        self.push(surface, loading_event(generation, intent, &name, &browse_snapshot));
         match open_decoded(path) {
             Ok(decoded) => {
+                let source_w = decoded.width;
+                let source_h = decoded.height;
                 let image = prepare_for_admission(decoded);
-                self.publish(surface, phase, generation, intent, name, image);
+                let resource_w = image.width;
+                let resource_h = image.height;
+                let full_resolution = source_w == resource_w && source_h == resource_h;
+                self.publish(
+                    surface,
+                    phase,
+                    generation,
+                    intent,
+                    name,
+                    image,
+                    source_w,
+                    source_h,
+                    full_resolution,
+                    &browse_snapshot,
+                );
             }
             Err(error) => {
                 if intent == OpenIntent::NewItem {
                     self.retire(phase);
                 }
-                self.push(surface, error_event(generation, intent, &error));
+                self.push(
+                    surface,
+                    error_event(generation, intent, &error, &browse_snapshot),
+                );
             }
         }
     }
@@ -286,6 +425,7 @@ impl CurrentItem {
     /// ready event can still resolve the superseded handle, so freeing here
     /// would open a stale-handle hole whenever a publication commits after
     /// a guest frame but before that frame's render.
+    #[allow(clippy::too_many_arguments)]
     fn publish(
         &mut self,
         surface: &UiSurface,
@@ -294,16 +434,20 @@ impl CurrentItem {
         intent: OpenIntent,
         name: String,
         image: DecodedImage,
+        source_width: u32,
+        source_height: u32,
+        full_resolution: bool,
+        browse_snapshot: &BrowseSnapshot,
     ) {
         let DecodedImage {
-            width,
-            height,
+            width: resource_width,
+            height: resource_height,
             rgba,
         } = image;
         // FLAG_LINEAR: bilinear sampling — the resource is frequently
         // displayed at non-integer scale (fit to window), and nearest
         // sampling turns that into visible blockiness.
-        let handle = surface.with_ui(|ui| ui.upload_owned_rgba8(rgba, width, height, true));
+        let handle = surface.with_ui(|ui| ui.upload_owned_rgba8(rgba, resource_width, resource_height, true));
         if handle < 0 {
             // The candidate was rejected; the API dropped its plane. A
             // Refresh keeps the last-good publication; a NewItem replaces it
@@ -317,16 +461,31 @@ impl CurrentItem {
                     generation,
                     intent,
                     &OpenError::Admission("resource admission rejected".into()),
+                    browse_snapshot,
                 ),
             );
             return;
         }
         // Publication swap commit: the candidate is the Current Item from
         // here on; the old logical resource is superseded.
-        let superseded = self.live.replace(LiveResource { handle });
+        let superseded = self.live.replace(LiveResource {
+            handle,
+            source_width,
+            source_height,
+        });
         self.push(
             surface,
-            ready_event(generation, &name, handle, width, height),
+            ready_event(
+                generation,
+                &name,
+                handle,
+                source_width,
+                source_height,
+                resource_width,
+                resource_height,
+                full_resolution,
+                browse_snapshot,
+            ),
         );
         if let Some(old) = superseded {
             self.superseded.push(old.handle);
@@ -367,35 +526,107 @@ impl CurrentItem {
         self.superseded.len()
     }
 
+    /// Snapshot of browse state for svc events.
+    fn browse_snapshot(&self) -> BrowseSnapshot {
+        match &self.browse {
+            Some(b) => BrowseSnapshot {
+                index: b.current_index().map(|i| i as u32),
+                count: b.count() as u32,
+                can_previous: b.can_previous(),
+                can_next: b.can_next(),
+                current_name: b.current_name().map(|s| s.to_string()),
+            },
+            None => BrowseSnapshot::none(),
+        }
+    }
+
     fn push(&self, surface: &UiSurface, event: serde_json::Value) {
         surface.svc_push(event.to_string());
     }
 }
 
-fn error_event(generation: u64, intent: OpenIntent, error: &OpenError) -> serde_json::Value {
-    json!({"t": SVC_TYPE, "g": generation, "status": "error", "intent": intent.as_str(), "error": error.message()})
+/// Snapshot of browse state for svc events. Carries only bounded scalars.
+#[derive(Debug, Clone)]
+struct BrowseSnapshot {
+    index: Option<u32>,
+    count: u32,
+    can_previous: bool,
+    can_next: bool,
+    current_name: Option<String>,
+}
+
+impl BrowseSnapshot {
+    fn none() -> Self {
+        Self {
+            index: None,
+            count: 0,
+            can_previous: false,
+            can_next: false,
+            current_name: None,
+        }
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        json!({
+            "browseIndex": self.index,
+            "browseCount": self.count,
+            "canPrevious": self.can_previous,
+            "canNext": self.can_next,
+        })
+    }
+}
+
+fn error_event(generation: u64, intent: OpenIntent, error: &OpenError, browse: &BrowseSnapshot) -> serde_json::Value {
+    let mut evt = json!({"t": SVC_TYPE, "g": generation, "status": "error", "intent": intent.as_str(), "error": error.message()});
+    merge_browse(&mut evt, browse);
+    evt
 }
 
 /// Pure svc event constructors. The guest-facing wire contract is exactly
-/// these three shapes — bounded scalars only, never pixel bytes — so the
+/// these shapes — bounded scalars only, never pixel bytes — so the
 /// constructors themselves enforce the channel's text cap. Loading and error
 /// events carry the Product intent (the observer's preserve-vs-replace
 /// policy input); a ready event needs no intent.
-fn loading_event(generation: u64, intent: OpenIntent, name: &str) -> serde_json::Value {
-    json!({"t": SVC_TYPE, "g": generation, "status": "loading", "intent": intent.as_str(), "name": bounded(name)})
+fn loading_event(generation: u64, intent: OpenIntent, name: &str, browse: &BrowseSnapshot) -> serde_json::Value {
+    let mut evt = json!({"t": SVC_TYPE, "g": generation, "status": "loading", "intent": intent.as_str(), "name": bounded(name)});
+    merge_browse(&mut evt, browse);
+    evt
 }
 
 #[allow(clippy::too_many_arguments)]
-fn ready_event(generation: u64, name: &str, handle: i32, width: u32, height: u32) -> serde_json::Value {
-    json!({
+fn ready_event(
+    generation: u64,
+    name: &str,
+    handle: i32,
+    source_width: u32,
+    source_height: u32,
+    resource_width: u32,
+    resource_height: u32,
+    full_resolution: bool,
+    browse: &BrowseSnapshot,
+) -> serde_json::Value {
+    let mut evt = json!({
         "t": SVC_TYPE,
         "g": generation,
         "status": "ready",
         "handle": handle,
-        "width": width,
-        "height": height,
+        "sourceWidth": source_width,
+        "sourceHeight": source_height,
+        "resourceWidth": resource_width,
+        "resourceHeight": resource_height,
+        "fullResolution": full_resolution,
         "name": bounded(name),
-    })
+    });
+    merge_browse(&mut evt, browse);
+    evt
+}
+
+fn merge_browse(evt: &mut serde_json::Value, browse: &BrowseSnapshot) {
+    if let (Some(obj), Some(browse_obj)) = (evt.as_object_mut(), browse.to_json().as_object()) {
+        for (k, v) in browse_obj {
+            obj.insert(k.clone(), v.clone());
+        }
+    }
 }
 
 fn open_decoded(path: &Path) -> Result<DecodedImage, OpenError> {
@@ -552,11 +783,11 @@ mod tests {
         // Bounded-semantic guard: svc events carry only small strings and
         // integers — never arrays, never bulk payloads.
         let text = v.to_string();
-        assert!(text.len() <= 512, "svc event too large: {text}");
+        assert!(text.len() <= 1024, "svc event too large: {text}");
         let obj = v.as_object().unwrap();
         for (k, val) in obj {
             assert!(
-                val.is_string() || val.is_i64() || val.is_u64(),
+                val.is_string() || val.is_i64() || val.is_u64() || val.is_boolean() || val.is_null(),
                 "field {k} is not a bounded scalar"
             );
         }
@@ -564,20 +795,27 @@ mod tests {
 
     #[test]
     fn svc_events_are_bounded_scalars() {
-        event_values(&loading_event(1, OpenIntent::Refresh, "a.jpg"));
-        event_values(&ready_event(2, "a.jpg", 3, 1920, 1080));
-        event_values(&error_event(3, OpenIntent::NewItem, &OpenError::Decode("x".repeat(500).into())));
-        event_values(&error_event(4, OpenIntent::Refresh, &OpenError::Admission("y".repeat(500).into())));
+        let browse = BrowseSnapshot {
+            index: Some(1),
+            count: 5,
+            can_previous: true,
+            can_next: true,
+            current_name: Some("test".into()),
+        };
+        event_values(&loading_event(1, OpenIntent::Refresh, "a.jpg", &browse));
+        event_values(&ready_event(2, "a.jpg", 3, 1920, 1080, 1920, 1080, true, &browse));
+        event_values(&error_event(3, OpenIntent::NewItem, &OpenError::Decode("x".repeat(500).into()), &browse));
+        event_values(&error_event(4, OpenIntent::Refresh, &OpenError::Admission("y".repeat(500).into()), &browse));
         // File names cap on the same channel as error text.
-        event_values(&loading_event(5, OpenIntent::NewItem, &"x".repeat(500)));
+        event_values(&loading_event(5, OpenIntent::NewItem, &"x".repeat(500), &browse));
         // The intent is the observer's preserve-vs-replace policy input and
         // must be on the wire exactly for the request-lifecycle events.
-        assert_eq!(loading_event(6, OpenIntent::Refresh, "a")["intent"], "refresh");
+        assert_eq!(loading_event(6, OpenIntent::Refresh, "a", &browse)["intent"], "refresh");
         assert_eq!(
-            error_event(7, OpenIntent::NewItem, &OpenError::MissingPath)["intent"],
+            error_event(7, OpenIntent::NewItem, &OpenError::MissingPath, &browse)["intent"],
             "new-item"
         );
-        assert!(ready_event(8, "a", 1, 2, 3).get("intent").is_none());
+        assert!(ready_event(8, "a", 1, 2, 3, 2, 3, true, &browse).get("intent").is_none());
     }
 
     #[test]
@@ -658,7 +896,8 @@ mod tests {
         let source_ptr = image.rgba.as_ptr();
 
         let mut item = CurrentItem::new();
-        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "oracle.png".to_string(), image);
+        let browse = BrowseSnapshot::none();
+        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "oracle.png".to_string(), image, 33, 17, true, &browse);
         let handle = item
             .live_handle()
             .expect("admission accepts the moved plane");
@@ -710,9 +949,10 @@ mod tests {
         // current DrawList can still resolve.
         let surface = UiSurface::new((96.0, 64.0));
         let mut item = CurrentItem::new();
-        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "a.png".into(), plane(4, 4));
+        let browse = BrowseSnapshot::none();
+        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "a.png".into(), plane(4, 4), 4, 4, true, &browse);
         let a = item.live_handle().expect("first publication");
-        item.publish(&surface, request_phase(), 2, OpenIntent::Refresh, "b.png".into(), plane(8, 8));
+        item.publish(&surface, request_phase(), 2, OpenIntent::Refresh, "b.png".into(), plane(8, 8), 8, 8, true, &browse);
         let b = item.live_handle().expect("refresh commit");
         assert_ne!(a, b);
         // Before the boundary: the publication is already the candidate,
@@ -742,7 +982,8 @@ mod tests {
         // not only to successful ready replacement.
         let surface = UiSurface::new((96.0, 64.0));
         let mut item = CurrentItem::new();
-        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "a.png".into(), plane(4, 4));
+        let browse = BrowseSnapshot::none();
+        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "a.png".into(), plane(4, 4), 4, 4, true, &browse);
         let a = item.live_handle().expect("publication live");
         item.open(&surface, request_phase(), Path::new("Z:/definitely/not/here.jpg"), OpenIntent::NewItem);
         assert_eq!(item.live_handle(), None, "new-item failure replaces the publication");
@@ -766,13 +1007,14 @@ mod tests {
         // release there — no leak, no slot growth across rounds.
         let surface = UiSurface::new((96.0, 64.0));
         let mut item = CurrentItem::new();
-        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "a.png".into(), plane(4, 4));
+        let browse = BrowseSnapshot::none();
+        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "a.png".into(), plane(4, 4), 4, 4, true, &browse);
         let a = item.live_handle().expect("first publication");
         let mut steady_slots: Option<usize> = None;
         for round in 0..2u64 {
-            item.publish(&surface, request_phase(), 10 + round, OpenIntent::Refresh, "b.png".into(), plane(8, 8));
+            item.publish(&surface, request_phase(), 10 + round, OpenIntent::Refresh, "b.png".into(), plane(8, 8), 8, 8, true, &browse);
             let b = item.live_handle().expect("round commit b");
-            item.publish(&surface, request_phase(), 20 + round, OpenIntent::Refresh, "c.png".into(), plane(16, 16));
+            item.publish(&surface, request_phase(), 20 + round, OpenIntent::Refresh, "c.png".into(), plane(16, 16), 16, 16, true, &browse);
             let c = item.live_handle().expect("round commit c");
             assert_ne!(b, c, "round {round}");
             // a (from the warm-up) is superseded only in round 0; b and c
@@ -920,6 +1162,10 @@ mod tests {
             assert!(view.linear, "fit-to-window display needs bilinear admission");
             assert_eq!(&view.pixels[..expected.rgba.len()], &expected.rgba[..]);
         });
+
+        // Source dimensions match resource for ordinary images.
+        let (sw, sh) = item.live_source_dimensions().expect("source dims published");
+        assert_eq!((sw, sh), (32, 16));
 
         // An initial failure leaves no publication: no live resource, and
         // the corrupt candidate's decode error is bounded.
@@ -1081,7 +1327,8 @@ mod tests {
             height: 0,
             rgba: Vec::new(),
         };
-        item.publish(&surface, request_phase(), 99, OpenIntent::Refresh, "rejected.png".into(), rejected);
+        let browse = BrowseSnapshot::none();
+        item.publish(&surface, request_phase(), 99, OpenIntent::Refresh, "rejected.png".into(), rejected, 0, 0, false, &browse);
         assert_eq!(
             item.live_handle(),
             Some(first),
@@ -1112,6 +1359,10 @@ mod tests {
                 height: 0,
                 rgba: Vec::new(),
             },
+            0,
+            0,
+            false,
+            &browse,
         );
         assert_eq!(
             item.live_handle(),
@@ -1197,20 +1448,21 @@ mod tests {
             height: 0,
             rgba: Vec::new(),
         };
+        let browse = BrowseSnapshot::none();
         for cycle in 0..6u64 {
             item.open(&surface, request_phase(), &jpg_b, OpenIntent::Refresh);
             let live = item.live_handle().expect("cycle leaves a publication");
             let pending_after_commit = item.pending_releases();
             item.open(&surface, request_phase(), &bad, OpenIntent::Refresh);
             assert_eq!(item.live_handle(), Some(live), "cycle {cycle}: refresh failure preserves");
-            item.publish(&surface, request_phase(), 1000 + cycle, OpenIntent::Refresh, "r".into(), rejected());
+            item.publish(&surface, request_phase(), 1000 + cycle, OpenIntent::Refresh, "r".into(), rejected(), 0, 0, false, &browse);
             assert_eq!(item.live_handle(), Some(live), "cycle {cycle}: admission failure preserves");
             assert_eq!(
                 item.pending_releases(),
                 pending_after_commit,
                 "cycle {cycle}: refresh failures queue no pending retirement"
             );
-            item.publish(&surface, request_phase(), 2000 + cycle, OpenIntent::NewItem, "r".into(), rejected());
+            item.publish(&surface, request_phase(), 2000 + cycle, OpenIntent::NewItem, "r".into(), rejected(), 0, 0, false, &browse);
             assert_eq!(item.live_handle(), None, "cycle {cycle}: new-item failure replaces");
             // One guest observation boundary per commit batch (the runtime
             // runs it after every tick): the removed publication frees

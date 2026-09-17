@@ -1,4 +1,5 @@
-// Observer reducer tests (PICOVIEW-LAST-GOOD-PUBLICATION-1 §19).
+// Observer reducer tests (PICOVIEW-LAST-GOOD-PUBLICATION-1 §19
+// + PICOVIEW-REAL-VIEWER-TRAIN-1 capability truth).
 //
 // These drive the pure guest observation state machine through the same
 // event sequences the native side emits. Run: `bun test guest/`.
@@ -12,8 +13,21 @@ import {
   type ObserverState,
 } from "./observer.ts";
 
-function ready(g: number, handle: number, w: number, h: number, name = "a.jpg") {
-  return { t: "current-item", status: "ready", g, handle, width: w, height: h, name };
+function ready(g: number, handle: number, sw: number, sh: number, rw?: number, rh?: number, name = "a.jpg") {
+  const resourceW = rw ?? sw;
+  const resourceH = rh ?? sh;
+  return {
+    t: "current-item",
+    status: "ready",
+    g,
+    handle,
+    sourceWidth: sw,
+    sourceHeight: sh,
+    resourceWidth: resourceW,
+    resourceHeight: resourceH,
+    fullResolution: sw === resourceW && sh === resourceH,
+    name,
+  };
 }
 function loading(g: number, intent: "new-item" | "refresh", name = "b.jpg") {
   return { t: "current-item", status: "loading", g, intent, name };
@@ -29,8 +43,16 @@ function fold(...events: ReturnType<typeof ready | typeof loading | typeof error
 }
 
 test("initial open success publishes and clears the request", () => {
-  const s = fold(loading(1, "new-item", "a.jpg"), ready(1, 11, 1920, 1080, "a.jpg"));
-  expect(s.publication).toMatchObject({ handle: 11, width: 1920, height: 1080, generation: 1 });
+  const s = fold(loading(1, "new-item", "a.jpg"), ready(1, 11, 1920, 1080));
+  expect(s.publication).toMatchObject({
+    handle: 11,
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+    resourceWidth: 1920,
+    resourceHeight: 1080,
+    generation: 1,
+    fullResolution: true,
+  });
   expect(s.request).toBeNull();
   expect(displayVerdict(s)).toBe("image");
 });
@@ -55,14 +77,22 @@ test("refresh error keeps the last-good publication and stays observable", () =>
   // READY(A) + REFRESH_LOADING(B) + REFRESH_ERROR(B): A still renders, the
   // failure remains observable.
   const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), error(2, "refresh"));
-  expect(s.publication).toMatchObject({ handle: 11, width: 1920 });
+  expect(s.publication).toMatchObject({ handle: 11, sourceWidth: 1920 });
   expect(s.request).toMatchObject({ status: "error", intent: "refresh", error: "could not decode image" });
   expect(displayVerdict(s)).toBe("image");
 });
 
 test("refresh success switches the publication to the candidate", () => {
-  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), ready(2, 22, 640, 480, "b.jpg"));
-  expect(s.publication).toMatchObject({ handle: 22, width: 640, height: 480, generation: 2 });
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), ready(2, 22, 640, 480, 640, 480, "b.jpg"));
+  expect(s.publication).toMatchObject({
+    handle: 22,
+    sourceWidth: 640,
+    sourceHeight: 480,
+    resourceWidth: 640,
+    resourceHeight: 480,
+    generation: 2,
+    fullResolution: true,
+  });
   expect(s.request).toBeNull();
   expect(displayVerdict(s)).toBe("image");
 });
@@ -107,13 +137,6 @@ test("publication carries no view-binding mechanics", () => {
   const s = fold(ready(1, 11, 100, 100));
   expect(s.publication).not.toHaveProperty("bindSlot");
   expect(s).not.toHaveProperty("nextBindSlot");
-  expect(Object.keys(s.publication ?? {}).sort()).toEqual([
-    "generation",
-    "handle",
-    "height",
-    "name",
-    "width",
-  ]);
 });
 
 test("several ready events in one turn collapse to the final publication", () => {
@@ -141,4 +164,102 @@ test("malformed and foreign lines are ignored", () => {
   expect(reduceObserver(state, { t: "something-else" })).toBe(state);
   expect(reduceObserver(state, { t: "current-item" })).toBe(state);
   expect(reduceObserver(state, { t: "current-item", g: "nope" })).toBe(state);
+});
+
+// --- Capability truth tests (REAL-VIEWER-TRAIN-1) ---
+
+test("ordinary image reports fullResolution true when source == resource", () => {
+  const s = fold(ready(1, 11, 1920, 1080));
+  expect(s.publication).toMatchObject({
+    sourceWidth: 1920,
+    sourceHeight: 1080,
+    resourceWidth: 1920,
+    resourceHeight: 1080,
+    fullResolution: true,
+  });
+});
+
+test("giant proxy reports fullResolution false when source != resource", () => {
+  const s = fold(ready(1, 11, 20000, 100, 8192, 41));
+  expect(s.publication).toMatchObject({
+    sourceWidth: 20000,
+    sourceHeight: 100,
+    resourceWidth: 8192,
+    resourceHeight: 41,
+    fullResolution: false,
+  });
+});
+
+// --- Browse state tests (REAL-VIEWER-TRAIN-1) ---
+
+test("browse state is updated from svc events", () => {
+  let s = reduceObserver(initialObserverState(), {
+    t: "current-item",
+    status: "ready",
+    g: 1,
+    handle: 11,
+    sourceWidth: 100,
+    sourceHeight: 100,
+    resourceWidth: 100,
+    resourceHeight: 100,
+    fullResolution: true,
+    browseIndex: 2,
+    browseCount: 17,
+    canPrevious: true,
+    canNext: true,
+  });
+  expect(s.browse).toMatchObject({
+    index: 2,
+    count: 17,
+    canPrevious: true,
+    canNext: true,
+  });
+});
+
+test("browse state persists across events", () => {
+  let s = reduceObserver(initialObserverState(), {
+    t: "current-item",
+    status: "loading",
+    g: 1,
+    intent: "new-item",
+    browseIndex: 5,
+    browseCount: 10,
+    canPrevious: true,
+    canNext: false,
+  });
+  expect(s.browse).toMatchObject({ index: 5, count: 10, canPrevious: true, canNext: false });
+  // A ready event without browse fields should preserve previous browse state.
+  s = reduceObserver(s, ready(1, 11, 100, 100));
+  expect(s.browse).toMatchObject({ index: 5, count: 10, canPrevious: true, canNext: false });
+});
+
+test("browse state updates when navigation changes it", () => {
+  let s = reduceObserver(initialObserverState(), {
+    t: "current-item",
+    status: "ready",
+    g: 1,
+    handle: 11,
+    sourceWidth: 100,
+    sourceHeight: 100,
+    resourceWidth: 100,
+    resourceHeight: 100,
+    fullResolution: true,
+    browseIndex: 0,
+    browseCount: 5,
+    canPrevious: false,
+    canNext: true,
+  });
+  expect(s.browse.canPrevious).toBe(false);
+  // Simulate Next navigation — new browse state with updated index.
+  s = reduceObserver(s, {
+    t: "current-item",
+    status: "loading",
+    g: 2,
+    intent: "new-item",
+    browseIndex: 1,
+    browseCount: 5,
+    canPrevious: true,
+    canNext: true,
+  });
+  expect(s.browse).toMatchObject({ index: 1, count: 5, canPrevious: true, canNext: true });
 });

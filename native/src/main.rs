@@ -19,9 +19,10 @@ use winit::dpi::LogicalSize;
 use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
 
+mod browse_session;
 mod current_item;
 mod gpu;
-use current_item::{CurrentItem, ObservationBoundary, OpenIntent, RequestPhase};
+use current_item::{Command, CurrentItem, ObservationBoundary, OpenIntent, RequestPhase};
 
 const HOST_ID: &str = "windows-app";
 const HOST_ABI: u32 = 4;
@@ -90,6 +91,23 @@ enum Input {
     Resize(u32, u32),
 }
 
+/// Parse a guest command from a svc JSON line. The guest sends lines like:
+/// `{"t":"pv","cmd":"previous"}`, `{"t":"pv","cmd":"next"}`,
+/// `{"t":"pv","cmd":"refresh"}`, `{"t":"pv","cmd":"open","path":"..."}`.
+fn parse_command(val: &serde_json::Value) -> Option<Command> {
+    let cmd = val.get("cmd")?.as_str()?;
+    match cmd {
+        "previous" => Some(Command::Previous),
+        "next" => Some(Command::Next),
+        "refresh" => Some(Command::Refresh),
+        "open" => {
+            let path = val.get("path")?.as_str()?;
+            Some(Command::Open(std::path::PathBuf::from(path)))
+        }
+        _ => None,
+    }
+}
+
 fn epoch_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -134,6 +152,9 @@ impl Runtime {
         );
         surface.set_identity(HOST_ID, HOST_ABI);
         surface.set_tick_rate(60);
+        // Enable guest→native command channel: the guest calls svcOpen("picoview")
+        // to confirm the channel, then svcSend() to push command JSON lines.
+        surface.set_svc_allowlist(["picoview"]);
         surface.feed_pak(&pak);
         let guest = Guest::new()?;
         surface.mount(&guest)?;
@@ -147,12 +168,15 @@ impl Runtime {
             json!({"t":"hello","w":args.viewport.0,"h":args.viewport.1,"epoch":epoch_ms()})
                 .to_string(),
         );
-        let mut current = CurrentItem::new();
-        if let Some(path) = &args.image {
+        let mut current = if let Some(path) = &args.image {
+            // Create a CurrentItem with a BrowseSession for the directory
+            // containing the initial image. The browse session enumerates
+            // supported images and enables Previous/Next navigation.
+            let mut item = CurrentItem::with_browse(path);
             // V1's only open: the boot image is a new item (there is no prior
             // publication to preserve). Boot is a legal request phase —
             // strictly before any guest turn.
-            current.open(
+            item.open(
                 &surface,
                 RequestPhase::before_guest_frame(),
                 path,
@@ -160,11 +184,22 @@ impl Runtime {
             );
             log::info!(
                 "current item: generation={} handle={:?} path={}",
-                current.generation(),
-                current.live_handle(),
+                item.generation(),
+                item.live_handle(),
                 path.display()
             );
-        }
+            if let Some(browse) = item.browse() {
+                log::info!(
+                    "browse session: dir={} count={} index={:?}",
+                    browse.dir().display(),
+                    browse.count(),
+                    browse.current_index()
+                );
+            }
+            item
+        } else {
+            CurrentItem::new()
+        };
         tlog("runtime booted (pak fed, guest mounted, source eval'd, current item opened)");
         Ok(Self {
             surface,
@@ -196,10 +231,18 @@ impl Runtime {
 
     fn tick(&mut self) -> Result<()> {
         self.offload.begin_frame();
-        // The guest emits no requests in V1; drain defensively so a stray
-        // svc line can never grow unbounded.
+        // Process guest commands: the guest sends command JSON lines via
+        // svcSend. Drain and process them before the guest frame. Each
+        // command gets its own RequestPhase token (consumed by open).
         for line in self.surface.svc_drain().into_iter().take(64) {
             log::debug!("guest svc: {line}");
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                if val.get("t").and_then(|v| v.as_str()) == Some("pv") {
+                    if let Some(cmd) = parse_command(&val) {
+                        self.current.handle_command(&self.surface, RequestPhase::before_guest_frame(), cmd);
+                    }
+                }
+            }
         }
         self.guest.frame(0)?;
         self.surface.tick();
