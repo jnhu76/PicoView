@@ -1,6 +1,6 @@
 ---
 feature: windows-shell-ui-polish-1
-status: in-progress
+status: ready-for-pr
 updated: 2026-09-18
 branch: feat/windows-shell-ui-polish-1
 commits: bbda8db50a99d8c35380e8831670219b75f5e962..1f85e11
@@ -97,13 +97,18 @@ Dependency: `rfd` on Windows only (target-gated). No second decode path.
 Product-claim association set (register/unregister only these):
 
 ```text
-.jpg .jpeg .png .bmp .gif .webp
+.jpg .jpeg .png .bmp
 ```
 
+GIF is excluded: current WIC first-frame decode is not full GIF product
+support (animation policy stays Issue #10). WebP is excluded until the
+product baseline is proven on supported Windows systems, not merely the
+local WIC install.
+
 BrowseSession may still enumerate additional extensions that WIC can open
-(`.tif` `.tiff` `.avif`) as directory candidates; those are **not** claimed
-for file association in this PR. Association eligibility ≠ codec discovery ≠
-BrowseSession filter.
+(`.tif` `.tiff` `.avif` `.gif` `.webp`) as directory candidates; those are
+**not** claimed for file association in this PR. Association eligibility ≠
+codec discovery ≠ BrowseSession filter.
 
 Registration mechanism: application-side CLI, not a full installer.
 
@@ -298,5 +303,5 @@ rotate/flip” claims are invalidated.
 - [x] T9: Release GUI subsystem + hidden-until-first-frame window — acceptance: release PE is Windows GUI; first visible state is dark PicoView shell after first present (covers: S4)
 - [x] T10: Association OpenWith-only registration — acceptance: register writes OpenWithProgids REG_NONE only; no extension default overwrite; unregister cleans ProgID + OpenWith (+ any stolen default) (covers: S4)
 - [x] T11: Keyboard canImage gate — acceptance: `keyboardIntent` blocks 0/1/+/- without image and 1 on proxy; guest tests cover the matrix (covers: S4)
-- [ ] T12: Hostile-CWD / path / console smoke + finalize — acceptance: launch from C:\ and %TEMP%, ASCII/spaces/CJK, no console, no white flash evidence recorded (covers: S4; depends: T8,T9,T10,T11)
+- [x] T12: Hostile-CWD / path / console smoke + finalize — acceptance: launch from C:\ and %TEMP%, ASCII/spaces/CJK, no console, no white flash evidence recorded (covers: S4; depends: T8,T9,T10,T11)
 - [x] T13: POST-#61 rebase/integration — acceptance: #61 ViewTransform/hello.scale/gesture/wheel/D4 preserved; PR60 shell re-applied; stale deferred claims removed (covers: S5)

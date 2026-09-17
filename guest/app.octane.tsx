@@ -182,6 +182,14 @@ export default function App() {
     const can100 = pub?.fullResolution === true;
 
     // --- keyboard ---
+    const shownForKeyboard =
+      displayVerdict(st) === "image"
+        ? pub?.name
+        : displayVerdict(st) === "loading" || displayVerdict(st) === "error"
+          ? st.request?.name
+          : undefined;
+    const canRefreshForKeyboard =
+      !!pub || (shownForKeyboard != null && shownForKeyboard !== "");
     for (const e of outcome.keyEvents) {
       const k = typeof e.k === "string" ? e.k : "";
       const ctrl = !!(e.cmd || e.ctl);
@@ -189,7 +197,7 @@ export default function App() {
         ctrl,
         canPrevious: st.browse.canPrevious,
         canNext: st.browse.canNext,
-        canRefresh: !!pub,
+        canRefresh: canRefreshForKeyboard,
         canImage,
         can100,
       });
