@@ -44,9 +44,12 @@ export interface GuestTurnOutcome {
   register: { key: string; handle: number } | null;
   /** True when the guest must re-render (Product state or binding moved). */
   render: boolean;
-  /** Key events collected during this turn. Each entry is a svc line with
-   *  t:"key" — the guest app can process these for keyboard shortcuts. */
+  /** Key events collected during this turn. */
   keyEvents: SvcLine[];
+  /** Pointer/mouse events (desktop host parity). */
+  mouseEvents: SvcLine[];
+  /** Wheel/scroll events. */
+  scrollEvents: SvcLine[];
 }
 
 /** Run one guest turn: `nextBatch` returns the next svc batch (a string of
@@ -58,6 +61,8 @@ export function runGuestTurn(
   let observer = state.observer;
   let changed = false;
   const keyEvents: SvcLine[] = [];
+  const mouseEvents: SvcLine[] = [];
+  const scrollEvents: SvcLine[] = [];
   for (;;) {
     const batch = nextBatch();
     // The pinned host returns undefined for an empty queue and never an
@@ -74,9 +79,17 @@ export function runGuestTurn(
         continue;
       }
       if (!v || typeof v !== "object") continue;
-      // Collect key events for the app to process (REAL-VIEWER-TRAIN-1).
+      // Transient view-input events never mutate Product publication state.
       if (v.t === "key" && typeof v.k === "string") {
         keyEvents.push(v);
+        continue;
+      }
+      if (v.t === "mouse") {
+        mouseEvents.push(v);
+        continue;
+      }
+      if (v.t === "scroll") {
+        scrollEvents.push(v);
         continue;
       }
       const next = reduceObserver(observer, v);
@@ -89,12 +102,14 @@ export function runGuestTurn(
   if (!changed && recon.binding === state.binding) {
     // Nothing to commit: no event moved the Product state and the binding
     // did not move. Hand the same state back — an idle turn is a no-op.
-    return { state, register: null, render: false, keyEvents };
+    return { state, register: null, render: false, keyEvents, mouseEvents, scrollEvents };
   }
   return {
     state: { observer, binding: recon.binding },
     register: recon.register,
     render: changed || recon.changed,
     keyEvents,
+    mouseEvents,
+    scrollEvents,
   };
 }

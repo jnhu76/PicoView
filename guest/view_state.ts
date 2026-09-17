@@ -15,18 +15,28 @@
 //   S → O (intrinsic) → U (user rotate/flip) → L (fit/zoom/pan) → P (DPI) → Display
 // This module owns the U → L stage: user transform + fit/zoom/pan geometry.
 //
-// Capability truth on the CURRENT PocketJS pin (`24bab5e`):
-//   - Fit / truthful 1:1 / deterministic Zoom +/- / Refresh / navigation are
-//     shipped product operations.
-//   - Rotate / Flip are PRECURSOR ONLY: PocketJS DrawList does not render
-//     rotated Image quads (conservatively culled). Helpers remain as pure
-//     ViewState math for a future framework integration; they are not wired
-//     to product UI and must not emit CSS `transform: "rotate(...)"`.
-//   - Pan helpers are presentation logic only:
-//       PAN_STATE_READY
-//       USER_GESTURE_PRECURSOR_REQUIRED
-//     The current PocketJS input surface does not expose pointer-drag /
-//     mouse-wheel paths to this viewer. No fake toolbar arrows.
+// Capability truth on the CURRENT PocketJS pin (`24bab5e`), re-verified by
+// PICOVIEW-VIEW-GEOMETRY-CORRECTIVE-1:
+//   - Fit / Actual Size / zoom / pan / rotate / flip are Product operations.
+//   - PocketJS DrawList DOES render rotated/transformed Image quads via
+//     TEX_TRI (emit_tex_quad); the old "conservatively culled" comment in
+//     draw.rs is stale documentation, not code reality.
+//   - Stock hosts/desktop already forwards CursorMoved / MouseInput /
+//     MouseWheel through bounded svc events. PicoView's Windows host now
+//     has semantic parity (see native/src/main.rs).
+//
+// Canonical geometry lives in guest/view_transform.ts. This file keeps
+// publication reconcile helpers and legacy view_state types used by older
+// tests; new product geometry must not add magic viewport deductions here.
+
+/** Publication identity used to decide whether navigation reset is needed. */
+export interface PublicationViewKey {
+  browseIndex: number | null;
+  name: string | undefined;
+  resourceWidth: number;
+  resourceHeight: number;
+  fullResolution: boolean;
+}
 
 /** View mode. */
 export type ViewMode = "fit" | "manual";
@@ -58,15 +68,6 @@ export interface ViewGeometry {
   imageH: number;
   viewportW: number;
   viewportH: number;
-}
-
-/** Publication identity used to decide whether navigation reset is needed. */
-export interface PublicationViewKey {
-  browseIndex: number | null;
-  name: string | undefined;
-  resourceWidth: number;
-  resourceHeight: number;
-  fullResolution: boolean;
 }
 
 /** Canonical zoom steps (common viewer progression). */

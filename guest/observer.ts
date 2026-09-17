@@ -68,7 +68,7 @@ export interface ObserverState {
   /** True once a terminal event (ready/error) closed seenGeneration; a
    *  same-generation event after the terminal is stale and never wins. */
   seenClosed: boolean;
-  viewport?: { w: number; h: number };
+  viewport?: { w: number; h: number; dpi?: number };
   /** Browse state (directory navigation). */
   browse: BrowseState;
 }
@@ -105,6 +105,16 @@ export interface SvcLine {
   canNext?: unknown;
   w?: unknown;
   h?: unknown;
+  /** Output scale: physical pixels per UI logical unit. */
+  scale?: unknown;
+  /** Pointer / mouse events (desktop host parity). */
+  x?: unknown;
+  y?: unknown;
+  d?: unknown;
+  b?: unknown;
+  sh?: unknown;
+  /** Wheel / scroll events. */
+  dy?: unknown;
   /** Keyboard key events from the desktop host (REAL-VIEWER-TRAIN-1). */
   k?: unknown;
   cmd?: unknown;
@@ -141,7 +151,8 @@ function extractBrowse(v: SvcLine): Partial<BrowseState> {
  *  trailing a terminal event of the same generation — never win. */
 export function reduceObserver(state: ObserverState, v: SvcLine): ObserverState {
   if ((v.t === "hello" || v.t === "resize") && typeof v.w === "number" && typeof v.h === "number") {
-    return { ...state, viewport: { w: v.w, h: v.h } };
+    const dpi = isNumber(v.scale) && v.scale > 0 ? v.scale : (state.viewport?.dpi ?? 1);
+    return { ...state, viewport: { w: v.w, h: v.h, dpi } };
   }
   if (v.t !== "current-item") return state;
   if (!isGeneration(v.g)) return state;

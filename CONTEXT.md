@@ -38,6 +38,18 @@ LEGAL Product transition constructs `RequestPhase` before the tick's guest
 frame; the tokens are review friction, not a claim about fabricated illegal
 use.
 
+Campaign `PICOVIEW-VIEW-GEOMETRY-CORRECTIVE-1` (2026-09-18, branch
+`corrective/view-geometry-1`) re-verified PocketJS pin `24bab5e` code reality
+(rotated Image → TEX_TRI already implemented; desktop host already forwards
+mouse/scroll) and replaced ad-hoc view math with one pure transform model:
+DPI-explicit Actual Size (`productZoom / dpiScale`), frozen image viewport
+(`shell_layout.ts`), correct pointer-anchored `zoomAt`, EXIF orientation
+materialized into O at decode, host mouse/wheel parity, and Rotate/Flip UI
+via PocketJS `rotate`/`scaleX`/`scaleY` props. Stale gap claims
+`POCKETJS_GAP_TEXTURED_2D_TRANSFORM` / `POCKETJS_GAP_INPUT_GESTURES` are
+invalidated as capability gaps; remaining work is product host/guest parity
+and interaction polish. Evidence: `docs/compose/spec/view-geometry-1.md`.
+
 The next work is the remaining PicoView-side corrections (R3): truthful
 full-resolution capability, generic color/alpha admission.
 

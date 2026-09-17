@@ -90,8 +90,9 @@ fn parse_args() -> Result<Args> {
 
 enum Input {
     Quit,
-    Resize(u32, u32),
-    /// Prebuilt svc JSON line pushed into the guest poll queue (key events).
+    /// Logical viewport + output scale (physical px per logical unit).
+    Resize(u32, u32, f64),
+    /// Prebuilt svc JSON line pushed into the guest poll queue.
     Service(String),
 }
 
@@ -115,6 +116,7 @@ fn key_name(key: &Key) -> String {
             NamedKey::End => "end".into(),
             NamedKey::PageUp => "pageup".into(),
             NamedKey::PageDown => "pagedown".into(),
+            NamedKey::F5 => "f5".into(),
             _ => String::new(),
         },
         _ => String::new(),
@@ -162,6 +164,8 @@ struct Runtime {
     offload: OffloadWorker,
     viewport: (u32, u32),
     density: u32,
+    /// Physical pixels per UI logical unit.
+    dpi_scale: f64,
     ticks: u64,
     /// Native Current Item truth. V1 opens exactly once at boot; nothing reads
     /// the field back yet, but it must outlive the process for the resource
@@ -195,7 +199,7 @@ impl Runtime {
             return Err(anyhow!("bundle installed no frame handler"));
         }
         surface.svc_push(
-            json!({"t":"hello","w":args.viewport.0,"h":args.viewport.1,"epoch":epoch_ms()})
+            json!({"t":"hello","w":args.viewport.0,"h":args.viewport.1,"scale":1.0,"epoch":epoch_ms()})
                 .to_string(),
         );
         let mut current = if let Some(path) = &args.image {
@@ -237,6 +241,7 @@ impl Runtime {
             offload,
             viewport: args.viewport,
             density: args.density,
+            dpi_scale: 1.0,
             ticks: 0,
             current,
         })
@@ -249,15 +254,17 @@ impl Runtime {
                 // Keyboard and other host→guest scalar events.
                 self.surface.svc_push(line);
             }
-            Input::Resize(w, h) => {
+            Input::Resize(w, h, scale) => {
                 self.viewport = (w, h);
+                self.dpi_scale = if scale > 0.0 { scale } else { 1.0 };
                 self.surface.with_ui(|ui| ui.set_viewport(w as f32, h as f32));
                 self.guest.eval(
                     "resize",
                     &format!("globalThis.__pocketResizeViewport?.({w},{h})"),
                 )?;
-                self.surface
-                    .svc_push(json!({"t":"resize","w":w,"h":h}).to_string());
+                self.surface.svc_push(
+                    json!({"t":"resize","w":w,"h":h,"scale":self.dpi_scale}).to_string(),
+                );
             }
         }
         Ok(true)
@@ -428,6 +435,10 @@ struct Host {
     viewport: (u32, u32),
     failure: Option<String>,
     modifiers: ModifiersState,
+    /// Logical pointer position (window scale-normalized).
+    pointer: (f64, f64),
+    /// Left button down.
+    pointer_down: bool,
 }
 
 impl Host {
@@ -532,6 +543,69 @@ impl ApplicationHandler<Wake> for Host {
             winit::event::WindowEvent::ModifiersChanged(state) => {
                 self.modifiers = state.state();
             }
+            winit::event::WindowEvent::Focused(false) => {
+                self.pointer_down = false;
+                // Focus-loss resets in-progress pointer gestures.
+                self.tx
+                    .try_send(Input::Service(
+                        json!({"t":"mouse","x":self.pointer.0,"y":self.pointer.1,"d":false,"b":0,"sh":false})
+                            .to_string(),
+                    ))
+                    .ok();
+            }
+            winit::event::WindowEvent::CursorMoved { position, .. } => {
+                let scale = self.window.as_ref().unwrap().scale_factor();
+                self.pointer = (position.x / scale, position.y / scale);
+                let line = json!({
+                    "t": "mouse",
+                    "x": self.pointer.0,
+                    "y": self.pointer.1,
+                    "d": self.pointer_down,
+                    "b": 0,
+                    "sh": self.modifiers.shift_key(),
+                })
+                .to_string();
+                self.tx.try_send(Input::Service(line)).ok();
+            }
+            winit::event::WindowEvent::MouseInput { state, button, .. } => {
+                if button == winit::event::MouseButton::Left {
+                    self.pointer_down = state == ElementState::Pressed;
+                }
+                let line = json!({
+                    "t": "mouse",
+                    "x": self.pointer.0,
+                    "y": self.pointer.1,
+                    "d": state == ElementState::Pressed,
+                    "b": if button == winit::event::MouseButton::Right { 2 } else { 0 },
+                    "sh": self.modifiers.shift_key(),
+                })
+                .to_string();
+                self.tx.try_send(Input::Service(line)).ok();
+            }
+            winit::event::WindowEvent::MouseWheel { delta, .. } => {
+                let dy = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(_, y) => {
+                        -(y as f64) * 24.0
+                    }
+                    winit::event::MouseScrollDelta::PixelDelta(p) => -p.y,
+                };
+                // Coalesce nothing here; guest accumulates high-res deltas.
+                let line = json!({ "t": "scroll", "dy": dy }).to_string();
+                self.tx.try_send(Input::Service(line)).ok();
+            }
+            winit::event::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                tlog(&format!("ScaleFactorChanged {scale_factor}"));
+                let Some(window) = &self.window else { return };
+                let size = window.inner_size();
+                let logical = (
+                    (size.width as f64 / scale_factor).round().clamp(240.0, 4096.0) as u32,
+                    (size.height as f64 / scale_factor).round().clamp(180.0, 4096.0) as u32,
+                );
+                self.tx
+                    .try_send(Input::Resize(logical.0, logical.1, scale_factor))
+                    .ok();
+                window.request_redraw();
+            }
             winit::event::WindowEvent::KeyboardInput { event, .. } => {
                 if event.state != ElementState::Pressed {
                     return;
@@ -574,7 +648,9 @@ impl ApplicationHandler<Wake> for Host {
                     (size.width as f64 / scale).round().clamp(240.0, 4096.0) as u32,
                     (size.height as f64 / scale).round().clamp(180.0, 4096.0) as u32,
                 );
-                self.tx.try_send(Input::Resize(logical.0, logical.1)).ok();
+                self.tx
+                    .try_send(Input::Resize(logical.0, logical.1, scale))
+                    .ok();
                 self.window.as_ref().unwrap().request_redraw();
             }
             _ => {}
@@ -600,6 +676,8 @@ fn main() -> Result<()> {
         viewport: args.viewport,
         failure: None,
         modifiers: ModifiersState::default(),
+        pointer: (0.0, 0.0),
+        pointer_down: false,
     };
     host.startup = Some(RuntimeStartup {
         args,

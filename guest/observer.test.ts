@@ -151,11 +151,11 @@ test("several ready events in one turn collapse to the final publication", () =>
 
 test("viewport events update fit input without touching publication", () => {
   let s = reduceObserver(initialObserverState(), { t: "hello", w: 960, h: 640 });
-  expect(s.viewport).toEqual({ w: 960, h: 640 });
+  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1 });
   s = reduceObserver(s, ready(1, 11, 1920, 1080));
-  expect(s.viewport).toEqual({ w: 960, h: 640 });
-  s = reduceObserver(s, { t: "resize", w: 1280, h: 720 });
-  expect(s.viewport).toEqual({ w: 1280, h: 720 });
+  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1 });
+  s = reduceObserver(s, { t: "resize", w: 1280, h: 720, scale: 1.5 });
+  expect(s.viewport).toEqual({ w: 1280, h: 720, dpi: 1.5 });
   expect(s.publication).toMatchObject({ handle: 11 });
 });
 
