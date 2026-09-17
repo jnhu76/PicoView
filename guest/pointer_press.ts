@@ -38,6 +38,46 @@ export interface PointerPressController {
   owner(): unknown;
 }
 
+/**
+ * PR61-CORRECTIVE-1 MAJOR-C: one gesture owner chosen on the UP→DOWN edge
+ * only. Motion while held must never transfer ownership.
+ */
+export type GestureOwner = "none" | "toolbar" | "canvas";
+
+export interface HeldGesture {
+  owner: GestureOwner;
+  wasDown: boolean;
+}
+
+export const IDLE_GESTURE: HeldGesture = { owner: "none", wasDown: false };
+
+export function classifyGestureOwner(input: {
+  claimedFocusable: boolean;
+  inImageViewport: boolean;
+  canImage: boolean;
+}): GestureOwner {
+  if (input.claimedFocusable) return "toolbar";
+  if (input.inImageViewport && input.canImage) return "canvas";
+  return "none";
+}
+
+/**
+ * Pure held-gesture state machine. Down-edge chooses owner exactly once;
+ * held packets keep the owner; release/cancel clear it.
+ */
+export function nextHeldGesture(
+  prev: HeldGesture,
+  packet: { down: boolean; cancel?: boolean },
+  classify: () => GestureOwner,
+): HeldGesture {
+  if (packet.cancel) return IDLE_GESTURE;
+  if (packet.down && !prev.wasDown) {
+    return { owner: classify(), wasDown: true };
+  }
+  if (!packet.down) return IDLE_GESTURE;
+  return prev;
+}
+
 export function createPointerPress(
   authority: PointerPressAuthority,
 ): PointerPressController {

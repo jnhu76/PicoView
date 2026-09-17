@@ -132,6 +132,59 @@ export function setDpiScale(
   return { ...state, dpiScale: d };
 }
 
+/**
+ * Window geometry facts that affect Fit / pan clamp but are NOT publication
+ * identity. Kept separate from PublicationViewKey on purpose.
+ */
+export interface ViewEnvironment {
+  viewport: ImageViewport;
+  dpiScale: number;
+}
+
+export function viewEnvironmentsEqual(
+  a: ViewEnvironment | null,
+  b: ViewEnvironment,
+): boolean {
+  if (!a) return false;
+  return (
+    a.viewport.x === b.viewport.x &&
+    a.viewport.y === b.viewport.y &&
+    a.viewport.width === b.viewport.width &&
+    a.viewport.height === b.viewport.height &&
+    a.dpiScale === b.dpiScale
+  );
+}
+
+/**
+ * PR61-CORRECTIVE-1 MAJOR-A: reconcile view state when viewport and/or DPI
+ * change. Presentation only — never reopens / re-decodes a publication.
+ *
+ * Fit: recompute Fit product zoom from the new environment (pan 0).
+ * Manual: preserve Product zoom and orientation; clamp pan against the new
+ * realized scale. Do NOT silently return to Fit.
+ *
+ * Idempotent: equivalent environment facts must not change the view.
+ */
+export function reconcileViewEnvironment(
+  img: OrientedImage,
+  previous: ViewEnvironment | null,
+  next: ViewEnvironment,
+  state: ViewTransform,
+): ViewTransform {
+  const d = next.dpiScale > 0 ? next.dpiScale : 1;
+  const withDpi = setDpiScale(state, d);
+  if (viewEnvironmentsEqual(previous, { viewport: next.viewport, dpiScale: d })) {
+    return withDpi;
+  }
+  if (img.width <= 0 || img.height <= 0) {
+    return withDpi;
+  }
+  if (withDpi.mode === "fit") {
+    return fitView(img, next.viewport, withDpi);
+  }
+  return clampPan(img, next.viewport, withDpi);
+}
+
 /** Extent of O after the user D4 orientation (AABB in the visible frame). */
 export function userExtent(
   img: OrientedImage,
@@ -461,6 +514,25 @@ export function resetForNewPublication(
   dpiScale: number,
 ): ViewTransform {
   return fitView(img, viewport, initialViewTransform(dpiScale));
+}
+
+/**
+ * Apply a user D4 orientation while keeping Fit honest.
+ * Fit is a function of post-user-transform extent (ARCHITECTURE §5.4), so a
+ * rotate/flip in Fit mode must re-materialize Fit product zoom. Manual keeps
+ * Product zoom and only clamps pan against the new extent.
+ */
+export function setUserOrientation(
+  img: OrientedImage,
+  viewport: ImageViewport,
+  state: ViewTransform,
+  orientation: UserOrientation,
+): ViewTransform {
+  const next = { ...state, orientation };
+  if (next.mode === "fit") {
+    return fitView(img, viewport, next);
+  }
+  return clampPan(img, viewport, next);
 }
 
 /** Display label. Proxy images never claim source-relative 100%. */

@@ -612,7 +612,16 @@ impl ApplicationHandler<Wake> for Host {
                     winit::event::MouseScrollDelta::PixelDelta(p) => -p.y,
                 };
                 // Coalesce nothing here; guest accumulates high-res deltas.
-                let line = json!({ "t": "scroll", "dy": dy }).to_string();
+                // x/y = latest logical pointer known by the host so wheel zoom
+                // stays pointer-anchored even when CursorMoved is not in this
+                // turn (PR61-CORRECTIVE-1 MAJOR-B).
+                let line = json!({
+                    "t": "scroll",
+                    "dy": dy,
+                    "x": self.pointer.0,
+                    "y": self.pointer.1
+                })
+                .to_string();
                 self.tx.try_send(Input::Service(line)).ok();
             }
             winit::event::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {

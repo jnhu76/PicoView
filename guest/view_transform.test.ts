@@ -1,4 +1,5 @@
 import { test, expect } from "bun:test";
+import { pointInImageViewport, wheelFocusPoint } from "./shell_layout.ts";
 import {
   IDENTITY_ORIENTATION,
   actualSize,
@@ -14,13 +15,16 @@ import {
   orientationsEqual,
   panBy,
   pocketImageStyle,
+  reconcileViewEnvironment,
   resetForNewPublication,
   resetView,
   rotateLeft,
   rotateRight,
   setDpiScale,
+  setUserOrientation,
   userExtent,
   userImageToViewport,
+  viewEnvironmentsEqual,
   viewportToUserImage,
   zoomAt,
   zoomIn,
@@ -29,6 +33,7 @@ import {
   type OrientedImage,
   type ImageViewport,
   type UserOrientation,
+  type ViewEnvironment,
   type ViewTransform,
 } from "./view_transform.ts";
 
@@ -414,4 +419,253 @@ test("FH then FV is semantically R180, not a stuck double-flip", () => {
     scaleX: -1,
     scaleY: 1,
   });
+});
+
+// --- PR61-CORRECTIVE-1 MAJOR-A: viewport / DPI reconcile ----------------------
+
+const big: OrientedImage = { width: 4000, height: 3000 };
+const vpA: ImageViewport = { x: 0, y: 0, width: 1000, height: 700 };
+const vpB: ImageViewport = { x: 0, y: 0, width: 600, height: 400 };
+const vpC: ImageViewport = { x: 0, y: 0, width: 2000, height: 1400 };
+
+function env(v: ImageViewport, dpiScale: number): ViewEnvironment {
+  return { viewport: v, dpiScale };
+}
+
+test("A1 Fit resize narrower recomputes productZoom and recenters", () => {
+  const start = fitView(big, vpA, initialViewTransform(1));
+  almost(start.productZoom, fitProductZoom(big, vpA, 1, IDENTITY_ORIENTATION));
+  const next = reconcileViewEnvironment(
+    big,
+    env(vpA, 1),
+    env(vpB, 1),
+    start,
+  );
+  expect(next.mode).toBe("fit");
+  almost(next.productZoom, fitProductZoom(big, vpB, 1, IDENTITY_ORIENTATION));
+  almost(next.panX, 0);
+  almost(next.panY, 0);
+});
+
+test("A2 Fit resize larger recomputes and respects no-upscale", () => {
+  const start = fitView(big, vpB, initialViewTransform(1));
+  const next = reconcileViewEnvironment(
+    big,
+    env(vpB, 1),
+    env(vpC, 1),
+    start,
+  );
+  expect(next.mode).toBe("fit");
+  expect(next.productZoom).toBeGreaterThan(start.productZoom);
+  expect(next.productZoom).toBeLessThanOrEqual(1);
+  almost(next.productZoom, fitProductZoom(big, vpC, 1, IDENTITY_ORIENTATION));
+});
+
+test("A2b Fit small viewport→large still never upscales past 1", () => {
+  const smallImg: OrientedImage = { width: 200, height: 150 };
+  const start = fitView(smallImg, vpB, initialViewTransform(1));
+  expect(start.productZoom).toBe(1);
+  const next = reconcileViewEnvironment(
+    smallImg,
+    env(vpB, 1),
+    env(vpC, 1),
+    start,
+  );
+  expect(next.productZoom).toBe(1);
+});
+
+test("A3 Fit DPI transition recomputes productZoom with new dpi", () => {
+  const start = fitView(big, vpA, initialViewTransform(1));
+  const next = reconcileViewEnvironment(
+    big,
+    env(vpA, 1),
+    env(vpA, 1.5),
+    start,
+  );
+  expect(next.mode).toBe("fit");
+  expect(next.dpiScale).toBe(1.5);
+  almost(next.productZoom, fitProductZoom(big, vpA, 1.5, IDENTITY_ORIENTATION));
+  // Fit physical result: realized = z/d still maps image into viewport.
+  const realized = next.productZoom / next.dpiScale;
+  const draw = drawnExtent(big, next);
+  expect(draw.width).toBeLessThanOrEqual(vpA.width + 1e-6);
+  expect(draw.height).toBeLessThanOrEqual(vpA.height + 1e-6);
+  almost(realized, next.productZoom / 1.5);
+});
+
+test("A4 Manual resize preserves productZoom and clamps pan only if needed", () => {
+  let start = actualSize(initialViewTransform(1));
+  start = { ...start, productZoom: 2, panX: 800, panY: 500 };
+  const next = reconcileViewEnvironment(
+    big,
+    env(vpA, 1),
+    env(vpB, 1),
+    start,
+  );
+  expect(next.mode).toBe("manual");
+  expect(next.productZoom).toBe(2);
+  // Pan must be clamped to the new viewport's allowed range.
+  const maxX = Math.max(0, (drawnExtent(big, next).width - vpB.width) / 2);
+  const maxY = Math.max(0, (drawnExtent(big, next).height - vpB.height) / 2);
+  expect(Math.abs(next.panX)).toBeLessThanOrEqual(maxX + 1e-6);
+  expect(Math.abs(next.panY)).toBeLessThanOrEqual(maxY + 1e-6);
+});
+
+test("A4b Manual resize does not silently return to Fit", () => {
+  const start = zoomIn(big, vpA, fitView(big, vpA, initialViewTransform(1)));
+  expect(start.mode).toBe("manual");
+  const next = reconcileViewEnvironment(
+    big,
+    env(vpA, 1),
+    env(vpB, 1),
+    start,
+  );
+  expect(next.mode).toBe("manual");
+  expect(next.productZoom).toBe(start.productZoom);
+});
+
+test("A5 Manual DPI transition keeps 100% product zoom and realizes 1/d", () => {
+  const start = actualSize(initialViewTransform(1));
+  const next = reconcileViewEnvironment(
+    big,
+    env(vpA, 1),
+    env(vpA, 2),
+    start,
+  );
+  expect(next.mode).toBe("manual");
+  expect(next.productZoom).toBe(1);
+  expect(next.dpiScale).toBe(2);
+  almost(next.productZoom / next.dpiScale, 0.5);
+});
+
+test("A6 Fit after R90 resize uses swapped user extent", () => {
+  let start = fitView(landscape, vp, initialViewTransform(1));
+  start = { ...start, orientation: rotateRight(IDENTITY_ORIENTATION) };
+  start = fitView(landscape, vp, start);
+  const next = reconcileViewEnvironment(
+    landscape,
+    env(vp, 1),
+    env(vpB, 1),
+    start,
+  );
+  expect(next.mode).toBe("fit");
+  expect(next.orientation.rotate).toBe(90);
+  almost(
+    next.productZoom,
+    fitProductZoom(landscape, vpB, 1, next.orientation),
+  );
+});
+
+test("A6b setUserOrientation while Fit recomputes productZoom (app path)", () => {
+  // Landscape Fit: width-bound. After R90 the extent swaps and height binds.
+  const fit0 = fitView(landscape, vp, initialViewTransform(1));
+  almost(fit0.productZoom, fitProductZoom(landscape, vp, 1, IDENTITY_ORIENTATION));
+  const r90 = setUserOrientation(
+    landscape,
+    vp,
+    fit0,
+    rotateRight(IDENTITY_ORIENTATION),
+  );
+  expect(r90.mode).toBe("fit");
+  expect(r90.orientation.rotate).toBe(90);
+  almost(
+    r90.productZoom,
+    fitProductZoom(landscape, vp, 1, r90.orientation),
+  );
+  // Drawn AABB after R90 must still fit the viewport.
+  const draw = drawnExtent(landscape, r90);
+  expect(draw.width).toBeLessThanOrEqual(vp.width + 1e-6);
+  expect(draw.height).toBeLessThanOrEqual(vp.height + 1e-6);
+  // Without the re-fit, stale pre-rotate zoom would overflow height.
+  expect(r90.productZoom).not.toBe(fit0.productZoom);
+});
+
+test("A6c setUserOrientation in manual keeps productZoom and clamps pan", () => {
+  let manual = actualSize(initialViewTransform(1));
+  manual = { ...manual, productZoom: 2, panX: 400, panY: 100 };
+  const r90 = setUserOrientation(
+    landscape,
+    vp,
+    manual,
+    rotateRight(IDENTITY_ORIENTATION),
+  );
+  expect(r90.mode).toBe("manual");
+  expect(r90.productZoom).toBe(2);
+  expect(r90.orientation.rotate).toBe(90);
+  const maxX = Math.max(0, (drawnExtent(landscape, r90).width - vp.width) / 2);
+  const maxY = Math.max(0, (drawnExtent(landscape, r90).height - vp.height) / 2);
+  expect(Math.abs(r90.panX)).toBeLessThanOrEqual(maxX + 1e-6);
+  expect(Math.abs(r90.panY)).toBeLessThanOrEqual(maxY + 1e-6);
+});
+
+test("reconcile idempotent for equivalent environment facts", () => {
+  const start = fitView(big, vpA, initialViewTransform(1));
+  const once = reconcileViewEnvironment(big, env(vpA, 1), env(vpA, 1), start);
+  const twice = reconcileViewEnvironment(
+    big,
+    env(vpA, 1),
+    env(vpA, 1),
+    once,
+  );
+  almost(twice.productZoom, start.productZoom);
+  almost(twice.panX, 0);
+  expect(twice.mode).toBe("fit");
+  // Same facts → no semantic change, same reference.
+  expect(once).toBe(start);
+  expect(twice).toBe(start);
+});
+
+test("reconcile from unknown previous still stabilizes Fit", () => {
+  const start = fitView(big, vpA, initialViewTransform(1));
+  const first = reconcileViewEnvironment(big, null, env(vpA, 1), start);
+  almost(first.productZoom, start.productZoom);
+  const second = reconcileViewEnvironment(big, env(vpA, 1), env(vpA, 1), first);
+  expect(second).toBe(first);
+});
+
+test("viewEnvironmentsEqual", () => {
+  expect(viewEnvironmentsEqual(null, env(vpA, 1))).toBe(false);
+  expect(viewEnvironmentsEqual(env(vpA, 1), env(vpA, 1))).toBe(true);
+  expect(viewEnvironmentsEqual(env(vpA, 1), env(vpB, 1))).toBe(false);
+  expect(viewEnvironmentsEqual(env(vpA, 1), env(vpA, 1.5))).toBe(false);
+});
+
+// --- PR61-CORRECTIVE-1 MAJOR-B: cross-turn wheel pipeline --------------------
+
+test("B1 CursorMoved turn N + wheel turn N+1 anchors at last pointer", () => {
+  // Window image viewport: y starts at chrome 100.
+  const windowVp: ImageViewport = { x: 0, y: 100, width: 960, height: 512 };
+  const s0 = actualSize(initialViewTransform(1));
+  // Turn N: pointer moved to window-logical (200, 280) → canvas-local (200, 180).
+  const pointer = { x: 200, y: 280, known: true };
+  expect(pointInImageViewport(windowVp, pointer.x, pointer.y)).toBe(true);
+  // Turn N+1: only scroll — no mouse packet. Anchor must still be the pointer.
+  const focus = wheelFocusPoint(windowVp, pointer);
+  expect(focus).toEqual({ x: 200, y: 280 });
+  const s1 = zoomAt(landscape, windowVp, s0, focus.x, focus.y, 2);
+  checkAnchor(landscape, windowVp, s0, s1, 200, 280);
+});
+
+test("B2 three wheel turns without motion share one anchor", () => {
+  const windowVp: ImageViewport = { x: 0, y: 100, width: 960, height: 512 };
+  let s = actualSize(initialViewTransform(1));
+  const pointer = { x: 700, y: 400, known: true };
+  const focus0 = wheelFocusPoint(windowVp, pointer);
+  for (let i = 0; i < 3; i++) {
+    const stepped = zoomIn(landscape, windowVp, s);
+    s = zoomAt(landscape, windowVp, s, focus0.x, focus0.y, stepped.productZoom);
+    const focusAgain = wheelFocusPoint(windowVp, pointer);
+    expect(focusAgain).toEqual(focus0);
+  }
+  // Final mapping still holds the original sample under the pointer.
+  const before = viewportToUserImage(
+    actualSize(initialViewTransform(1)),
+    windowVp,
+    landscape,
+    focus0.x,
+    focus0.y,
+  );
+  const after = viewportToUserImage(s, windowVp, landscape, focus0.x, focus0.y);
+  almost(after.x, before.x, 1.0);
+  almost(after.y, before.y, 1.0);
 });

@@ -44,3 +44,25 @@ export function pointInImageViewport(
     y < viewport.y + viewport.height
   );
 }
+
+/**
+ * PR61-CORRECTIVE-1 MAJOR-B: wheel zoom anchor.
+ * Persist last logical pointer across guest turns. If that point is inside
+ * the image viewport, zoom around it; never anchor to toolbar coordinates.
+ * Otherwise fall back to the image-viewport center.
+ */
+export function wheelFocusPoint(
+  viewport: ImageViewport,
+  pointer: { x: number; y: number; known: boolean },
+): { x: number; y: number } {
+  if (
+    pointer.known &&
+    pointInImageViewport(viewport, pointer.x, pointer.y)
+  ) {
+    return { x: pointer.x, y: pointer.y };
+  }
+  return {
+    x: viewport.x + viewport.width / 2,
+    y: viewport.y + viewport.height / 2,
+  };
+}

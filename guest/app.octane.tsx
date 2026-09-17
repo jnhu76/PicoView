@@ -17,7 +17,11 @@ import {
 import { textureKeyFor, type BoundPublication } from "./binding.ts";
 import { runGuestTurn } from "./turn.ts";
 import { cmdPrevious, cmdNext, cmdRefresh } from "./commands.ts";
-import { imageViewport, pointInImageViewport } from "./shell_layout.ts";
+import {
+  imageViewport,
+  pointInImageViewport,
+  wheelFocusPoint,
+} from "./shell_layout.ts";
 import {
   publicationViewKeyFrom,
   reconcileViewForPublication,
@@ -31,19 +35,27 @@ import {
   initialViewTransform,
   panBy,
   pocketImageStyle,
+  reconcileViewEnvironment,
   resetForNewPublication,
   resetView,
   rotateLeft,
   rotateRight,
-  setDpiScale,
+  setUserOrientation,
   zoomAt,
   zoomIn,
   zoomLabel,
   zoomOut,
   type OrientedImage,
+  type ViewEnvironment,
   type ViewTransform,
 } from "./view_transform.ts";
-import { createPointerPress } from "./pointer_press.ts";
+import {
+  createPointerPress,
+  IDLE_GESTURE,
+  classifyGestureOwner,
+  nextHeldGesture,
+  type HeldGesture,
+} from "./pointer_press.ts";
 
 // PicoView viewer shell (PICOVIEW-VIEW-GEOMETRY-CORRECTIVE-1).
 //
@@ -53,7 +65,6 @@ import { createPointerPress } from "./pointer_press.ts";
 // Pointer and wheel events are host-forwarded (desktop host parity).
 
 type PointerDrag = {
-  active: boolean;
   lastX: number;
   lastY: number;
 };
@@ -66,7 +77,11 @@ export default function App() {
   const viewRef = useRef<ViewTransform>(initialViewTransform());
   const [viewState, setViewState] = useState<ViewTransform>(initialViewTransform());
   const viewKey = useRef<PublicationViewKey | null>(null);
-  const drag = useRef<PointerDrag>({ active: false, lastX: 0, lastY: 0 });
+  const envKey = useRef<ViewEnvironment | null>(null);
+  const drag = useRef<PointerDrag>({ lastX: 0, lastY: 0 });
+  const gesture = useRef<HeldGesture>(IDLE_GESTURE);
+  // MAJOR-B: last logical pointer known to the guest — survives across turns.
+  const lastPointer = useRef({ x: 0, y: 0, known: false });
   const wheelAcc = useRef(0);
   // MAJOR-2: svc mouse is not onPress. Wire PocketJS hit→press so toolbar
   // ToolButtons work with a real Windows mouse (keyboard stays on shortcuts).
@@ -113,12 +128,6 @@ export default function App() {
     };
     const hasImage = img.width > 0 && img.height > 0;
 
-    // Keep DPI as an explicit view fact (does not reset zoom).
-    if (viewRef.current.dpiScale !== dpi) {
-      viewRef.current = setDpiScale(viewRef.current, dpi);
-      setViewState(viewRef.current);
-    }
-
     const nextKey = publicationViewKeyFrom(item.current);
     const action = reconcileViewForPublication(viewKey.current, nextKey);
     if (action === "reset") {
@@ -131,6 +140,21 @@ export default function App() {
       setViewState(viewRef.current);
     }
     viewKey.current = nextKey;
+
+    // MAJOR-A: viewport/DPI are a separate reconciliation layer from
+    // publication identity. Fit recomputes; Manual preserves zoom and clamps.
+    const env: ViewEnvironment = { viewport: vp, dpiScale: dpi };
+    const nextView = reconcileViewEnvironment(
+      img,
+      envKey.current,
+      env,
+      viewRef.current,
+    );
+    if (nextView !== viewRef.current) {
+      viewRef.current = nextView;
+      setViewState(nextView);
+    }
+    envKey.current = env;
 
     const apply = (fn: (s: ViewTransform) => ViewTransform) => {
       const next = fn(viewRef.current);
@@ -178,40 +202,59 @@ export default function App() {
       }
     }
 
-    // --- pointer drag pan + toolbar onPress ---
+    // --- pointer drag pan + toolbar onPress (MAJOR-C ownership) ---
     for (const e of outcome.mouseEvents) {
       const x = typeof e.x === "number" ? e.x : 0;
       const y = typeof e.y === "number" ? e.y : 0;
       const down = e.d === true;
       const cancel = e.cancel === true;
-      // Feed the shared press authority first (toolbar / any focusable).
-      // Host Focused(false) sends cancel:true — drop press WITHOUT onPress.
+      // Latest logical pointer is authority for later wheel turns (MAJOR-B).
+      lastPointer.current = { x, y, known: true };
+
       if (cancel) {
         pointerPress.current.cancel();
-        drag.current.active = false;
+        gesture.current = IDLE_GESTURE;
         continue;
       }
-      pointerPress.current.update({ x, y, down });
+
+      const claimed = pointerPress.current.update({ x, y, down });
       const inCanvas = pointInImageViewport(vp, x, y);
-      // Drag-pan only from the image canvas — never from a toolbar press.
-      if (down && !drag.current.active && inCanvas && canImage) {
-        drag.current = { active: true, lastX: x, lastY: y };
-      }
-      if (!down) {
-        drag.current.active = false;
-      }
-      if (drag.current.active && canImage) {
-        const dx = x - drag.current.lastX;
-        const dy = y - drag.current.lastY;
-        drag.current.lastX = x;
-        drag.current.lastY = y;
-        if (dx !== 0 || dy !== 0) {
-          applyView(panBy(img, vp, viewRef.current, dx, dy));
+      const prev = gesture.current;
+      gesture.current = nextHeldGesture(prev, { down }, () =>
+        classifyGestureOwner({
+          claimedFocusable: claimed,
+          inImageViewport: inCanvas,
+          canImage,
+        }),
+      );
+      const owner = gesture.current.owner;
+
+      // Canvas pan only when THIS down-edge chose canvas. Ownership never
+      // transfers toolbar→canvas / canvas→toolbar / none→canvas while held.
+      if (owner === "canvas" && canImage) {
+        if (!prev.wasDown || prev.owner !== "canvas") {
+          drag.current = { lastX: x, lastY: y };
+        } else {
+          const dx = x - drag.current.lastX;
+          const dy = y - drag.current.lastY;
+          drag.current.lastX = x;
+          drag.current.lastY = y;
+          if (dx !== 0 || dy !== 0) {
+            applyView(panBy(img, vp, viewRef.current, dx, dy));
+          }
         }
       }
     }
 
-    // --- wheel zoom (coalesce high-res deltas) ---
+    // Host scroll may carry latest logical pointer; guest also keeps its own
+    // persistent pointer so a wheel turn without CursorMoved still anchors.
+    for (const e of outcome.scrollEvents) {
+      if (typeof e.x === "number" && typeof e.y === "number") {
+        lastPointer.current = { x: e.x, y: e.y, known: true };
+      }
+    }
+
+    // --- wheel zoom (coalesce high-res deltas; MAJOR-B anchor) ---
     if (canImage) {
       let acc = wheelAcc.current;
       for (const e of outcome.scrollEvents) {
@@ -223,28 +266,15 @@ export default function App() {
       if (Math.abs(acc) >= NOTCH) {
         const steps = Math.trunc(acc / NOTCH);
         acc -= steps * NOTCH;
-        const last = outcome.scrollEvents[outcome.scrollEvents.length - 1];
-        const fx = typeof last?.x === "number" ? last.x : vp.x + vp.width / 2;
-        const fy = typeof last?.y === "number" ? last.y : vp.y + vp.height / 2;
-        // Prefer pointer over canvas if present in last mouse; else center.
-        let focusX = vp.x + vp.width / 2;
-        let focusY = vp.y + vp.height / 2;
-        const lastMouse = outcome.mouseEvents[outcome.mouseEvents.length - 1];
-        if (lastMouse && typeof lastMouse.x === "number") {
-          focusX = lastMouse.x;
-          focusY = typeof lastMouse.y === "number" ? lastMouse.y : focusY;
-        } else if (typeof last?.x === "number") {
-          focusX = fx;
-          focusY = fy;
-        }
+        const focus = wheelFocusPoint(vp, lastPointer.current);
         let next = viewRef.current;
         for (let i = 0; i < Math.abs(steps); i++) {
           const stepped =
             steps > 0
               ? zoomIn(img, vp, next)
               : zoomOut(img, vp, next);
-          // Re-anchor each step at the pointer.
-          next = zoomAt(img, vp, next, focusX, focusY, stepped.productZoom);
+          // Re-anchor each step at the persistent pointer.
+          next = zoomAt(img, vp, next, focus.x, focus.y, stepped.productZoom);
         }
         applyView(next);
       }
@@ -334,22 +364,34 @@ export default function App() {
         <ToolBtn
           label="RotL"
           disabled={!canImage}
-          onPress={() => apply(s => ({ ...s, orientation: rotateLeft(s.orientation) }))}
+          onPress={() =>
+            apply(s => setUserOrientation(img, vp, s, rotateLeft(s.orientation)))
+          }
         />
         <ToolBtn
           label="RotR"
           disabled={!canImage}
-          onPress={() => apply(s => ({ ...s, orientation: rotateRight(s.orientation) }))}
+          onPress={() =>
+            apply(s => setUserOrientation(img, vp, s, rotateRight(s.orientation)))
+          }
         />
         <ToolBtn
           label="FlipH"
           disabled={!canImage}
-          onPress={() => apply(s => ({ ...s, orientation: flipHorizontal(s.orientation) }))}
+          onPress={() =>
+            apply(s =>
+              setUserOrientation(img, vp, s, flipHorizontal(s.orientation)),
+            )
+          }
         />
         <ToolBtn
           label="FlipV"
           disabled={!canImage}
-          onPress={() => apply(s => ({ ...s, orientation: flipVertical(s.orientation) }))}
+          onPress={() =>
+            apply(s =>
+              setUserOrientation(img, vp, s, flipVertical(s.orientation)),
+            )
+          }
         />
         <ToolBtn
           label="Reset"
