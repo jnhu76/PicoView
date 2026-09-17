@@ -1,6 +1,6 @@
 ---
 feature: view-geometry-1
-status: ready-for-human-merge
+status: ready-for-pr
 updated: 2026-09-17
 branch: corrective/view-geometry-1
 commits: bbda8db50a99d8c35380e8831670219b75f5e962..HEAD
@@ -84,12 +84,24 @@ Honest residual: 150% live DPI; multi-monitor DPI transition; cancel `cancel:tru
 PR60 collision reconfirmed against `9d352e4`: rebase after VG merge; keep VG
 hello scale + pointer path; keep PR60 embed as additive.
 
-### Remaining before merge
+### Remaining for this PR
 
-- Human merge decision (do not auto-merge). PocketJS pin unchanged
-  (`24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb`).
-- Optional follow-up on a 150% machine: startup Actual Size physical-pixel check.
-- Optional follow-up: upstream PocketJS `draw.rs` comment-only patch.
+- Open/land PR for `corrective/view-geometry-1`. Do not auto-merge.
+  PocketJS pin unchanged (`24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb`).
+- Then rebase PR #60 onto new main (keep VG hello.scale / pointer-cancel /
+  ViewTransform / EXIF O / D4; keep PR60 embed + shell polish additive).
+
+### Pre-release evidence follow-up (does not block this PR)
+
+High-DPI OS integration is mechanism-closed (measured `window.scale_factor()`
+→ hello → `realized = z/d`; `density` cancels in blit; `ScaleFactorChanged`
+→ `Input::Resize(..., scale)`), but **not live-proven above 100%** on this
+campaign machine.
+
+Before release: real >100% DPI startup + DPI transition smoke
+(startup Actual Size physical-pixel check; cross-scale Fit/100%).
+
+Also pre-release, not PR-blocking: upstream PocketJS `draw.rs` comment-only patch.
 
 ## [S1] Problem
 
