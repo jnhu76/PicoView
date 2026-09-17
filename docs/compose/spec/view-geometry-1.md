@@ -3,7 +3,7 @@ feature: view-geometry-1
 status: in-progress
 updated: 2026-09-18
 branch: corrective/view-geometry-1
-commits: bbda8db50a99d8c35380e8831670219b75f5e962..HEAD
+commits: bbda8db50a99d8c35380e8831670219b75f5e962..44dc2cc
 ---
 
 # View Geometry Corrective 1
