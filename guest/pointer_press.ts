@@ -14,6 +14,8 @@ export type PointerHit = {
   x: number;
   y: number;
   down: boolean;
+  /** Host gesture cancel (focus-loss). Must NOT fire onPress. */
+  cancel?: boolean;
 };
 
 export interface PointerPressAuthority {
@@ -43,6 +45,10 @@ export function createPointerPress(
   let down = false;
   return {
     update(e: PointerHit): boolean {
+      if (e.cancel) {
+        this.cancel();
+        return false;
+      }
       const hit = authority.hit(e.x, e.y);
       if (e.down) {
         if (down) return owner !== null;

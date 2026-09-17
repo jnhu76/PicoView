@@ -562,15 +562,15 @@ impl ApplicationHandler<Wake> for Host {
                 self.modifiers = state.state();
             }
             winit::event::WindowEvent::Focused(false) => {
-                // MAJOR-5 (Corrective-2): winit/Win32 captures the mouse on
-                // button-down so a release outside the window still arrives.
-                // Focus loss is the other strand path (alt-tab mid-drag):
-                // clear host down-state AND push a synthetic d:false so the
-                // guest's drag + pointer-press controllers both release.
+                // MAJOR-5 / adversarial-2: focus-loss must CANCEL, not release.
+                // Encoding this as a plain d:false at the last pointer position
+                // can spuriously fire onPress if the cursor still sits on the
+                // armed toolbar control (alt-tab mid-click). `"cancel":true`
+                // tells the guest to drop the press owner without activate.
                 self.pointer_down = false;
                 self.tx
                     .try_send(Input::Service(
-                        json!({"t":"mouse","x":self.pointer.0,"y":self.pointer.1,"d":false,"b":0,"sh":false})
+                        json!({"t":"mouse","x":self.pointer.0,"y":self.pointer.1,"d":false,"b":0,"sh":false,"cancel":true})
                             .to_string(),
                     ))
                     .ok();

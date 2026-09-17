@@ -30,7 +30,18 @@ test("drag off the control cancels the press", () => {
   expect(h.pressed).toEqual([]);
 });
 
-test("release outside window after down-on-button still cancels via focus-loss cancel()", () => {
+test("host cancel packet must not fire onPress even if still over the control", () => {
+  const btn = { id: "btn" };
+  const h = harness({ "10": btn });
+  h.pointer.update({ x: 10, y: 5, down: true });
+  expect(h.pointer.owner()).toBe(btn);
+  // Focused(false) style cancel at the same position — not a release.
+  h.pointer.update({ x: 10, y: 5, down: false, cancel: true });
+  expect(h.pressed).toEqual([]);
+  expect(h.pointer.owner()).toBeNull();
+});
+
+test("release outside window after down-on-button still cancels via cancel()", () => {
   const btn = { id: "btn" };
   const h = harness({ "10": btn });
   h.pointer.update({ x: 10, y: 5, down: true });

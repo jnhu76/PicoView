@@ -983,20 +983,23 @@ mod tests {
         }
     }
 
-    /// Corrective-2 MAJOR-3 lock: EXIF materialization happens INSIDE
-    /// decode_jpeg, so `DecodedImage.width/height` are already O (oriented)
-    /// extents. `open()` then sets source_* and resource_* from that same
-    /// O-space pair. A full-res EXIF-6 portrait therefore reports
-    /// source == resource == O, and fullResolution stays true — it must not
-    /// compare S (storage) against O (oriented).
+    /// Corrective-2 MAJOR-3 lock (rewritten after adversarial review): the
+    /// production path is apply_exif_orientation → prepare_for_admission →
+    /// source/resource/fullResolution. A hand-built already-O DecodedImage
+    /// would be tautological; this walks the real EXIF transform first so a
+    /// S/O mixup in open()'s formula fails the test.
+    #[cfg(windows)]
     #[test]
     fn exif_oriented_decode_keeps_full_resolution_in_o_space() {
-        // Simulate decode_jpeg AFTER apply_exif_orientation(6): storage was
-        // 2x3, O is 3x2.
+        // Storage 2x3; EXIF 6 rotates 90° CW → O is 3x2.
+        let (sw, sh) = (2usize, 3usize);
+        let plane = vec![9u8; sw * sh * 4];
+        let (ow, oh, oriented) = wic::apply_exif_orientation(sw as u32, sh as u32, &plane, 6);
+        assert_eq!((ow, oh), (3, 2), "EXIF 6 must swap into O extent");
         let decode = DecodedImage {
-            width: 3,
-            height: 2,
-            rgba: vec![9u8; 3 * 2 * 4],
+            width: ow,
+            height: oh,
+            rgba: oriented,
         };
         let source_w = decode.width;
         let source_h = decode.height;

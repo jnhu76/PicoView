@@ -183,8 +183,14 @@ export default function App() {
       const x = typeof e.x === "number" ? e.x : 0;
       const y = typeof e.y === "number" ? e.y : 0;
       const down = e.d === true;
+      const cancel = e.cancel === true;
       // Feed the shared press authority first (toolbar / any focusable).
-      // Host Focused(false) sends d:false, which also releases a held press.
+      // Host Focused(false) sends cancel:true — drop press WITHOUT onPress.
+      if (cancel) {
+        pointerPress.current.cancel();
+        drag.current.active = false;
+        continue;
+      }
       pointerPress.current.update({ x, y, down });
       const inCanvas = pointInImageViewport(vp, x, y);
       // Drag-pan only from the image canvas — never from a toolbar press.
@@ -204,7 +210,6 @@ export default function App() {
         }
       }
     }
-    // Focus-loss host reset sends d:false — already handled above.
 
     // --- wheel zoom (coalesce high-res deltas) ---
     if (canImage) {

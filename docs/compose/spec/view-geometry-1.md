@@ -21,7 +21,7 @@ results on this branch:
 | MAJOR-2 | svc mouse ≠ PocketJS `onPress` | **CONFIRMED** | `guest/pointer_press.ts` + `@pocketjs/framework/input` hit/press wiring; toolbar ToolButtons now mouse-clickable |
 | MAJOR-3 | EXIF × fullResolution S/O mixup | **NOT A BUG** | `decode_jpeg` materializes O inside `DecodedImage`; `open()` compares O vs O. Locked by `exif_oriented_decode_keeps_full_resolution_in_o_space` |
 | MAJOR-4 | D4 16 representational states | **CONFIRMED (latent)** | `normalizeOrientation` folds the `Rot(θ)∘Scale ≡ Rot(θ+180)∘Scale(-sx,-sy)` kernel onto 8 canonical tuples; ops call it |
-| MAJOR-5 | release outside strands `down` | **MITIGATED** | winit/Win32 mouse capture + `Focused(false)` host reset + guest pointer/drag clear on any `d:false`; unit-tested |
+| MAJOR-5 | release outside strands `down` | **MITIGATED + cancel** | winit/Win32 mouse capture + `Focused(false)` now sends `"cancel":true` (not a release that can fire onPress); guest `pointer_press.cancel()` drops the owner without activate; drag clears on cancel or `d:false` |
 
 ### PR60 integration collision (do not merge both branches as-is)
 
@@ -31,13 +31,21 @@ main
  └── corrective/view-geometry-1       (this branch: ViewState, DPI, EXIF, input, rotate/flip)
 ```
 
-Both touch `guest/app.octane.tsx`, `native/src/main.rs`, observer/turn, and
-view state. Each can PASS alone and still regress the other's semantics after
-a naive merge. Required integration order after human review:
+Real shared files (adversarial-2 correction — not observer/turn/view_state on
+PR60): both rewrite `guest/app.octane.tsx`, `native/src/main.rs`, and
+`native/src/current_item.rs`. Semantic conflicts that survive a clean git
+merge:
+
+- PR60 hello has **no `scale` field**; this branch requires real `scale`.
+- PR60 guest still uses the **legacy `ViewState` API**; this branch owns
+  `view_transform.ViewTransform` + pointer press.
+
+Each can PASS alone and still regress the other after a naive merge.
+Required integration order after human review:
 
 1. Land view-geometry-1 (Product geometry authority).
 2. Rebase PR60 launch corrective onto it; re-check embed/GUI/associations
-   against the new mouse/DPI path.
+   against the new mouse/DPI/cancel path.
 3. Re-run the PR60 launch smoke + this branch's interactive smoke together.
 
 This branch still needs explicit `--js`/`--pak` (no embed). That is intentional
