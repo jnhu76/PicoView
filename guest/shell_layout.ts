@@ -7,9 +7,10 @@
 
 import type { ImageViewport } from "./view_transform.ts";
 
-/** Chrome heights in UI logical units (must match app.octane.tsx via import). */
+/** Chrome heights in UI logical units (must match app.octane.tsx via import).
+ *  In-app title strip removed: native caption owns the window name. */
 export const SHELL_CHROME = {
-  titleH: 28,
+  titleH: 0,
   toolbarH: 44,
   statusH: 24,
 } as const;

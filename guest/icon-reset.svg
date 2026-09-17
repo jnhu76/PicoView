@@ -1,4 +1,15 @@
 <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-  <path d="M5 2.5 L11 2.5 L11 7 L13 7 L8 12.5 L3 7 L5 7 Z" fill="#f0f0f0"/>
-  <rect x="2" y="13" width="12" height="1.5" fill="#f0f0f0"/>
+  <rect x="2" y="2" width="4" height="1" fill="#f0f0f0"/>
+  <rect x="2" y="2" width="1" height="4" fill="#f0f0f0"/>
+  <rect x="10" y="2" width="4" height="1" fill="#f0f0f0"/>
+  <rect x="13" y="2" width="1" height="4" fill="#f0f0f0"/>
+  <rect x="2" y="13" width="4" height="1" fill="#f0f0f0"/>
+  <rect x="2" y="10" width="1" height="4" fill="#f0f0f0"/>
+  <rect x="10" y="13" width="4" height="1" fill="#f0f0f0"/>
+  <rect x="13" y="10" width="1" height="4" fill="#f0f0f0"/>
+  <rect x="7" y="7" width="2" height="2" fill="#f0f0f0"/>
+  <rect x="7.5" y="4.5" width="1" height="2" fill="#f0f0f0"/>
+  <rect x="7.5" y="9.5" width="1" height="2" fill="#f0f0f0"/>
+  <rect x="4.5" y="7.5" width="2" height="1" fill="#f0f0f0"/>
+  <rect x="9.5" y="7.5" width="2" height="1" fill="#f0f0f0"/>
 </svg>

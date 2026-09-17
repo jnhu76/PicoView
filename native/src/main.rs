@@ -24,7 +24,7 @@ use winit::dpi::LogicalSize;
 use winit::event::ElementState;
 use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
-use winit::window::{Window, WindowId};
+use winit::window::{Theme, Window, WindowId};
 
 mod associations;
 mod assets;
@@ -563,6 +563,9 @@ impl ApplicationHandler<Wake> for Host {
                 .create_window(
                     Window::default_attributes()
                         .with_title(&self.title)
+                        // Dark native caption — matches the dark product chrome;
+                        // avoids a light OS title bar sitting on a dark viewer.
+                        .with_theme(Some(Theme::Dark))
                         .with_inner_size(LogicalSize::new(self.viewport.0, self.viewport.1))
                         .with_resizable(true)
                         // Stay hidden until the first presented frame so the

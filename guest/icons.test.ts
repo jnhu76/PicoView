@@ -45,8 +45,9 @@ test("toolbar chrome actions exclude Previous/Next text controls", () => {
   }
   // Frozen shell geometry still owns toolbar height (PR #61 authority).
   // Compact product chrome (PR62 follow-up): image viewport priority.
+  // In-app title strip removed (native caption owns the name).
   expect(SHELL_CHROME.toolbarH).toBe(44);
-  expect(SHELL_CHROME.titleH).toBe(28);
+  expect(SHELL_CHROME.titleH).toBe(0);
   expect(SHELL_CHROME.statusH).toBe(24);
 });
 

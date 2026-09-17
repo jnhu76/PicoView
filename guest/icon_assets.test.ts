@@ -50,7 +50,9 @@ test("reset and refresh remain visually different sources", () => {
   const fit = readSvg("icon-fit.svg");
   expect(reset).not.toBe(refresh);
   expect(reset).not.toBe(fit);
-  // Reset is return-to-baseline, not circular reload and not fit corners.
-  expect(reset).toContain("rect x=\"2\" y=\"13\"");
+  // Reset is recenter target (corners + center crosshair) — not download,
+  // not circular reload, not fit corners alone.
+  expect(reset).toContain("rect x=\"7\" y=\"7\"");
+  expect(reset.includes("12.5")).toBe(false);
   expect(refresh.toLowerCase()).toContain("path");
 });

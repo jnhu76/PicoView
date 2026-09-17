@@ -361,22 +361,10 @@ export default function App() {
     setViewState(next);
   };
 
-  const headerCenter = shownName
-    ? (posText
-        ? `${truncateName(shownName, 36)}  (${posText})`
-        : truncateName(shownName, 36))
-    : "";
-
   return (
     <View class="w-full h-full flex-col bg-[#1e1e1e]">
-      {/* Title — height frozen in SHELL_CHROME.titleH */}
-      <View class="flex-row items-center px-3 bg-[#252526]" style={{ height: SHELL_CHROME.titleH }}>
-        <Text class="text-sm font-bold text-[#f0f0f0]">PicoView</Text>
-        <View class="flex-1 items-center justify-center overflow-hidden">
-          <Text class="text-sm text-[#a0a0a0]">{headerCenter}</Text>
-        </View>
-        <View class="w-12" />
-      </View>
+      {/* No in-app title strip — native window caption owns "PicoView".
+          Filename / index stay in the status bar. */}
 
       {/* Toolbar — icon-first actions only; state stays in the status bar.
           Previous/Next are viewport navigation on the image edges, not here.
