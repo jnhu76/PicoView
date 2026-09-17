@@ -24,7 +24,12 @@ publication ordering: candidates are admitted before the previous
 publication is released, refresh failures preserve the last-good
 publication, new-item failures deliberately publish the error item
 (PRD §2.10), and the guest observer splits request state from publication
-state.
+state. Its corrective (`-CORRECTIVE-1`, same day) separates the
+publication COMMIT from the superseded RESOURCE RELEASE: removals only
+queue the superseded handle, and the physical release runs once per tick
+at the post-guest-frame observation boundary (`ObservationBoundary` /
+`RequestPhase` tokens in `native/src/current_item.rs`), so no renderable
+guest state can reference a freed handle in any call phase.
 
 The next work is the remaining PicoView-side corrections (R3): truthful
 full-resolution capability, generic color/alpha admission.

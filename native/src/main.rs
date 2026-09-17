@@ -21,7 +21,7 @@ use winit::window::{Window, WindowId};
 
 mod current_item;
 mod gpu;
-use current_item::{CurrentItem, OpenIntent};
+use current_item::{CurrentItem, ObservationBoundary, OpenIntent, RequestPhase};
 
 const HOST_ID: &str = "windows-app";
 const HOST_ABI: u32 = 4;
@@ -150,8 +150,14 @@ impl Runtime {
         let mut current = CurrentItem::new();
         if let Some(path) = &args.image {
             // V1's only open: the boot image is a new item (there is no prior
-            // publication to preserve).
-            current.open(&surface, path, OpenIntent::NewItem);
+            // publication to preserve). Boot is a legal request phase —
+            // strictly before any guest turn.
+            current.open(
+                &surface,
+                RequestPhase::before_guest_frame(),
+                path,
+                OpenIntent::NewItem,
+            );
             log::info!(
                 "current item: generation={} handle={:?} path={}",
                 current.generation(),
@@ -197,6 +203,17 @@ impl Runtime {
         }
         self.guest.frame(0)?;
         self.surface.tick();
+        // Release boundary (PICOVIEW-LAST-GOOD-PUBLICATION-1-CORRECTIVE-1).
+        // The guest turn is complete: svcPoll delivered every svc event
+        // queued before this frame, the frame's commits landed in it, and
+        // surface.tick rebuilt the draw list the renderer will read. Every
+        // superseded publication was replaced by an event observed before
+        // that frame, so freeing it here cannot open a stale-handle hole —
+        // and this runs strictly before render, so no submitted frame can
+        // resolve a freed handle. This is the only place a Current Item
+        // texture is ever freed.
+        self.current
+            .release_superseded(&self.surface, ObservationBoundary::after_guest_frame());
         self.ticks += 1;
         Ok(())
     }
@@ -251,6 +268,23 @@ fn run_runtime(
     let mut runtime = Runtime::boot(&args)?;
     let mut hash = None;
     let mut deadline = Instant::now();
+    // Fixed tick order (PICOVIEW-LAST-GOOD-PUBLICATION-1-CORRECTIVE-1):
+    //   1. input/request processing      — the only legal Product open phase
+    //                                     (besides boot) — BEFORE_GUEST_FRAME;
+    //                                     a future open trigger constructs
+    //                                     `RequestPhase::before_guest_frame()`
+    //                                     exactly here, and nowhere else;
+    //   2. Runtime::tick                 — guest.frame observes everything
+    //                                     queued, surface.tick rebuilds the
+    //                                     draw list, then the release boundary
+    //                                     frees superseded publications;
+    //   3. hash + renderer.render        — read/consume that draw list.
+    // Current Item textures are freed ONLY inside step 2, so no draw list
+    // step 3 consumes can reference a freed handle. A commit inside the
+    // guest turn or between it and the boundary requires fabricating a
+    // `RequestPhase` — a named, greppable misuse — so every queued handle's
+    // replacing event is always observed by a frame that completes before
+    // the boundary that frees it.
     loop {
         for input in inputs.try_iter().take(256) {
             if !runtime.input(input)? {
