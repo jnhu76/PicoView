@@ -155,7 +155,7 @@ Use the exact current Architecture/SPEC/accepted ADR text when adjudicating a ca
 
 PicoView consumes `jnhu76/pocketjs` at the exact revision pinned in `POCKETJS.lock`.
 
-If PicoView needs a **generic runtime/graphics capability**, implement it in PocketJS first, review/merge it there, then deliberately advance `POCKETJS.lock`.
+If PicoView needs a **generic runtime/graphics capability**, implement it in PocketJS first, review it there, freeze the exact reviewed commit on `integration/picoview-desktop`, then deliberately advance `POCKETJS.lock` to that exact SHA. Neither `jnhu76/pocketjs` main nor `pocket-stack/pocketjs` main is an integration target for PicoView-specific dependency advancement.
 
 The direct Desktop/wgpu image-admission capability required by ADR-0002 is a PocketJS-generic graphics correction to the shared native-desktop backend family. Do not implement a PicoView-only `PSM_8888` detour or a Windows-only renderer to avoid changing PocketJS.
 

@@ -19,9 +19,27 @@ reviewed HEAD of `jnhu76/pocketjs:integration/picoview-desktop`
 now publishes ordinary decodes by MOVING the WIC RGBA plane into
 `Ui::upload_owned_rgba8` — no PSM tag, no borrow seam, no second CPU plane.
 
+Campaign `PICOVIEW-LAST-GOOD-PUBLICATION-1` (2026-09-17) fixed the
+publication ordering: candidates are admitted before the previous
+publication is released, refresh failures preserve the last-good
+publication, new-item failures deliberately publish the error item
+(PRD §2.10), and the guest observer splits request state from publication
+state. Its correctives separate the three commit domains:
+`-CORRECTIVE-1` split the publication COMMIT from the superseded RESOURCE
+RELEASE — removals only queue the superseded handle and the physical
+release runs once per tick at the post-guest-frame observation boundary
+(`ObservationBoundary` / `RequestPhase` tokens in
+`native/src/current_item.rs`) — and `-CORRECTIVE-2` split the native Product
+commit from the guest RENDERED binding: one guest turn reduces all events
+and commits at most one binding for the FINAL observed publication
+(`guest/binding.ts`, `guest/turn.ts`), so an arbitrary number of collapsed
+Product commits cannot leave the mounted Image on a freed handle. Every
+LEGAL Product transition constructs `RequestPhase` before the tick's guest
+frame; the tokens are review friction, not a claim about fabricated illegal
+use.
+
 The next work is the remaining PicoView-side corrections (R3): truthful
-full-resolution capability, refresh/last-good ordering, generic color/alpha
-admission.
+full-resolution capability, generic color/alpha admission.
 
 ---
 
@@ -119,7 +137,7 @@ Remaining differentials after `PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`
 - sampling is partly stored with texture state rather than generic draw state;
 - `NATIVE_TEX_MAX_DIM`/8192 leaks backend/default assumptions into image admission;
 - giant images are reduced before publication without a fully separated full-resolution capability;
-- refresh/publication ordering currently risks retiring old state before replacement admission succeeds;
+- ~~refresh/publication ordering currently risks retiring old state before replacement admission succeeds~~ — resolved 2026-09-17 (`PICOVIEW-LAST-GOOD-PUBLICATION-1`): admit-then-commit ordering, intent-split failure policy (refresh preserves last-good, new-item publishes the error item), guest publication/request state split;
 - renderer/presentation authority is still partly in PicoView host code (window/swapchain plumbing adapted from the portable desktop host; rendering itself is `pocket-ui-wgpu`);
 - current Windows path has no proved software fallback;
 - current color/alpha admission is effectively PSM/RGBA8-oriented rather than the generic architecture contract;

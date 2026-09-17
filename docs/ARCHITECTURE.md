@@ -803,12 +803,20 @@ aligned CPU texture storage for image admission (`TexBacking::Owned`), and
 `pocket-ui-wgpu` borrows the Owned plane directly into `Queue::write_texture`
 (no second RGBA vector). The ordinary Desktop image path satisfies ADR-0002.
 
+Resolved 2026-09-17 (`PICOVIEW-LAST-GOOD-PUBLICATION-1`): refresh/last-good
+publication ordering — the candidate is admitted before the previous
+publication is released and the publication swap commits only on successful
+admission; a refresh failure preserves the last-good publication and a
+new-item failure deliberately publishes the error item (PRD §2.10). The
+guest observation splits request state from publication state, and a
+per-publication texture key rebinding keeps a mounted image node correct
+across commits.
+
 Still open:
 
 - current sampling preference is partly stored as texture state rather than purely generic draw policy;
 - current `NATIVE_TEX_MAX_DIM` embeds a wgpu-default-class limit in core and PicoView uses it as an admission/downsample trigger;
 - current giant-image path silently creates a reduced resource, so full-resolution capability needs truthful separation;
-- current refresh/publication ordering may retire the previous resource before replacement admission succeeds;
 - renderer/presentation authority is still partly implemented in PicoView host code (window/swapchain plumbing adapted from the portable desktop host; rendering itself is `pocket-ui-wgpu`);
 - current Windows presentation path has no proved software renderer fallback;
 - current color/alpha boundary is effectively RGBA8/PSM-oriented rather than the generic admission contract;
@@ -819,7 +827,7 @@ Still open:
 
 # 21. Cross-repo rule
 
-If PicoView needs a capability generic to runtime/graphics, implement it in `jnhu76/pocketjs` first, review/merge it there, then advance `POCKETJS.lock`.
+If PicoView needs a capability generic to runtime/graphics, implement it in `jnhu76/pocketjs` first, review it there, freeze the exact reviewed commit on `integration/picoview-desktop`, then advance `POCKETJS.lock` to that exact SHA. Neither `jnhu76/pocketjs` main nor `pocket-stack/pocketjs` main is an integration target for PicoView-specific dependency advancement.
 
 Likely PocketJS work includes:
 

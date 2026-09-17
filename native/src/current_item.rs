@@ -5,6 +5,25 @@
 //! state over the svc channel. Image bytes never cross QuickJS — the only
 //! guest-facing payloads here are small JSON objects of strings and integers.
 //!
+//! Publication is transactional per Product intent (PRD §2.10): a candidate
+//! is admitted BEFORE the previous publication is released, and the
+//! publication swap commits only on a successful admission. A Refresh
+//! failure therefore leaves the last-good publication live and visible; a
+//! NewItem failure deliberately replaces it with the error observation.
+//!
+//! Commit and release are separate transitions: a publication removal
+//! (replacement commit or NewItem failure) only queues the superseded
+//! handle. The physical release runs at the runtime's observation boundary —
+//! after a guest frame has observed the replacing svc event and rebuilt the
+//! draw list, before that tick's render. Every LEGAL Product transition
+//! requires a `RequestPhase`, i.e. it commits before the tick's guest frame;
+//! from there the superseded handle stays resolvable until the boundary of
+//! the tick whose frame observed the replacing event. The guest holds the
+//! other half of that contract: one guest turn renders only the FINAL
+//! publication it observed, so the frame that presents the replacement
+//! really has stopped resolving the superseded handle
+//! (`guest/binding.ts`, `guest/turn.ts`).
+//!
 //! The full-resolution decode is published through PocketJS owned RGBA8
 //! image admission (`Ui::upload_owned_rgba8`), so ordinary photographs keep
 //! their source resolution in the production resource: fit to window is GPU
@@ -20,8 +39,8 @@ use serde_json::json;
 use std::path::Path;
 
 pub const SVC_TYPE: &str = "current-item";
-/// Texture key the guest binds ready handles under (mirrored in
-/// guest/app.octane.tsx; the handle travels via svc, the key stays literal).
+/// Texture key prefix the guest binds ready handles under (mirrored in
+/// guest/binding.ts; the handle travels via svc, the key stays literal).
 #[allow(dead_code)]
 const TEXTURE_KEY_HINT: &str = "picoview-current";
 /// PocketJS owned-admission ceiling (`spec::NATIVE_TEX_MAX_DIM`, matched to
@@ -93,15 +112,111 @@ impl OpenError {
     }
 }
 
+/// Product intent of an open request (PRD §2.10). The two cases are
+/// deliberately different Product operations:
+///
+/// - `Refresh` revalidates the currently published item; when the candidate
+///   fails at decode or admission, the last-good publication stays published
+///   and visible (SPEC §7).
+/// - `NewItem` is the initial open or navigation to a different item; when
+///   the candidate fails, the publication is deliberately replaced by the
+///   error observation (a corrupt new item publishes an error item).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenIntent {
+    NewItem,
+    /// Constructed by the refresh/last-good tests and consumed by the guest
+    /// wire contract; a product trigger arrives with the navigation slice.
+    #[allow(dead_code)]
+    Refresh,
+}
+
+impl OpenIntent {
+    /// Bounded wire form carried by loading/error svc events; the guest
+    /// observer needs it to choose preserve-vs-replace failure policy.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OpenIntent::NewItem => "new-item",
+            OpenIntent::Refresh => "refresh",
+        }
+    }
+}
+
 struct LiveResource {
     handle: i32,
 }
 
+/// Zero-sized proof token for the release boundary. It can only be
+/// constructed at the one point PocketJS's own frame contract designates
+/// ("after the guest turn, before rendering" — `UiSurface::tick` docs): the
+/// guest has observed every svc event queued before the frame, the frame's
+/// commits landed in that frame, and the draw list the renderer reads is
+/// rebuilt. `release_superseded` refuses to run without one, so the safe
+/// phase is part of the API, not a comment a future caller must remember.
+///
+/// The token witnesses the phase, not the handles: it says "a guest frame
+/// has completed", and the deferred-release protocol (CORRECTIVE-1) plus the
+/// guest's one-binding-per-turn commit (`guest/turn.ts`, CORRECTIVE-2) are
+/// what make that frame the one that stopped resolving the superseded
+/// publication.
+pub struct ObservationBoundary(());
+
+impl ObservationBoundary {
+    /// Legal only after `Runtime::tick` has completed `guest.frame` and
+    /// `surface.tick`, and strictly before that tick's render.
+    pub(crate) fn after_guest_frame() -> Self {
+        Self(())
+    }
+}
+
+/// Zero-sized proof token for the request phase — the counterpart of
+/// `ObservationBoundary`. Constructible only where Product open requests
+/// are legal: process boot and the runtime input/request processing step,
+/// both strictly before a tick's guest turn. Gating `open`/`retire` on it
+/// turns the revoked hazard — a publication committing between
+/// `guest.frame` and the same tick's release boundary, freed before any
+/// frame observed its replacing event — into a deliberate, greppable
+/// fabrication of a token whose name states the phase it grants, instead
+/// of an invisible call-site convention. That fabrication is out of
+/// contract: no comment, test, or claim in this crate treats an illegal
+/// phase as supported.
+pub struct RequestPhase(());
+
+impl RequestPhase {
+    /// Legal only at boot or in the input/request processing phase of the
+    /// runtime loop (both BEFORE_GUEST_FRAME).
+    pub(crate) fn before_guest_frame() -> Self {
+        Self(())
+    }
+}
+
 /// Native-side Current Item truth. The guest observes it through svc events
 /// only; it never owns decode, filesystem, or texture lifetime authority.
+///
+/// Publication commit and superseded release are separate transitions
+/// (PICOVIEW-LAST-GOOD-PUBLICATION-1-CORRECTIVE-1): `open`/`retire` commit
+/// Product state and queue superseded handles, but NEVER free a texture.
+/// Freeing lives solely in `release_superseded`, which requires an
+/// `ObservationBoundary`. The safety statement is about LEGAL transitions:
+/// every Product transition requires a `RequestPhase`, and every designed
+/// call site constructs it before the tick's guest frame, so the replacing
+/// event is always observed by a frame that completes before the boundary
+/// that frees the superseded handle. `RequestPhase` is review friction —
+/// a named, greppable phase witness — not a type-system proof of wall-clock
+/// phase: a deliberately fabricated token inside the guest turn could still
+/// commit after a frame, and neither this mechanism nor its tests claim
+/// safety for such a call.
 pub struct CurrentItem {
     next_generation: u64,
     live: Option<LiveResource>,
+    /// Handles of superseded publications awaiting the next observation
+    /// boundary. Bound: the number of publications committed between two
+    /// boundaries. It cannot accumulate across ticks — the boundary drains
+    /// it completely every runtime tick, and commits only happen on the
+    /// runtime thread between boundaries (single-threaded). With the
+    /// designed call sites (boot once; future input-phase triggers, at most
+    /// one open per drained input) it is empty at rest and holds at most
+    /// the opens coalesced into one input phase in the worst case.
+    superseded: Vec<i32>,
 }
 
 impl CurrentItem {
@@ -109,6 +224,7 @@ impl CurrentItem {
         Self {
             next_generation: 1,
             live: None,
+            superseded: Vec::new(),
         }
     }
 
@@ -121,37 +237,64 @@ impl CurrentItem {
         self.live.as_ref().map(|l| l.handle)
     }
 
-    /// Open an explicit local path: decode with WIC, retire any previous
-    /// native resource, publish the new one, and push exactly one bounded
-    /// terminal svc event (ready or error) for this generation.
-    pub fn open(&mut self, surface: &UiSurface, path: &Path) {
+    /// Open an explicit local path: decode with WIC, then publish per the
+    /// Product intent, pushing exactly one bounded terminal svc event (ready
+    /// or error) for this generation. A Refresh failure never touches the
+    /// last-good publication; a NewItem failure deliberately replaces it.
+    /// Gated on `RequestPhase`: a commit is legal only strictly before a
+    /// tick's guest turn, so the replacing event is always observed by a
+    /// frame that completes before the boundary that would free the
+    /// superseded publication.
+    pub fn open(
+        &mut self,
+        surface: &UiSurface,
+        phase: RequestPhase,
+        path: &Path,
+        intent: OpenIntent,
+    ) {
         let generation = self.next_generation;
         self.next_generation += 1;
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        self.push(surface, loading_event(generation, &name));
+        self.push(surface, loading_event(generation, intent, &name));
         match open_decoded(path) {
             Ok(decoded) => {
                 let image = prepare_for_admission(decoded);
-                self.publish(surface, generation, name, image);
+                self.publish(surface, phase, generation, intent, name, image);
             }
             Err(error) => {
-                self.retire(surface);
-                self.push(surface, error_event(generation, &error));
+                if intent == OpenIntent::NewItem {
+                    self.retire(phase);
+                }
+                self.push(surface, error_event(generation, intent, &error));
             }
         }
     }
 
-    /// Retire the previous resource, admit the new one, and publish the
-    /// ready event: handles are generation-tagged in the core, so a stale
-    /// handle drawn by the guest in the interim renders nothing after free.
-    /// The decoded plane MOVES into PocketJS here — this is the single
-    /// ownership transfer on the ordinary path; a rejection (handle < 0)
-    /// drops the plane, it never copies it.
-    fn publish(&mut self, surface: &UiSurface, generation: u64, name: String, image: DecodedImage) {
-        self.retire(surface);
+    /// Admit the candidate FIRST, commit the publication swap, notify the
+    /// guest, and QUEUE the superseded resource for the next observation
+    /// boundary (SPEC §7: never release last-good before replacement
+    /// admission succeeds). The decoded plane MOVES into PocketJS at the
+    /// admission call — this is the single ownership transfer on the
+    /// ordinary path; a rejection (handle < 0) drops the plane, it never
+    /// copies it.
+    ///
+    /// This function never frees a texture. The queued release runs only at
+    /// the post-frame boundary: a guest frame that has not yet observed the
+    /// ready event can still resolve the superseded handle, so freeing here
+    /// would open a stale-handle hole whenever a publication commits after
+    /// a guest frame but before that frame's render.
+    fn publish(
+        &mut self,
+        surface: &UiSurface,
+        phase: RequestPhase,
+        generation: u64,
+        intent: OpenIntent,
+        name: String,
+        image: DecodedImage,
+    ) {
         let DecodedImage {
             width,
             height,
@@ -162,24 +305,66 @@ impl CurrentItem {
         // sampling turns that into visible blockiness.
         let handle = surface.with_ui(|ui| ui.upload_owned_rgba8(rgba, width, height, true));
         if handle < 0 {
+            // The candidate was rejected; the API dropped its plane. A
+            // Refresh keeps the last-good publication; a NewItem replaces it
+            // with the error observation.
+            if intent == OpenIntent::NewItem {
+                self.retire(phase);
+            }
             self.push(
                 surface,
-                error_event(generation, &OpenError::Admission("resource admission rejected".into())),
+                error_event(
+                    generation,
+                    intent,
+                    &OpenError::Admission("resource admission rejected".into()),
+                ),
             );
             return;
         }
-        self.live = Some(LiveResource { handle });
+        // Publication swap commit: the candidate is the Current Item from
+        // here on; the old logical resource is superseded.
+        let superseded = self.live.replace(LiveResource { handle });
         self.push(
             surface,
             ready_event(generation, &name, handle, width, height),
         );
+        if let Some(old) = superseded {
+            self.superseded.push(old.handle);
+        }
     }
 
-    /// Free the live native resource. Never waits on QuickJS GC.
-    pub fn retire(&mut self, surface: &UiSurface) {
+    /// Remove the live publication (Product transition only — the NewItem
+    /// failure paths). The physical release is deferred to the next
+    /// observation boundary: the guest may still be rendering the removed
+    /// publication until it observes the error event that replaces it.
+    /// Gated on `RequestPhase` for the same reason as `open` — a removal is
+    /// legal only strictly before a tick's guest turn. Never waits on
+    /// QuickJS GC.
+    pub fn retire(&mut self, RequestPhase(()) : RequestPhase) {
         if let Some(live) = self.live.take() {
-            surface.with_ui(|ui| ui.free_texture(live.handle));
+            self.superseded.push(live.handle);
         }
+    }
+
+    /// Release every superseded publication. Callable only with an
+    /// `ObservationBoundary`: at that point the guest turn is complete —
+    /// svcPoll delivered every svc event queued before the frame
+    /// (svcPoll drains the whole queue per call), the frame's commits
+    /// landed in that frame (the octane sync boundary), and the draw list
+    /// the renderer reads is rebuilt (`surface.tick`). Every queued handle
+    /// was replaced by an event queued before that frame, so no renderable
+    /// DrawList references it anymore; the render for this tick happens
+    /// strictly after this call returns.
+    pub fn release_superseded(&mut self, surface: &UiSurface, ObservationBoundary(()): ObservationBoundary) {
+        for handle in self.superseded.drain(..) {
+            surface.with_ui(|ui| ui.free_texture(handle));
+        }
+    }
+
+    /// Superseded publications awaiting the observation boundary.
+    #[cfg(test)]
+    fn pending_releases(&self) -> usize {
+        self.superseded.len()
     }
 
     fn push(&self, surface: &UiSurface, event: serde_json::Value) {
@@ -187,15 +372,17 @@ impl CurrentItem {
     }
 }
 
-fn error_event(generation: u64, error: &OpenError) -> serde_json::Value {
-    json!({"t": SVC_TYPE, "g": generation, "status": "error", "error": error.message()})
+fn error_event(generation: u64, intent: OpenIntent, error: &OpenError) -> serde_json::Value {
+    json!({"t": SVC_TYPE, "g": generation, "status": "error", "intent": intent.as_str(), "error": error.message()})
 }
 
 /// Pure svc event constructors. The guest-facing wire contract is exactly
 /// these three shapes — bounded scalars only, never pixel bytes — so the
-/// constructors themselves enforce the channel's text cap.
-fn loading_event(generation: u64, name: &str) -> serde_json::Value {
-    json!({"t": SVC_TYPE, "g": generation, "status": "loading", "name": bounded(name)})
+/// constructors themselves enforce the channel's text cap. Loading and error
+/// events carry the Product intent (the observer's preserve-vs-replace
+/// policy input); a ready event needs no intent.
+fn loading_event(generation: u64, intent: OpenIntent, name: &str) -> serde_json::Value {
+    json!({"t": SVC_TYPE, "g": generation, "status": "loading", "intent": intent.as_str(), "name": bounded(name)})
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -377,11 +564,20 @@ mod tests {
 
     #[test]
     fn svc_events_are_bounded_scalars() {
-        event_values(&loading_event(1, "a.jpg"));
+        event_values(&loading_event(1, OpenIntent::Refresh, "a.jpg"));
         event_values(&ready_event(2, "a.jpg", 3, 1920, 1080));
-        event_values(&error_event(3, &OpenError::Decode("x".repeat(500).into())));
+        event_values(&error_event(3, OpenIntent::NewItem, &OpenError::Decode("x".repeat(500).into())));
+        event_values(&error_event(4, OpenIntent::Refresh, &OpenError::Admission("y".repeat(500).into())));
         // File names cap on the same channel as error text.
-        event_values(&loading_event(4, &"x".repeat(500)));
+        event_values(&loading_event(5, OpenIntent::NewItem, &"x".repeat(500)));
+        // The intent is the observer's preserve-vs-replace policy input and
+        // must be on the wire exactly for the request-lifecycle events.
+        assert_eq!(loading_event(6, OpenIntent::Refresh, "a")["intent"], "refresh");
+        assert_eq!(
+            error_event(7, OpenIntent::NewItem, &OpenError::MissingPath)["intent"],
+            "new-item"
+        );
+        assert!(ready_event(8, "a", 1, 2, 3).get("intent").is_none());
     }
 
     #[test]
@@ -462,7 +658,7 @@ mod tests {
         let source_ptr = image.rgba.as_ptr();
 
         let mut item = CurrentItem::new();
-        item.publish(&surface, 1, "oracle.png".to_string(), image);
+        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "oracle.png".to_string(), image);
         let handle = item
             .live_handle()
             .expect("admission accepts the moved plane");
@@ -480,9 +676,136 @@ mod tests {
                 assert_eq!(*b, expected_byte(i), "byte {i} changed across the move");
             }
         });
-        item.retire(&surface);
+        item.retire(request_phase());
         assert_eq!(item.live_handle(), None);
+        // Removal is a Product transition only: the plane stays resolvable
+        // until the observation boundary, then frees exactly there.
+        assert_eq!(item.pending_releases(), 1);
+        surface.with_ui(|ui| assert!(ui.texture(handle).is_some()));
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        assert_eq!(item.pending_releases(), 0);
         surface.with_ui(|ui| assert!(ui.texture(handle).is_none()));
+    }
+
+    fn plane(w: u32, h: u32) -> DecodedImage {
+        DecodedImage {
+            width: w,
+            height: h,
+            rgba: vec![7u8; (w * h * 4) as usize],
+        }
+    }
+
+    /// Tests simulate the request phase (boot / input processing) — the
+    /// only phase where `open`/`retire` are legal.
+    fn request_phase() -> RequestPhase {
+        RequestPhase::before_guest_frame()
+    }
+
+    #[test]
+    fn superseded_publication_survives_until_the_observation_boundary() {
+        // THE temporal contract (CORRECTIVE-1): after a successful refresh
+        // commit the old publication must stay resolvable until a guest
+        // observation boundary has installed the new binding. Committing
+        // between guest.frame and render must never free a handle the
+        // current DrawList can still resolve.
+        let surface = UiSurface::new((96.0, 64.0));
+        let mut item = CurrentItem::new();
+        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "a.png".into(), plane(4, 4));
+        let a = item.live_handle().expect("first publication");
+        item.publish(&surface, request_phase(), 2, OpenIntent::Refresh, "b.png".into(), plane(8, 8));
+        let b = item.live_handle().expect("refresh commit");
+        assert_ne!(a, b);
+        // Before the boundary: the publication is already the candidate,
+        // but the superseded handle is still resolvable in Core.
+        assert_eq!(item.pending_releases(), 1);
+        surface.with_ui(|ui| {
+            assert!(
+                ui.texture(a).is_some(),
+                "old must stay resolvable before the observation boundary"
+            );
+            assert!(ui.texture(b).is_some());
+        });
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        assert_eq!(item.pending_releases(), 0);
+        surface.with_ui(|ui| {
+            assert!(ui.texture(a).is_none(), "old freed exactly at the boundary");
+            assert!(ui.texture(b).is_some(), "new publication stays live");
+        });
+    }
+
+    #[test]
+    fn new_item_failure_release_waits_for_the_observation_boundary() {
+        // Real Product error path (missing file → NewItem failure → retire):
+        // the replaced publication stays resolvable until the observation
+        // boundary — the guest may still render it while the error event is
+        // in flight, so the same deferred rule applies to error replacement,
+        // not only to successful ready replacement.
+        let surface = UiSurface::new((96.0, 64.0));
+        let mut item = CurrentItem::new();
+        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "a.png".into(), plane(4, 4));
+        let a = item.live_handle().expect("publication live");
+        item.open(&surface, request_phase(), Path::new("Z:/definitely/not/here.jpg"), OpenIntent::NewItem);
+        assert_eq!(item.live_handle(), None, "new-item failure replaces the publication");
+        assert_eq!(item.pending_releases(), 1);
+        surface.with_ui(|ui| {
+            assert!(
+                ui.texture(a).is_some(),
+                "old stays resolvable until the guest observes the error"
+            );
+        });
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        assert_eq!(item.pending_releases(), 0);
+        surface.with_ui(|ui| assert!(ui.texture(a).is_none()));
+    }
+
+    #[test]
+    fn two_commits_before_one_boundary_release_every_superseded() {
+        // Legal worst case: several publications commit inside one input
+        // phase, before any guest frame observes any of them. Every
+        // superseded handle must survive until the single next boundary and
+        // release there — no leak, no slot growth across rounds.
+        let surface = UiSurface::new((96.0, 64.0));
+        let mut item = CurrentItem::new();
+        item.publish(&surface, request_phase(), 1, OpenIntent::NewItem, "a.png".into(), plane(4, 4));
+        let a = item.live_handle().expect("first publication");
+        let mut steady_slots: Option<usize> = None;
+        for round in 0..2u64 {
+            item.publish(&surface, request_phase(), 10 + round, OpenIntent::Refresh, "b.png".into(), plane(8, 8));
+            let b = item.live_handle().expect("round commit b");
+            item.publish(&surface, request_phase(), 20 + round, OpenIntent::Refresh, "c.png".into(), plane(16, 16));
+            let c = item.live_handle().expect("round commit c");
+            assert_ne!(b, c, "round {round}");
+            // a (from the warm-up) is superseded only in round 0; b and c
+            // chain per round: two pending, all resolvable before the
+            // boundary.
+            assert_eq!(item.pending_releases(), 2, "round {round}");
+            surface.with_ui(|ui| {
+                if round == 0 {
+                    assert!(ui.texture(a).is_some());
+                }
+                assert!(ui.texture(b).is_some());
+                assert!(ui.texture(c).is_some());
+            });
+            item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+            assert_eq!(item.pending_releases(), 0, "round {round}");
+            let slots = surface.with_ui(|ui| {
+                assert!(ui.texture(b).is_none(), "round {round}: superseded freed");
+                assert!(ui.texture(c).is_some(), "round {round}: publication live");
+                ui.texture_slot_count()
+            });
+            // The native half of the guest binding oracle: after a coalesced
+            // commit batch the LIVE handle is the batch's final candidate —
+            // the publication a guest turn reconciles its binding to — and
+            // every intermediate candidate is gone.
+            assert_eq!(item.live_handle(), Some(c), "round {round}: final candidate is the publication");
+            match steady_slots {
+                Some(s) => assert_eq!(
+                    s, slots,
+                    "round {round}: slot count stable across commit/boundary rounds"
+                ),
+                None => steady_slots = Some(slots),
+            }
+        }
     }
 
     #[cfg(windows)]
@@ -570,18 +893,16 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn current_item_opens_replaces_and_retires_native_handles() {
+    fn initial_open_succeeds_and_publishes_at_source_resolution() {
         // Real PocketJS surface, CPU-side, driven through the real open path
         // (explicit file → WIC → native texture → svc events): proves the
         // ownership invariant without QuickJS GC or a GPU.
         let surface = UiSurface::new((96.0, 64.0));
-        let jpg_a = std::env::temp_dir().join("picoview-current-item-a.jpg");
-        let jpg_b = std::env::temp_dir().join("picoview-current-item-b.jpg");
+        let jpg_a = std::env::temp_dir().join("picoview-lgp-initial.jpg");
         std::fs::write(&jpg_a, wic_encode_jpeg(32, 16)).unwrap();
-        std::fs::write(&jpg_b, wic_encode_jpeg(64, 64)).unwrap();
 
         let mut item = CurrentItem::new();
-        item.open(&surface, &jpg_a);
+        item.open(&surface, request_phase(), &jpg_a, OpenIntent::NewItem);
         let first = item.live_handle().expect("first open publishes a live texture");
         surface.with_ui(|ui| assert!(ui.texture(first).is_some()));
 
@@ -600,44 +921,319 @@ mod tests {
             assert_eq!(&view.pixels[..expected.rgba.len()], &expected.rgba[..]);
         });
 
-        item.open(&surface, &jpg_b);
-        let second = item.live_handle().expect("second open publishes a live texture");
+        // An initial failure leaves no publication: no live resource, and
+        // the corrupt candidate's decode error is bounded.
+        let bad = std::env::temp_dir().join("picoview-lgp-initial-bad.jpg");
+        std::fs::write(&bad, [0u8; 64]).unwrap();
+        let mut fresh = CurrentItem::new();
+        fresh.open(&surface, request_phase(), &bad, OpenIntent::NewItem);
+        assert_eq!(fresh.live_handle(), None);
+        fresh.open(&surface, request_phase(), &jpg_a, OpenIntent::NewItem);
+        assert!(fresh.live_handle().is_some(), "open succeeds after a failed open");
+
+        let _ = std::fs::remove_file(&jpg_a);
+        let _ = std::fs::remove_file(&bad);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn replacement_success_admits_candidate_before_releasing_old() {
+        let surface = UiSurface::new((96.0, 64.0));
+        let jpg_a = std::env::temp_dir().join("picoview-lgp-repl-a.jpg");
+        let jpg_b = std::env::temp_dir().join("picoview-lgp-repl-b.jpg");
+        std::fs::write(&jpg_a, wic_encode_jpeg(32, 16)).unwrap();
+        std::fs::write(&jpg_b, wic_encode_jpeg(64, 64)).unwrap();
+
+        let mut item = CurrentItem::new();
+        item.open(&surface, request_phase(), &jpg_a, OpenIntent::NewItem);
+        let first = item.live_handle().expect("first open publishes");
+        item.open(&surface, request_phase(), &jpg_b, OpenIntent::NewItem);
+        let second = item.live_handle().expect("second open publishes");
         assert_ne!(first, second);
-        // The superseded resource retired without any GC involvement.
-        surface.with_ui(|ui| assert!(ui.texture(first).is_none()));
-        surface.with_ui(|ui| assert!(ui.texture(second).is_some()));
-
-        // The event shapes are pure constructors carrying the generation
-        // field; the actual svc_in queue is guest-drained only, so wire
-        // behavior rests on the manual presentation evidence.
-        for generation in [1u64, 2] {
-            let ready = ready_event(generation, "x.jpg", 0, 1, 1);
-            assert_eq!(ready["g"], generation);
-        }
-
-        // Error-after-success: the corrupt open must retire the previously
-        // live texture itself, leaving no resource and nothing drawable.
-        let jpg_bad = std::env::temp_dir().join("picoview-current-item-bad.jpg");
-        std::fs::write(&jpg_bad, [0u8; 64]).unwrap();
-        item.open(&surface, &jpg_bad);
-        assert_eq!(item.live_handle(), None);
-        surface.with_ui(|ui| assert!(ui.texture(second).is_none()));
-
-        // A directory path fails as NotAFile, not MissingPath or a panic.
-        let dir = std::env::temp_dir();
-        item.open(&surface, &dir);
-        assert_eq!(item.live_handle(), None);
-
-        // Success after error, then the explicit retire path.
-        item.open(&surface, &jpg_a);
-        let third = item.live_handle().expect("open succeeds after a failed open");
-        item.retire(&surface);
-        assert_eq!(item.live_handle(), None);
-        surface.with_ui(|ui| assert!(ui.texture(third).is_none()));
+        // The commit swapped the publication, but the superseded resource is
+        // still resolvable: a guest frame that has not yet observed the new
+        // ready event can still resolve the old handle.
+        assert_eq!(item.pending_releases(), 1);
+        surface.with_ui(|ui| {
+            assert!(
+                ui.texture(first).is_some(),
+                "old stays resolvable until the observation boundary"
+            );
+            assert!(ui.texture(second).is_some(), "candidate is the publication");
+        });
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        // Exactly one live publication after the boundary, no GC involvement.
+        surface.with_ui(|ui| {
+            assert!(ui.texture(first).is_none(), "old logical resource released");
+            assert!(ui.texture(second).is_some(), "candidate is the publication");
+        });
 
         let _ = std::fs::remove_file(&jpg_a);
         let _ = std::fs::remove_file(&jpg_b);
-        let _ = std::fs::remove_file(&jpg_bad);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn corrupt_new_item_failure_deliberately_replaces_the_publication() {
+        // PRD §2.10: navigating to a corrupt NEW item may publish an error
+        // item instead of preserving the previous image. This is the
+        // deliberate counterpart of the refresh policy — not a regression.
+        let surface = UiSurface::new((96.0, 64.0));
+        let jpg = std::env::temp_dir().join("picoview-lgp-newitem.jpg");
+        std::fs::write(&jpg, wic_encode_jpeg(32, 16)).unwrap();
+        let bad = std::env::temp_dir().join("picoview-lgp-newitem-bad.jpg");
+        std::fs::write(&bad, [0u8; 64]).unwrap();
+
+        let mut item = CurrentItem::new();
+        item.open(&surface, request_phase(), &jpg, OpenIntent::NewItem);
+        let first = item.live_handle().expect("publication live");
+        item.open(&surface, request_phase(), &bad, OpenIntent::NewItem);
+        assert_eq!(item.live_handle(), None, "new-item failure replaces the publication");
+        // The replaced publication stays resolvable until the observation
+        // boundary — the guest may still render it while the error event is
+        // in flight.
+        assert_eq!(item.pending_releases(), 1);
+        surface.with_ui(|ui| assert!(ui.texture(first).is_some()));
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        surface.with_ui(|ui| assert!(ui.texture(first).is_none()));
+
+        // A directory path fails as NotAFile, not MissingPath or a panic.
+        item.open(&surface, request_phase(), &jpg, OpenIntent::NewItem);
+        assert!(item.live_handle().is_some());
+        let dir = std::env::temp_dir();
+        item.open(&surface, request_phase(), &dir, OpenIntent::NewItem);
+        assert_eq!(item.live_handle(), None);
+        assert_eq!(item.pending_releases(), 1);
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        assert_eq!(item.pending_releases(), 0);
+
+        let _ = std::fs::remove_file(&jpg);
+        let _ = std::fs::remove_file(&bad);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn refresh_decode_failure_keeps_last_good_published() {
+        // The core last-good property (PRD §2.10, SPEC §7): when the
+        // refresh candidate fails to decode, the old publication stays
+        // current and its logical resource stays live.
+        let surface = UiSurface::new((96.0, 64.0));
+        let jpg_a = std::env::temp_dir().join("picoview-lgp-refdec-a.jpg");
+        let jpg_b = std::env::temp_dir().join("picoview-lgp-refdec-b.jpg");
+        std::fs::write(&jpg_a, wic_encode_jpeg(32, 16)).unwrap();
+        std::fs::write(&jpg_b, wic_encode_jpeg(48, 48)).unwrap();
+        let bad = std::env::temp_dir().join("picoview-lgp-refdec-bad.jpg");
+        std::fs::write(&bad, [0u8; 64]).unwrap();
+
+        let mut item = CurrentItem::new();
+        item.open(&surface, request_phase(), &jpg_a, OpenIntent::NewItem);
+        let first = item.live_handle().expect("publication live");
+
+        item.open(&surface, request_phase(), &bad, OpenIntent::Refresh);
+        assert_eq!(
+            item.live_handle(),
+            Some(first),
+            "refresh decode failure must not touch the last-good resource"
+        );
+        assert_eq!(
+            item.pending_releases(),
+            0,
+            "a refresh failure queues no pending retirement"
+        );
+        surface.with_ui(|ui| {
+            let view = ui.texture(first).expect("last-good stays live");
+            assert_eq!((view.w, view.h), (32, 16));
+        });
+
+        // A later successful refresh recovers normally: the candidate is the
+        // publication, the old stays resolvable until the boundary.
+        item.open(&surface, request_phase(), &jpg_b, OpenIntent::Refresh);
+        let second = item.live_handle().expect("refresh success publishes");
+        assert_ne!(first, second);
+        assert_eq!(item.pending_releases(), 1);
+        surface.with_ui(|ui| assert!(ui.texture(first).is_some()));
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        surface.with_ui(|ui| assert!(ui.texture(first).is_none()));
+
+        let _ = std::fs::remove_file(&jpg_a);
+        let _ = std::fs::remove_file(&jpg_b);
+        let _ = std::fs::remove_file(&bad);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn refresh_admission_failure_keeps_last_good_and_leaks_nothing() {
+        // Smallest real mechanism, no dependency injection: publish a
+        // crafted plane the real Core admission rejects (zero-width), once
+        // as a Refresh and once as a NewItem. The refresh must preserve the
+        // publication; the new-item failure deliberately replaces it.
+        let surface = UiSurface::new((96.0, 64.0));
+        let jpg = std::env::temp_dir().join("picoview-lgp-refadm.jpg");
+        std::fs::write(&jpg, wic_encode_jpeg(32, 16)).unwrap();
+
+        let mut item = CurrentItem::new();
+        item.open(&surface, request_phase(), &jpg, OpenIntent::NewItem);
+        let first = item.live_handle().expect("publication live");
+        let slots_after_open = surface.with_ui(|ui| ui.texture_slot_count());
+
+        let rejected = DecodedImage {
+            width: 0,
+            height: 0,
+            rgba: Vec::new(),
+        };
+        item.publish(&surface, request_phase(), 99, OpenIntent::Refresh, "rejected.png".into(), rejected);
+        assert_eq!(
+            item.live_handle(),
+            Some(first),
+            "refresh admission failure must keep the last-good live"
+        );
+        assert_eq!(
+            item.pending_releases(),
+            0,
+            "a refresh admission failure queues no pending retirement"
+        );
+        surface.with_ui(|ui| {
+            assert!(ui.texture(first).is_some());
+            assert_eq!(
+                ui.texture_slot_count(),
+                slots_after_open,
+                "a rejected candidate allocates no resource"
+            );
+        });
+
+        item.publish(
+            &surface,
+            request_phase(),
+            100,
+            OpenIntent::NewItem,
+            "rejected.png".into(),
+            DecodedImage {
+                width: 0,
+                height: 0,
+                rgba: Vec::new(),
+            },
+        );
+        assert_eq!(
+            item.live_handle(),
+            None,
+            "new-item admission failure deliberately replaces the publication"
+        );
+        // Replacement removes the publication; the physical release waits
+        // for the observation boundary.
+        assert_eq!(item.pending_releases(), 1);
+        surface.with_ui(|ui| assert!(ui.texture(first).is_some()));
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        surface.with_ui(|ui| assert!(ui.texture(first).is_none()));
+
+        let _ = std::fs::remove_file(&jpg);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn refresh_success_swaps_publication_and_releases_old() {
+        let surface = UiSurface::new((96.0, 64.0));
+        let jpg_a = std::env::temp_dir().join("picoview-lgp-refsuc-a.jpg");
+        let jpg_b = std::env::temp_dir().join("picoview-lgp-refsuc-b.jpg");
+        std::fs::write(&jpg_a, wic_encode_jpeg(32, 16)).unwrap();
+        std::fs::write(&jpg_b, wic_encode_jpeg(64, 64)).unwrap();
+
+        let mut item = CurrentItem::new();
+        item.open(&surface, request_phase(), &jpg_a, OpenIntent::NewItem);
+        let first = item.live_handle().expect("publication live");
+
+        // The candidate is admitted while the old resource is still live
+        // (transient two-resource overlap), then the commit swaps and the
+        // superseded old stays resolvable until the observation boundary.
+        // Observable end state: exactly one publication, and it is the
+        // candidate.
+        item.open(&surface, request_phase(), &jpg_b, OpenIntent::Refresh);
+        let second = item.live_handle().expect("refresh success publishes");
+        assert_ne!(first, second);
+        assert_eq!(item.pending_releases(), 1);
+        surface.with_ui(|ui| {
+            assert!(
+                ui.texture(first).is_some(),
+                "old resolvable until the boundary — no stale-handle hole window"
+            );
+            assert!(ui.texture(second).is_some(), "candidate is the publication");
+            let view = ui.texture(second).unwrap();
+            assert_eq!((view.w, view.h), (64, 64));
+        });
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        surface.with_ui(|ui| {
+            assert!(ui.texture(first).is_none(), "old released at the boundary");
+            assert!(ui.texture(second).is_some());
+        });
+
+        let _ = std::fs::remove_file(&jpg_a);
+        let _ = std::fs::remove_file(&jpg_b);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn repeated_publication_cycles_stay_bounded() {
+        // Mixed refresh/new-item success and failure cycles: every branch
+        // must settle. The core slot count is the leak oracle — once warm,
+        // free-list reuse keeps it flat; any abandoned handle would grow it.
+        let surface = UiSurface::new((96.0, 64.0));
+        let jpg_a = std::env::temp_dir().join("picoview-lgp-cyc-a.jpg");
+        let jpg_b = std::env::temp_dir().join("picoview-lgp-cyc-b.jpg");
+        std::fs::write(&jpg_a, wic_encode_jpeg(32, 16)).unwrap();
+        std::fs::write(&jpg_b, wic_encode_jpeg(40, 40)).unwrap();
+        let bad = std::env::temp_dir().join("picoview-lgp-cyc-bad.jpg");
+        std::fs::write(&bad, [0u8; 64]).unwrap();
+
+        let mut item = CurrentItem::new();
+        item.open(&surface, request_phase(), &jpg_a, OpenIntent::NewItem);
+        // Warm the alloc/free cycle once (including one observation-boundary
+        // release) so the slot count is at its steady value before the leak
+        // oracle starts measuring.
+        item.open(&surface, request_phase(), &jpg_b, OpenIntent::Refresh);
+        item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+        let steady_slots = surface.with_ui(|ui| ui.texture_slot_count());
+
+        let rejected = || DecodedImage {
+            width: 0,
+            height: 0,
+            rgba: Vec::new(),
+        };
+        for cycle in 0..6u64 {
+            item.open(&surface, request_phase(), &jpg_b, OpenIntent::Refresh);
+            let live = item.live_handle().expect("cycle leaves a publication");
+            let pending_after_commit = item.pending_releases();
+            item.open(&surface, request_phase(), &bad, OpenIntent::Refresh);
+            assert_eq!(item.live_handle(), Some(live), "cycle {cycle}: refresh failure preserves");
+            item.publish(&surface, request_phase(), 1000 + cycle, OpenIntent::Refresh, "r".into(), rejected());
+            assert_eq!(item.live_handle(), Some(live), "cycle {cycle}: admission failure preserves");
+            assert_eq!(
+                item.pending_releases(),
+                pending_after_commit,
+                "cycle {cycle}: refresh failures queue no pending retirement"
+            );
+            item.publish(&surface, request_phase(), 2000 + cycle, OpenIntent::NewItem, "r".into(), rejected());
+            assert_eq!(item.live_handle(), None, "cycle {cycle}: new-item failure replaces");
+            // One guest observation boundary per commit batch (the runtime
+            // runs it after every tick): the removed publication frees
+            // exactly here, never earlier.
+            item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+            assert_eq!(
+                item.pending_releases(),
+                0,
+                "cycle {cycle}: the boundary drains the pending state fully"
+            );
+            item.open(&surface, request_phase(), &jpg_a, OpenIntent::NewItem);
+            let next = item.live_handle().expect("cycle {cycle}: recovery publishes");
+            assert_ne!(next, live, "superseded handle must not be handed out again");
+            item.release_superseded(&surface, ObservationBoundary::after_guest_frame());
+            surface.with_ui(|ui| {
+                assert!(ui.texture(live).is_none());
+                assert_eq!(ui.texture_slot_count(), steady_slots, "cycle {cycle}: no slot growth");
+            });
+        }
+
+        let _ = std::fs::remove_file(&jpg_a);
+        let _ = std::fs::remove_file(&jpg_b);
+        let _ = std::fs::remove_file(&bad);
     }
 
     #[test]
@@ -655,11 +1251,22 @@ mod tests {
     fn guest_texture_key_matches_host_hint() {
         // The host hint and the guest's registerTexture key are one wire
         // contract kept as literals on both sides; this locks them together.
-        let guest = std::fs::read_to_string(concat!(
+        // The guest OWNS the key derivation (guest/binding.ts) so exactly one
+        // module can produce binding keys — app.octane.tsx must consume it
+        // rather than hand-rolling a key string.
+        let guest_binding = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../guest/binding.ts"
+        ))
+        .expect("guest binding module readable from the workspace");
+        assert!(guest_binding.contains(&format!("const TEXTURE_KEY = \"{TEXTURE_KEY_HINT}\";")));
+        let guest_app = std::fs::read_to_string(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../guest/app.octane.tsx"
         ))
         .expect("guest source readable from the workspace");
-        assert!(guest.contains(&format!("const TEXTURE_KEY = \"{TEXTURE_KEY_HINT}\";")));
+        // The single Image render site must resolve the RECONCILED binding,
+        // not a publication field or a hand-rolled key.
+        assert!(guest_app.contains("src={textureKeyFor(bound.slot)}"));
     }
 }

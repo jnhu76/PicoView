@@ -175,6 +175,19 @@ No codec noun crosses into generic rendering.
 
 No normal Desktop path reintroduces a canonical PSM texture solely at the PicoView side.
 
+> **Execution note (2026-09-17):** campaign `PICOVIEW-LAST-GOOD-PUBLICATION-1`
+> implemented the CurrentItem candidate/admission/publication ordering and the
+> refresh/last-good items of this list: the candidate is admitted before the
+> previous publication is released, the swap commits only on successful
+> admission, refresh failures preserve the last-good publication, and
+> new-item failures deliberately publish the error item (PRD §2.10). The
+> guest observer splits request state from publication state. Its correctives
+> separate the commit domains: the superseded resource release runs at the
+> post-frame observation boundary (CORRECTIVE-1), and the guest commits at
+> most one view binding per turn, for the final publication that turn
+> observed (CORRECTIVE-2). Evidence:
+> `docs/PICOVIEW-LAST-GOOD-PUBLICATION-1-EVIDENCE.md`.
+
 ---
 
 ## R4 — Format Capability Matrix
