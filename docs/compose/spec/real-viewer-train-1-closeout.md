@@ -3,7 +3,7 @@ feature: real-viewer-train-1-closeout
 status: delivered
 updated: 2026-09-17
 branch: feat/real-viewer-train-1
-commits: 7a0a5e8..HEAD
+commits: 7a0a5e8..6531a95
 ---
 
 # Real Viewer Train 1 — Current-Capability Closeout
