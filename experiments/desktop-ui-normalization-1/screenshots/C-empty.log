@@ -1,0 +1,24 @@
+[2026-09-17T15:47:00Z INFO  picoview] [     0.0ms] process start
+[2026-09-17T15:47:00Z INFO  picoview] [    34.1ms] window created (hidden until first frame)
+[2026-09-17T15:47:01Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-17T15:47:01Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-17T15:47:01Z INFO  picoview] [   644.7ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-17T15:47:01Z INFO  picoview] [   645.4ms] window scale_factor = 1 (hello dpi)
+[2026-09-17T15:47:01Z INFO  picoview] [   645.8ms] Resized 960x640
+[2026-09-17T15:47:01Z INFO  picoview] [   695.6ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-17T15:47:01Z INFO  picoview] [   713.7ms] render submit (tick 1)
+[2026-09-17T15:47:01Z INFO  picoview] [   714.1ms] frame ready from worker (tick 1)
+[2026-09-17T15:47:01Z INFO  picoview] [   714.3ms] present begin (frame tick 1)
+[2026-09-17T15:47:01Z INFO  picoview] [   714.4ms] first-present recovery: reconfigure swapchain
+[2026-09-17T15:47:01Z INFO  picoview] [   730.2ms] swapchain present submitted
+[2026-09-17T15:47:01Z INFO  picoview] [   730.5ms] present end (frame tick 1, submitted true)
+[2026-09-17T15:47:01Z INFO  picoview] [   752.8ms] window shown after first presented frame
+[2026-09-17T15:47:01Z INFO  picoview] [   753.3ms] Resized 960x640
+[2026-09-17T15:47:01Z INFO  picoview] [   754.9ms] RedrawRequested
+[2026-09-17T15:47:01Z INFO  picoview] [   755.2ms] present begin (frame tick 1)
+[2026-09-17T15:47:01Z INFO  picoview] [   756.7ms] swapchain present submitted
+[2026-09-17T15:47:01Z INFO  picoview] [   757.0ms] present end (frame tick 1, submitted true)
+[2026-09-17T15:47:03Z INFO  picoview] [  3490.6ms] RedrawRequested
+[2026-09-17T15:47:03Z INFO  picoview] [  3491.2ms] present begin (frame tick 1)
+[2026-09-17T15:47:03Z INFO  picoview] [  3491.9ms] swapchain present submitted
+[2026-09-17T15:47:03Z INFO  picoview] [  3492.1ms] present end (frame tick 1, submitted true)

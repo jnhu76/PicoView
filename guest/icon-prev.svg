@@ -1,3 +1,4 @@
 <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-  <path d="M9 2 L3 8 L9 14 L9 10 L14 10 L14 6 L9 6 Z" fill="#f0f0f0"/>
+  <!-- left edge chevron — light filled arrow -->
+  <path d="M10.5 2.5 L10.5 5.5 L6.5 8 L10.5 10.5 L10.5 13.5 L4.5 8 Z" fill="#f0f0f0"/>
 </svg>

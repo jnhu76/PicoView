@@ -1,0 +1,26 @@
+[2026-09-17T15:46:56Z INFO  picoview] [     0.0ms] process start
+[2026-09-17T15:46:56Z INFO  picoview] [    32.7ms] window created (hidden until first frame)
+[2026-09-17T15:46:57Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-17T15:46:57Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-17T15:46:57Z INFO  picoview] [   633.9ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-17T15:46:57Z INFO  picoview] [   634.1ms] window scale_factor = 1 (hello dpi)
+[2026-09-17T15:46:57Z INFO  picoview] [   634.3ms] Resized 960x640
+[2026-09-17T15:46:57Z INFO  picoview] current item: generation=1 handle=Some(14) path=C:\Users\fred1\source\PicoView\.worktrees\ui-chrome-1\experiments\real-viewer-closeout-1\smoke-media\B.jpg
+[2026-09-17T15:46:57Z INFO  picoview] browse session: dir=C:\Users\fred1\source\PicoView\.worktrees\ui-chrome-1\experiments\real-viewer-closeout-1\smoke-media count=4 index=Some(1)
+[2026-09-17T15:46:57Z INFO  picoview] [   708.2ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-17T15:46:57Z INFO  picoview] [   730.7ms] render submit (tick 1)
+[2026-09-17T15:46:57Z INFO  picoview] [   731.1ms] frame ready from worker (tick 1)
+[2026-09-17T15:46:57Z INFO  picoview] [   731.2ms] present begin (frame tick 1)
+[2026-09-17T15:46:57Z INFO  picoview] [   731.4ms] first-present recovery: reconfigure swapchain
+[2026-09-17T15:46:57Z INFO  picoview] [   746.3ms] swapchain present submitted
+[2026-09-17T15:46:57Z INFO  picoview] [   746.6ms] present end (frame tick 1, submitted true)
+[2026-09-17T15:46:57Z INFO  picoview] [   769.1ms] window shown after first presented frame
+[2026-09-17T15:46:57Z INFO  picoview] [   769.5ms] Resized 960x640
+[2026-09-17T15:46:57Z INFO  picoview] [   769.9ms] RedrawRequested
+[2026-09-17T15:46:57Z INFO  picoview] [   770.0ms] present begin (frame tick 1)
+[2026-09-17T15:46:57Z INFO  picoview] [   772.4ms] swapchain present submitted
+[2026-09-17T15:46:57Z INFO  picoview] [   773.2ms] present end (frame tick 1, submitted true)
+[2026-09-17T15:46:59Z INFO  picoview] [  3485.9ms] RedrawRequested
+[2026-09-17T15:46:59Z INFO  picoview] [  3486.4ms] present begin (frame tick 1)
+[2026-09-17T15:46:59Z INFO  picoview] [  3487.0ms] swapchain present submitted
+[2026-09-17T15:46:59Z INFO  picoview] [  3487.2ms] present end (frame tick 1, submitted true)
