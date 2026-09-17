@@ -181,7 +181,11 @@ No normal Desktop path reintroduces a canonical PSM texture solely at the PicoVi
 > previous publication is released, the swap commits only on successful
 > admission, refresh failures preserve the last-good publication, and
 > new-item failures deliberately publish the error item (PRD §2.10). The
-> guest observer splits request state from publication state. Evidence:
+> guest observer splits request state from publication state. Its correctives
+> separate the commit domains: the superseded resource release runs at the
+> post-frame observation boundary (CORRECTIVE-1), and the guest commits at
+> most one view binding per turn, for the final publication that turn
+> observed (CORRECTIVE-2). Evidence:
 > `docs/PICOVIEW-LAST-GOOD-PUBLICATION-1-EVIDENCE.md`.
 
 ---

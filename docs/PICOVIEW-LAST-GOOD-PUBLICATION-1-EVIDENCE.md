@@ -8,7 +8,11 @@ correction in PicoView only; PocketJS untouched.
 ```text
 BASE_SHA:            879f4c3 (PicoView main at campaign start)
 BRANCH:              fix/last-good-publication-1
+```
 CORRECTIVE-1 BASE:   7436f89 (pre-corrective branch head; its PASS revoked)
+CORRECTIVE-2 BASE:   476f0f7 (CORRECTIVE-1 head; its review PASS revoked —
+                     one MAJOR remained in the guest publication binding;
+                     see §Q mechanism, §R review)
 POCKETJS_LOCK_SHA:   24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb (unchanged)
 POCKETJS SOURCE:     integration/picoview-desktop (read-only inspection)
 WORKTREE:            clean (untracked tooling files removed, see §A)
@@ -129,8 +133,12 @@ OLD HANDLE VALID UNTIL: the guest observation boundary — after a guest frame
   (CORRECTIVE-1; see §O). No transient stale-handle hole is reachable in
   any call phase.
 
-NEW HANDLE BECOMES VISIBLE WHEN: the frame that observes `ready` rebinds the
-  texture key and rebuilds the DrawList — within one guest.frame() call.
+NEW HANDLE BECOMES VISIBLE WHEN: the frame that observes the replacing
+  `ready` renders it — under a texture key that changed, so `setSrc`
+  re-resolves. The guest commits exactly ONE binding per turn, against the
+  FINAL publication that turn observed (CORRECTIVE-2, §Q); if several
+  publications commit before one frame, only the last becomes a binding.
+  The rebuild happens inside that same guest.frame() call.
 
 FAILURE POLICY — REFRESH:  keep the old publication live and visible; emit a
   bounded, intent-tagged refresh error observation (PRD §2.10, SPEC §7).
@@ -151,8 +159,8 @@ MINIMAL MECHANISM: `OpenIntent { NewItem, Refresh }` parameter on
   `CurrentItem::open`; publish reordered to admit → commit → notify → queue
   superseded (release deferred to the observation boundary, §O); guest
   observer split into Publication (last-good) + Request (progress/
-  failure) with a per-publication ping-pong texture key for mounted-Image
-  rebinding.
+  failure); a bounded alternating texture key whose flip is committed once
+  per guest turn against the final observed publication (CORRECTIVE-2, §Q).
 ```
 
 The commit point is unambiguous (a single native assignment), so
@@ -202,38 +210,47 @@ site, enforced by the `ObservationBoundary` token in the API (§O).
 
 ```text
 ObserverState {
-  publication: last-good ready item | null
+  publication: last-good ready item | null   (generation, handle, w, h, name)
   request:     { generation, intent, status: loading|error } | null
   seenGeneration + seenClosed (stale-event guard)
-  nextBindSlot: 0|1 (publication bind nonce)
 }
 
 loading(g, intent) → request set; publication untouched
-ready(g)           → publication = candidate (bindSlot flips); request null
+ready(g)           → publication = candidate; request null
 error(g, refresh)  → publication PRESERVED; request = error   (PRD §2.10)
 error(g, new-item) → publication = null; request = error      (error item)
 stale: g < seenGeneration, or g == seenGeneration after its terminal
 ```
 
-`displayVerdict`: a refresh never displaces the main content (its
-progress/failure surfaces in the status strip + a bounded error line); a
-new-item loading/error does displace it.
+The Product state carries NO view-binding mechanics (CORRECTIVE-2): how a
+mounted Image re-resolves the publication handle is rendering realization,
+owned by `guest/binding.ts`. `displayVerdict`: a refresh never displaces the
+main content (its progress/failure surfaces in the status strip + a bounded
+error line); a new-item loading/error does displace it.
 
-Rebinding (`guest/app.octane.tsx`): `registerTexture` only updates the
-framework key→handle map and `setProp` skips an unchanged `src`, so the
-guest binds each publication under `picoview-current-<bindSlot>` (two
-alternating keys; the map stays bounded at two entries) and passes that key
-as `src` — a commit changes the string, forcing `setSrc` → `setImage` with
-the new handle before that frame's DrawList.
+Rebinding (`guest/binding.ts` + `guest/turn.ts` + `guest/app.octane.tsx`):
+`registerTexture` only updates the framework key→handle map and `setProp`
+skips an unchanged `src`, so a commit becomes a VIEW BINDING only when the
+frame that presents it renders under a different key. Native Product
+commits and guest rendered bindings are different commit domains, so the
+binding is reconciled ONCE per guest turn against the FINAL observed
+publication: if that publication's identity (generation + handle) differs
+from the one the mounted Image resolves, the slot flips (0↔1), the new key
+is registered, and the flip is the only thing that can change the rendered
+`src` string. N collapsed commits flip the binding once; zero commits flip
+it zero times; the framework key map stays bounded at
+`picoview-current-0/1`.
 
 ## F. Successful refresh sequence (proven ordering)
 
 ```text
 native tick:   admit(candidate) → COMMIT live=candidate → push ready →
                QUEUE superseded(old)
-guest frame:   svcPoll delivers ready → register new key → in-frame re-render
-               (framework flushUniversalSync drains microtask re-renders
-               inside the frame handler) → setSrc → setImage(new handle)
+guest frame:   svcPoll delivers the ready batch → the turn reduces every
+               event, commits ONE binding to the FINAL publication →
+               register the key → in-frame re-render (framework
+               flushUniversalSync drains microtask re-renders inside the
+               frame handler) → setSrc → setImage(final handle)
 boundary:      release_superseded — free(old) only after the frame that
                observed ready rebuilt the draw list; the old handle can no
                longer be resolved by anything the renderer consumes
@@ -241,12 +258,19 @@ draw:          submitted after the boundary; the renderer never sees a
                DrawList that references a freed handle
 ```
 
-The decisive property: even if the publication commit runs AFTER a guest
-frame but before that frame's render (the adversarial phase), the old
-handle is NOT freed at the commit — it frees only at the NEXT tick's
-boundary, after a frame has observed the ready event. The DrawList that
-rasterized in between resolved the still-live old handle (last-good
-visibility), never a freed one.
+The decisive properties, each owned by one side:
+
+- native: a superseded handle is NOT freed at the commit; it frees only at
+  the boundary of the tick whose guest frame observed its replacing event
+  (`RequestPhase` keeps every legal commit before that frame);
+- guest: that frame renders only the FINAL publication it observed
+  (CORRECTIVE-2, §Q), so the frame really has stopped resolving the
+  superseded handle when the boundary frees it.
+
+Neither half is sufficient alone: without the native deferral the commit
+could free a handle the current draw list still resolves; without the guest
+one-binding-per-turn commit the frame could still be bound to an earlier
+handle of the same batch (the CORRECTIVE-2 MAJOR).
 
 Tests: `superseded_publication_survives_until_the_observation_boundary`
 (commit → old still resolvable → boundary → freed),
@@ -322,10 +346,10 @@ growth across rounds.
 
 | Suite | Command | Result |
 | --- | --- | --- |
-| native state machine + oracles | `cd native && cargo test` | 19 passed, 0 failed (16 pre-corrective + 3 corrective) |
-| guest observer reducer | `bun test ./guest/observer.test.ts` | 12 passed, 0 failed |
-| clippy | `cargo clippy --all-targets` | pre-existing warnings only (Refresh dead-code allowed with named reason) |
-| guest bundle | `pocket.ts compile --target windows-app` | pass 2 ok, 343912 bytes |
+| native state machine + oracles | `cd native && cargo test` | 19 passed, 0 failed (16 pre-corrective + 3 corrective-1; `two_commits_before_one_boundary_release_every_superseded` extended for CORRECTIVE-2 with the "final candidate is the publication" assertion) |
+| guest observation + binding suites | `bun test guest/` | 33 passed, 0 failed (13 `observer.test.ts` + 11 `binding.test.ts` + 6 `turn.test.ts` + 3 `framework-binding.test.ts`) |
+| clippy | `cargo clippy --all-targets` | pre-existing warnings only, byte-identical set before/after (6, all in test-only code; `Refresh` dead-code allowed with named reason) |
+| guest bundle | `pocket.ts compile --target windows-app` | pass 2 ok, 345064 bytes |
 | release smoke (good) | `picoview.exe … smoke-lgp.jpg` | open handle=Some(0), render tick 1, present ok |
 | release smoke (corrupt) | `picoview.exe … corrupt.jpg` | open handle=None, error item, present ok |
 
@@ -341,13 +365,25 @@ boundary drain inside the cycles test.
 Guest coverage map (§19): READY(A); READY(A)+REFRESH_LOADING(B);
 +REFRESH_ERROR(B); READY(A)+REFRESH_LOADING(B)+READY(B);
 READY(A)+NEW_ITEM_LOADING(B)+NEW_ITEM_ERROR(B); stale generations;
-unknown intent; bind-slot alternation; viewport events; malformed lines.
+unknown intent; multi-ready collapse to the final publication; no
+view-binding mechanics in the Product state; viewport events; malformed
+lines. Binding coverage (§Q.4): the two/three/N-commit batch oracles,
+A→B→C→D in one batch, alternating-turn boundedness, refresh-error and
+new-item-error interleavings, handle-number reuse, idempotence,
+multi-batch-in-one-frame turns, and the framework-level
+`setProp`/`registerTexture` mechanism tests.
 
-E2E note (§20): V1 has no runtime refresh trigger (boot-open only), so the
-frame-level oracle rests on (a) the framework flush ordering citation
-(§B), (b) the native lifetime tests, (c) the reducer tests, and (d) the
-release smokes above; an interactive refresh path arrives with the
-navigation slice and will exercise this contract live.
+E2E note (§20): V1 has no runtime refresh trigger (boot-open only), so no
+test drives the compiled bundle through a live multi-commit batch. The
+temporal oracle is therefore assembled from three real parts, none of them
+a stub: (a) the native lifetime tests against the real PocketJS core
+(`two_commits_before_one_boundary_release_every_superseded` and
+friends), (b) the guest turn/binding oracles driving the exact shipped
+loop (`guest/turn.ts`, `guest/binding.ts`), and (c) framework-level tests
+that call the real pinned `setProp`/`setSrc`/`registerTexture` to prove an
+unchanged `src` resolves nothing and a flipped key resolves the new
+handle. An interactive refresh path arrives with the navigation slice and
+will exercise this contract live.
 
 ## M. Adversarial review 1 (pre-corrective) — verdict REVOKED
 
@@ -513,36 +549,47 @@ runtime loop iteration (run_runtime, native/src/main.rs):
                        and cannot resolve handles at all.
 ```
 
-Enforcement is code order plus the API shape: `open`/`retire` require a
-`RequestPhase` constructible only BEFORE_GUEST_FRAME; `release_superseded`
-requires an `ObservationBoundary` constructible only at the tick tail; the
-renderer's draw-list reads happen only after `tick` returns. Safety does
-not rest on any caller remembering a convention.
+Enforcement is code order plus the API shape: every LEGAL Product
+transition (`open`/`retire`) requires a `RequestPhase` — constructed at
+boot and in the runtime's input/request step, i.e. before the tick's guest
+frame — and `release_superseded` requires an `ObservationBoundary`
+constructible only at the tick tail; the renderer's draw-list reads happen
+only after `tick` returns. The tokens are review friction: they make the
+phase explicit and greppable, so an illegal phase is a deliberate named
+fabrication rather than an invisible call-site convention. They are NOT a
+type-system proof of wall-clock phase, and no claim here — or test — covers
+a deliberately fabricated illegal `RequestPhase`.
 
 ### O.5 The adversarial case, proven
 
-`frame N guest state draws OLD; candidate NEW commits at the latest legal
-point; OLD must stay resolvable until a guest observation boundary
-installs NEW; the renderer must never raster a DrawList referencing OLD
-after OLD is freed`:
+```text
+frame N guest state draws OLD; a publication removal commits before the
+next tick's guest turn; OLD must stay resolvable until that frame has
+observed the replacing event and rebuilt the draw list; the renderer must
+never raster a DrawList referencing OLD after OLD is freed.
+```
 
-- Commit BEFORE frame N (input phase or boot): frame N observes ready,
-  rebinds, boundary frees OLD before render N. DrawList at render N
-  references NEW. ✓
-- Commit AFTER frame N, BEFORE render N (the revoked phase): render N
-  still draws the DrawList referencing OLD — OLD is live (queued, not
-  freed), so it resolves and renders last-good. Frame N+1 observes ready,
-  rebinds to NEW; boundary N+1 frees OLD; render N+1 references NEW. No
-  frame ever resolves a freed handle. ✓
-- Commit AFTER render N: identical to the previous case shifted one
-  boundary later. ✓
+- Commit BEFORE frame N+1 (input phase or boot — every legal call site):
+  frame N+1 observes the ready/error event, commits its binding to the
+  replacing publication (§Q), and the boundary frees OLD before render
+  N+1. DrawList at render N+1 references the replacement. ✓
+- Commit AFTER frame N+1's guest turn (the illegal phase): this is NOT a
+  legal Product transition — `RequestPhase` is only constructible before
+  the guest turn, so such a call is a fabricated token and is explicitly
+  out of contract. The mechanism does not claim, and its evidence does not
+  assert, that a fabricated commit is deferred-then-safe; the token exists
+  precisely so that this is a named misuse rather than an assumed-sound
+  window.
 - NewItem failure instead of ready: the error event unmounts the Image on
   observation (verdict error, reducer §E); the replaced publication frees
   at the same post-observation boundary
   (`new_item_failure_release_waits_for_the_observation_boundary`). ✓
 - Two commits before any frame: both superseded handles survive to the
-  next boundary and free there
-  (`two_commits_before_one_boundary_release_every_superseded`). ✓
+  next boundary and free there; the guest's single turn-level binding
+  commit resolves to the batch's final publication, never to an
+  intermediate or superseded one
+  (`two_commits_before_one_boundary_release_every_superseded` natively,
+  the batch oracles of §Q.4 on the guest side). ✓
 
 ### O.6 Corrective tests
 
@@ -563,7 +610,17 @@ Direct-admission oracles re-run unchanged:
 identity) and `ordinary_decodes_prepare_as_the_decoder_plane_verbatim`
 both PASS at the corrective HEAD.
 
-## P. Fresh adversarial review 2 (post-corrective)
+## P. Fresh adversarial review 2 (post-corrective-1) — verdict REVOKED
+
+**Scope of this revocation:** the review below verified the NATIVE
+deferred-release mechanism and the phase gating, and those findings still
+stand. Its PASS is revoked as a whole-branch verdict because its attack
+list did not include the guest binding commit domain: the then-current
+guest flipped the texture-key slot once per `ready` EVENT, so an even
+number of publications collapsed into one guest turn ended back on the
+mounted key and the mounted Image kept resolving a superseded handle that
+the (correct) native boundary then freed. A fresh review found that as a
+MAJOR; `-CORRECTIVE-2` fixes it (§Q) and the re-review is §R.
 
 Fresh-context reviewer against the corrective HEAD, locked PocketJS
 `24bab5e` (checkout HEAD and all six git deps verified equal to the lock).
@@ -614,3 +671,143 @@ threading, 19 native tests pass, and the honest gate-strength caveat
 above.
 
 Verdict: **PASS — 0 unresolved BLOCKER, 0 unresolved MAJOR.**
+
+## Q. CORRECTIVE-2 — guest binding commit boundary
+
+Scope: PicoView guest only (`guest/observer.ts`, `guest/binding.ts`,
+`guest/turn.ts`, `guest/app.octane.tsx`, tests). PocketJS untouched (lock
+still `24bab5e`); the CORRECTIVE-1 native mechanism is preserved unchanged
+(`superseded` Vec, `RequestPhase`, `ObservationBoundary`,
+`release_superseded` at the `Runtime::tick` tail, NewItem deferred
+retirement, refresh last-good).
+
+### Q.1 The defect
+
+`Publication.bindSlot` flipped on every observed `ready` event and
+`app.octane.tsx` registered each ready publication immediately, deferring
+the actual re-render until the svc batch was fully processed. Several
+native publications can commit between two guest frames, and one guest
+turn reduces all of their events — so this legal sequence was broken:
+
+```text
+rendered:   A under picoview-current-0
+before the next guest frame:  native commits B, then C
+one svc batch:  loading B, ready B, loading C, ready C
+reduce ready B → bindSlot 1, register key1 → B
+reduce ready C → bindSlot 0, register key0 → C   (map only; no render of B)
+after the batch: setRevision → ONE render
+final JSX src = picoview-current-0 = the src already mounted
+→ setProp skips the unchanged value → setSrc never re-runs
+→ the mounted native Image node still resolves handle A
+→ the CORRECTIVE-1 boundary legitimately frees A and B
+→ the DrawList can reference freed A (blank frame)
+```
+
+Root cause is an authority mismatch, not a nonce-width problem:
+**native Product publication commits != guest rendered-binding commits.**
+More slots only move the wrap interval; three or N keys fail at 3 or N
+collapsed commits. The nonce was attached to the wrong commit domain.
+
+### Q.2 Mechanism
+
+PRODUCT observation and VIEW-BINDING realization are separate:
+
+```text
+ObserverState.publication = pure Product fact
+    { generation, handle, width, height, name }      (no bindSlot)
+GuestTurnState.binding = rendering fact only
+    { generation, handle, slot: 0|1 } | null
+```
+
+One guest turn (`guest/turn.ts`, the loop `app.octane.tsx` actually ships):
+
+```text
+for each queued svcPoll batch:            reduce every event in order
+                                          (Product correctness: every
+                                           staleness race is decided
+                                           per event)
+THEN, once per turn:
+    reconcileBinding(bound, final publication):
+        identity equal            → no flip, no register
+        identity differs          → slot = opposite(bound.slot)
+                                    (or 0 when nothing is bound)
+                                    register key(slot) → handle
+                                    binding = {new identity, slot}
+        publication null          → binding = null (Image unmounts)
+```
+
+Then — and only then — the turn schedules the render under the reconciled
+slot. The rendered `src` string therefore ALWAYS differs from the mounted
+one when a rebind is needed, and never differs when the publication did
+not move:
+
+```text
+0 native commits in a turn   → src unchanged
+1 native commit              → src flips once
+2 native commits             → src flips once
+N native commits             → src flips once
+```
+
+Bound-before-render ordering: `registerTexture` runs before the
+`setRevision` flush, and the flush is where `setSrc` resolves the key
+(framework contract, §B) — the registered handle is the one the frame
+renders. Verified at the locked revision: the octane sync boundary runs
+the frame hooks and then drains the render wave they scheduled in the same
+pass, looping until no root remains scheduled
+(`octane/dist/universal-core.js:6720` `runUniversalSyncBoundary`, called
+from `framework/src/index-octane.ts:225`), so the render this turn
+scheduled is committed inside the same `guest.frame()` — before
+`surface.tick` rebuilds the draw list and before the native release
+boundary runs.
+
+### Q.3 Boundedness and the key namespace
+
+Exactly two texture keys (`picoview-current-0/1`) remain sufficient,
+because the slot flips per RENDERED publication transition rather than per
+native event. A generation-derived key would grow the framework key→handle
+map without an unregister mechanism, and is deliberately not used. The
+registry holds at most two entries; the invariant "the rendered key always
+resolves the current publication" holds because a reconciliation writes
+only the previously-non-current slot (the write and the slot change are
+the same event), so the current slot's entry cannot be overwritten while
+it is current.
+
+### Q.4 Corrective tests
+
+| Test | Proves |
+| --- | --- |
+| `two commits in one turn flip the binding exactly once (A -> B -> C)` | the exact review scenario: final publication C, one flip, src string changes, mounted node resolves C |
+| `any number of collapsed ready events flips the binding exactly once` | 1..8 ready events per turn: one flip, correct final handle, no even-count wrap |
+| `A -> B -> C -> D inside one batch still renders only A -> D` | intermediate publications never become bindings |
+| `two-commit batch oracle: the drawn handle survives the boundary free` | after the native boundary frees A and B, the drawn handle is C, not a superseded one |
+| `refresh error after an intermediate success binds the intermediate publication` | A → READY(B) → REFRESH_ERROR(C): Product publication is B, binding moves A → B once |
+| `new-item error after an intermediate success unmounts instead of binding` | A → READY(B) → NEW_ITEM_ERROR(C): publication null, Image unmounts, no registration for B |
+| `refresh loading alone never flips the binding` | a view/request-only turn leaves the binding and src untouched |
+| `reconciliation is idempotent for an unchanged publication` | re-running a turn over the same publication flips nothing |
+| `a reused handle number from a newer generation is still a new binding` | identity is generation+handle; freed-handle reuse is a new binding |
+| `alternating turns keep flipping between exactly two keys` | namespace stays bounded at two keys and two registry entries |
+| `negative control: per-event key flipping would re-mount the stale handle` | the test would catch the superseded per-event model |
+| `two svc batches in one frame commit exactly one binding` | the commit boundary is the TURN: per-batch commits would reintroduce the MAJOR one level up |
+| `three batches in one frame still commit exactly one binding` | same, at the next parity |
+| `an empty drain changes nothing and schedules no render` | idle turns are no-ops |
+| `a turn with no Publication change schedules no render and no register` | refresh loading: status render, no rebind |
+| `malformed and foreign lines are skipped without disturbing the binding` | robustness cannot move the binding |
+| `the turn is the only place a binding moves (no double register)` | repeat turns do not re-register |
+| `an unchanged src does not re-resolve the mounted handle` | FRAMEWORK-LEVEL: the real pinned `setProp`/`setSrc` skips on an unchanged key even when the registry moved |
+| `a flipped slot re-resolves the node to the reconciled publication` | FRAMEWORK-LEVEL: the flipped key really calls `setImage(new handle)` on the real path |
+| `a full image node unmount/remount cycle is always a fresh src` | a remount applies its src regardless of key repetition |
+| `publication carries no view-binding mechanics` (`observer.test.ts`) | the semantic split is enforced in the Product state |
+| `several ready events in one turn collapse to the final publication` | the reducer has no per-event binding machinery |
+| `guest_texture_key_matches_host_hint` (native, extended) | the host hint and the guest key owner (`guest/binding.ts`) stay one contract, and the app consumes the derivation |
+
+### Q.5 Honest statement of the guarantee
+
+For every turn, the guest commits at most one binding, for the final
+publication that turn observed. Combined with the native rule (superseded
+handles stay resolvable until the boundary of the tick whose frame
+observed the replacing event), no legal Product transition can free a
+publication while a renderable guest state still references it.
+
+Not claimed: safety for a fabricated illegal `RequestPhase`; end-to-end
+execution of the compiled bundle through a live multi-commit batch (V1 has
+no runtime trigger — see §L E2E note).

@@ -24,12 +24,19 @@ publication ordering: candidates are admitted before the previous
 publication is released, refresh failures preserve the last-good
 publication, new-item failures deliberately publish the error item
 (PRD §2.10), and the guest observer splits request state from publication
-state. Its corrective (`-CORRECTIVE-1`, same day) separates the
-publication COMMIT from the superseded RESOURCE RELEASE: removals only
-queue the superseded handle, and the physical release runs once per tick
-at the post-guest-frame observation boundary (`ObservationBoundary` /
-`RequestPhase` tokens in `native/src/current_item.rs`), so no renderable
-guest state can reference a freed handle in any call phase.
+state. Its correctives separate the three commit domains:
+`-CORRECTIVE-1` split the publication COMMIT from the superseded RESOURCE
+RELEASE — removals only queue the superseded handle and the physical
+release runs once per tick at the post-guest-frame observation boundary
+(`ObservationBoundary` / `RequestPhase` tokens in
+`native/src/current_item.rs`) — and `-CORRECTIVE-2` split the native Product
+commit from the guest RENDERED binding: one guest turn reduces all events
+and commits at most one binding for the FINAL observed publication
+(`guest/binding.ts`, `guest/turn.ts`), so an arbitrary number of collapsed
+Product commits cannot leave the mounted Image on a freed handle. Every
+LEGAL Product transition constructs `RequestPhase` before the tick's guest
+frame; the tokens are review friction, not a claim about fabricated illegal
+use.
 
 The next work is the remaining PicoView-side corrections (R3): truthful
 full-resolution capability, generic color/alpha admission.
