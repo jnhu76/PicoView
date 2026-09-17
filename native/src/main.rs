@@ -208,7 +208,10 @@ impl Runtime {
         // queued before this frame, the frame's commits landed in it, and
         // surface.tick rebuilt the draw list the renderer will read. Every
         // superseded publication was replaced by an event observed before
-        // that frame, so freeing it here cannot open a stale-handle hole —
+        // that frame — and the guest's turn renders only the FINAL
+        // publication it observed (`guest/turn.ts`, CORRECTIVE-2), so that
+        // frame's binding has really stopped resolving the superseded
+        // handle. Freeing it here therefore cannot open a stale-handle hole,
         // and this runs strictly before render, so no submitted frame can
         // resolve a freed handle. This is the only place a Current Item
         // texture is ever freed.

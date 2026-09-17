@@ -15,8 +15,14 @@
 //! (replacement commit or NewItem failure) only queues the superseded
 //! handle. The physical release runs at the runtime's observation boundary —
 //! after a guest frame has observed the replacing svc event and rebuilt the
-//! draw list, before that tick's render — so no renderable guest state can
-//! ever reference a freed handle, whatever phase the committing call ran in.
+//! draw list, before that tick's render. Every LEGAL Product transition
+//! requires a `RequestPhase`, i.e. it commits before the tick's guest frame;
+//! from there the superseded handle stays resolvable until the boundary of
+//! the tick whose frame observed the replacing event. The guest holds the
+//! other half of that contract: one guest turn renders only the FINAL
+//! publication it observed, so the frame that presents the replacement
+//! really has stopped resolving the superseded handle
+//! (`guest/binding.ts`, `guest/turn.ts`).
 //!
 //! The full-resolution decode is published through PocketJS owned RGBA8
 //! image admission (`Ui::upload_owned_rgba8`), so ordinary photographs keep
@@ -33,8 +39,8 @@ use serde_json::json;
 use std::path::Path;
 
 pub const SVC_TYPE: &str = "current-item";
-/// Texture key the guest binds ready handles under (mirrored in
-/// guest/app.octane.tsx; the handle travels via svc, the key stays literal).
+/// Texture key prefix the guest binds ready handles under (mirrored in
+/// guest/binding.ts; the handle travels via svc, the key stays literal).
 #[allow(dead_code)]
 const TEXTURE_KEY_HINT: &str = "picoview-current";
 /// PocketJS owned-admission ceiling (`spec::NATIVE_TEX_MAX_DIM`, matched to
@@ -146,6 +152,12 @@ struct LiveResource {
 /// commits landed in that frame, and the draw list the renderer reads is
 /// rebuilt. `release_superseded` refuses to run without one, so the safe
 /// phase is part of the API, not a comment a future caller must remember.
+///
+/// The token witnesses the phase, not the handles: it says "a guest frame
+/// has completed", and the deferred-release protocol (CORRECTIVE-1) plus the
+/// guest's one-binding-per-turn commit (`guest/turn.ts`, CORRECTIVE-2) are
+/// what make that frame the one that stopped resolving the superseded
+/// publication.
 pub struct ObservationBoundary(());
 
 impl ObservationBoundary {
@@ -164,7 +176,9 @@ impl ObservationBoundary {
 /// `guest.frame` and the same tick's release boundary, freed before any
 /// frame observed its replacing event — into a deliberate, greppable
 /// fabrication of a token whose name states the phase it grants, instead
-/// of an invisible call-site convention.
+/// of an invisible call-site convention. That fabrication is out of
+/// contract: no comment, test, or claim in this crate treats an illegal
+/// phase as supported.
 pub struct RequestPhase(());
 
 impl RequestPhase {
@@ -182,11 +196,15 @@ impl RequestPhase {
 /// (PICOVIEW-LAST-GOOD-PUBLICATION-1-CORRECTIVE-1): `open`/`retire` commit
 /// Product state and queue superseded handles, but NEVER free a texture.
 /// Freeing lives solely in `release_superseded`, which requires an
-/// `ObservationBoundary`. This makes every legal call phase safe by
-/// construction: a publication removed at any point — before, during, or
-/// after a guest frame — stays resolvable until a guest frame has observed
-/// the event that replaced it, so no renderable DrawList can ever reference
-/// a freed handle.
+/// `ObservationBoundary`. The safety statement is about LEGAL transitions:
+/// every Product transition requires a `RequestPhase`, and every designed
+/// call site constructs it before the tick's guest frame, so the replacing
+/// event is always observed by a frame that completes before the boundary
+/// that frees the superseded handle. `RequestPhase` is review friction —
+/// a named, greppable phase witness — not a type-system proof of wall-clock
+/// phase: a deliberately fabricated token inside the guest turn could still
+/// commit after a frame, and neither this mechanism nor its tests claim
+/// safety for such a call.
 pub struct CurrentItem {
     next_generation: u64,
     live: Option<LiveResource>,
@@ -775,6 +793,11 @@ mod tests {
                 assert!(ui.texture(c).is_some(), "round {round}: publication live");
                 ui.texture_slot_count()
             });
+            // The native half of the guest binding oracle: after a coalesced
+            // commit batch the LIVE handle is the batch's final candidate —
+            // the publication a guest turn reconciles its binding to — and
+            // every intermediate candidate is gone.
+            assert_eq!(item.live_handle(), Some(c), "round {round}: final candidate is the publication");
             match steady_slots {
                 Some(s) => assert_eq!(
                     s, slots,
@@ -1228,11 +1251,20 @@ mod tests {
     fn guest_texture_key_matches_host_hint() {
         // The host hint and the guest's registerTexture key are one wire
         // contract kept as literals on both sides; this locks them together.
-        let guest = std::fs::read_to_string(concat!(
+        // The guest OWNS the key derivation (guest/binding.ts) so exactly one
+        // module can produce binding keys — app.octane.tsx must consume it
+        // rather than hand-rolling a key string.
+        let guest_binding = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../guest/binding.ts"
+        ))
+        .expect("guest binding module readable from the workspace");
+        assert!(guest_binding.contains(&format!("const TEXTURE_KEY = \"{TEXTURE_KEY_HINT}\";")));
+        let guest_app = std::fs::read_to_string(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../guest/app.octane.tsx"
         ))
         .expect("guest source readable from the workspace");
-        assert!(guest.contains(&format!("const TEXTURE_KEY = \"{TEXTURE_KEY_HINT}\";")));
+        assert!(guest_app.contains("textureKeyFor("));
     }
 }

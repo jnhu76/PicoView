@@ -6,10 +6,10 @@ import { useFrame } from "@pocketjs/framework/octane/lifecycle";
 import {
   displayVerdict,
   initialObserverState,
-  reduceObserver,
   type ObserverState,
-  type Publication,
 } from "./observer.ts";
+import { textureKeyFor, type BoundPublication } from "./binding.ts";
+import { runGuestTurn } from "./turn.ts";
 
 // PicoView product shell (ROADMAP V1: Open One Image; last-good publication
 // ordering: PICOVIEW-LAST-GOOD-PUBLICATION-1).
@@ -22,18 +22,17 @@ import {
 // loading/failure) and request (progress/failure, carrying the Product
 // intent); see observer.ts. No filesystem, decode, or texture-lifetime
 // authority lives here.
-
-const TEXTURE_KEY = "picoview-current";
-
-// The texture key flips per publication commit: setProp skips an unchanged
-// src, so a mounted Image only re-resolves its handle when the key string
-// changes. Two alternating keys keep the framework key→handle map bounded.
-function textureKeyFor(slot: 0 | 1): string {
-  return `${TEXTURE_KEY}-${slot}`;
-}
+//
+// Product reduction and view-binding realization are separate commit
+// domains (CORRECTIVE-2). A turn may reduce several `ready` events — native
+// commits between two frames — but only the FINAL publication of the turn
+// can become a rendered binding; binding.ts owns that reconciliation. The
+// texture key flips once per rendered publication transition, so a mounted
+// Image always re-resolves to the publication the native side currently
+// keeps live.
 
 function fit(
-  publication: Publication,
+  publication: { width: number; height: number },
   viewport?: { w: number; h: number },
 ): { w: number; h: number } | null {
   if (!viewport) return null;
@@ -53,49 +52,37 @@ function fit(
 
 export default function App() {
   // Current Item observations live in a plain ref that the pure reducer
-  // folds per svc line: one frame's svcPoll batch applies all its lines in
+  // folds per svc line: one frame's svcPoll drain applies every line in
   // order. The tick counter only schedules the re-render.
   const item = useRef<ObserverState>(initialObserverState());
   const revision = useRef(0);
   const [, setRevision] = useState(0);
-  // Bind slot whose handle is registered under its texture key. Two slots
-  // total; rebinding on a newer publication implicitly supersedes the old.
-  const registeredSlot = useRef<number>(-1);
+  // The publication the mounted Image currently resolves to, plus the
+  // texture-key slot its src string names. Not Product authority — it
+  // remembers a rendering fact only (binding.ts).
+  const binding = useRef<BoundPublication | null>(null);
 
   useFrame(() => {
     const ops = getOps();
     const poll = ops.svcPoll;
     if (!poll) return;
-    // svcPoll batches complete newline-terminated JSON lines per call.
-    for (;;) {
-      const batch = poll.call(ops);
-      if (batch === undefined) break;
-      let changed = false;
-      for (const line of batch.split("\n")) {
-        if (!line) continue;
-        let v: Parameters<typeof reduceObserver>[1];
-        try {
-          v = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (!v || typeof v !== "object") continue;
-        const next = reduceObserver(item.current, v);
-        if (next === item.current) continue;
-        item.current = next;
-        changed = true;
-        // Register the new publication's handle before the re-render flush:
-        // setSrc resolves the key against this map during the flush.
-        const publication = next.publication;
-        if (publication && publication.bindSlot !== registeredSlot.current) {
-          registerTexture(textureKeyFor(publication.bindSlot), publication.handle);
-          registeredSlot.current = publication.bindSlot;
-        }
-      }
-      if (changed) {
-        revision.current += 1;
-        setRevision(revision.current);
-      }
+    // One guest turn: reduce every queued svc batch in order, then commit
+    // exactly ONE view binding against the final observed publication —
+    // never once per ready event, and never once per batch. N collapsed
+    // native commits still move the binding at most once, so the rendered
+    // src key always names the publication the native side keeps live, and
+    // never a superseded handle the observation boundary is about to free.
+    const outcome = runGuestTurn(
+      { observer: item.current, binding: binding.current },
+      () => poll.call(ops),
+    );
+    item.current = outcome.state.observer;
+    binding.current = outcome.state.binding;
+    // Register before the re-render flush: setSrc resolves the key there.
+    if (outcome.register) registerTexture(outcome.register.key, outcome.register.handle);
+    if (outcome.render) {
+      revision.current += 1;
+      setRevision(revision.current);
     }
   });
 
@@ -103,6 +90,7 @@ export default function App() {
   const verdict = displayVerdict(state);
   const publication = state.publication;
   const request = state.request;
+  const bound = binding.current;
   const box = publication && verdict === "image" ? fit(publication, state.viewport) : null;
   // A refresh keeps the last-good image on screen; its progress/failure is
   // reported truthfully in the status area without displacing the image.
@@ -132,9 +120,9 @@ export default function App() {
         {shownName ? <Text class="text-xs text-slate-400">{shownName}</Text> : null}
       </View>
       <View class="flex-1 flex-col items-center justify-center bg-slate-800 overflow-hidden">
-        {verdict === "image" && box && publication ? (
+        {verdict === "image" && box && bound ? (
           <Image
-            src={textureKeyFor(publication.bindSlot)}
+            src={textureKeyFor(bound.slot)}
             class="overflow-hidden"
             style={{ width: box.w, height: box.h }}
           />

@@ -18,12 +18,13 @@
 
 export type OpenIntent = "new-item" | "refresh";
 
+/** The last-good published item — a pure Product fact. It deliberately
+ *  carries NO view-binding mechanics: how a mounted Image re-resolves this
+ *  handle (texture keys, slots) is a rendering-realization concern owned
+ *  by guest/binding.ts, because native commits and rendered bindings are
+ *  different commit domains (several publications can collapse into one
+ *  guest turn). */
 export interface Publication {
-  /** View-binding nonce, flipped on every publication commit so a mounted
-   *  Image re-resolves its handle (setProp skips an unchanged src, so the
-   *  texture key must change for setSrc to rebind). Two slots total; the
-   *  key→handle map stays bounded at two entries. */
-  bindSlot: 0 | 1;
   generation: number;
   handle: number;
   width: number;
@@ -48,13 +49,11 @@ export interface ObserverState {
   /** True once a terminal event (ready/error) closed seenGeneration; a
    *  same-generation event after the terminal is stale and never wins. */
   seenClosed: boolean;
-  /** Bind slot for the next publication commit. */
-  nextBindSlot: 0 | 1;
   viewport?: { w: number; h: number };
 }
 
 export function initialObserverState(): ObserverState {
-  return { publication: null, request: null, seenGeneration: 0, seenClosed: false, nextBindSlot: 0 };
+  return { publication: null, request: null, seenGeneration: 0, seenClosed: false };
 }
 
 /** Loosely-typed wire form (svc events arrive as parsed JSON lines). */
@@ -102,10 +101,8 @@ export function reduceObserver(state: ObserverState, v: SvcLine): ObserverState 
     typeof v.width === "number" &&
     typeof v.height === "number"
   ) {
-    const bindSlot = state.nextBindSlot;
     return {
       publication: {
-        bindSlot,
         generation: v.g,
         handle: v.handle,
         width: v.width,
@@ -115,7 +112,6 @@ export function reduceObserver(state: ObserverState, v: SvcLine): ObserverState 
       request: null,
       seenGeneration: v.g,
       seenClosed: true,
-      nextBindSlot: bindSlot === 0 ? 1 : 0,
       viewport: state.viewport,
     };
   }

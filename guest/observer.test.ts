@@ -100,13 +100,30 @@ test("unknown intent narrows to new-item so preservation stays deliberate", () =
   expect(displayVerdict(s)).toBe("error");
 });
 
-test("publication bind slot alternates so a mounted image rebinds", () => {
-  const first = fold(ready(1, 11, 100, 100));
-  const second = fold(ready(1, 11, 100, 100), ready(2, 22, 200, 200));
-  const third = fold(ready(1, 11, 100, 100), ready(2, 22, 200, 200), ready(3, 33, 300, 300));
-  expect(first.publication?.bindSlot).toBe(0);
-  expect(second.publication?.bindSlot).toBe(1);
-  expect(third.publication?.bindSlot).toBe(0);
+test("publication carries no view-binding mechanics", () => {
+  // The Product observer state answers only "what is the final observed
+  // publication" — how a mounted Image re-resolves that handle is
+  // rendering realization (guest/binding.ts, CORRECTIVE-2).
+  const s = fold(ready(1, 11, 100, 100));
+  expect(s.publication).not.toHaveProperty("bindSlot");
+  expect(s).not.toHaveProperty("nextBindSlot");
+  expect(Object.keys(s.publication ?? {}).sort()).toEqual([
+    "generation",
+    "handle",
+    "height",
+    "name",
+    "width",
+  ]);
+});
+
+test("several ready events in one turn collapse to the final publication", () => {
+  // The guest drains a whole svc batch per turn; only the LAST publication
+  // the turn observed can become a rendered binding. The reducer must not
+  // encode any per-event ordering machinery for that.
+  const s = fold(ready(1, 11, 100, 100), ready(2, 22, 200, 200), ready(3, 33, 300, 300));
+  expect(s.publication).toMatchObject({ generation: 3, handle: 33 });
+  expect(s.request).toBeNull();
+  expect(displayVerdict(s)).toBe("image");
 });
 
 test("viewport events update fit input without touching publication", () => {
