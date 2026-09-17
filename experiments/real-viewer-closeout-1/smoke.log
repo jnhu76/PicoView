@@ -1,0 +1,103 @@
+[2026-09-17T05:13:33Z INFO  picoview] [     0.0ms] process start
+[2026-09-17T05:13:33Z INFO  picoview] [    68.2ms] window created
+[2026-09-17T05:13:34Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-17T05:13:34Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-17T05:13:34Z INFO  picoview] [   681.8ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-17T05:13:34Z INFO  picoview] [   682.7ms] Resized 1904x984
+[2026-09-17T05:13:34Z INFO  picoview] [   683.0ms] Resized 960x640
+[2026-09-17T05:13:34Z INFO  picoview] [   683.2ms] Resized 960x640
+[2026-09-17T05:13:34Z INFO  picoview] [   683.5ms] RedrawRequested
+[2026-09-17T05:13:34Z INFO  picoview] current item: generation=1 handle=Some(0) path=C:\Users\fred1\source\PicoView\experiments\real-viewer-closeout-1\smoke-media\A.jpg
+[2026-09-17T05:13:34Z INFO  picoview] browse session: dir=C:\Users\fred1\source\PicoView\experiments\real-viewer-closeout-1\smoke-media count=4 index=Some(0)
+[2026-09-17T05:13:34Z INFO  picoview] [   747.0ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-17T05:13:34Z INFO  picoview] [   761.9ms] render submit (tick 1)
+[2026-09-17T05:13:34Z INFO  picoview] [   762.5ms] frame ready from worker (tick 1), requesting redraw
+[2026-09-17T05:13:34Z INFO  picoview] [   762.7ms] RedrawRequested
+[2026-09-17T05:13:34Z INFO  picoview] [   762.9ms] present begin (frame tick 1)
+[2026-09-17T05:13:34Z INFO  picoview] [   763.0ms] first-present recovery: reconfigure swapchain
+[2026-09-17T05:13:34Z INFO  picoview] [   777.5ms] swapchain present submitted
+[2026-09-17T05:13:34Z INFO  picoview] [   777.9ms] present end (frame tick 1, submitted true)
+[2026-09-17T05:13:35Z DEBUG picoview] guest svc: {"t":"pv","cmd":"next"}
+[2026-09-17T05:13:35Z INFO  picoview] [  1619.3ms] render submit (tick 52)
+[2026-09-17T05:13:35Z INFO  picoview] [  1619.7ms] frame ready from worker (tick 52), requesting redraw
+[2026-09-17T05:13:35Z INFO  picoview] [  1620.0ms] RedrawRequested
+[2026-09-17T05:13:35Z INFO  picoview] [  1620.1ms] present begin (frame tick 52)
+[2026-09-17T05:13:35Z INFO  picoview] [  1621.0ms] swapchain present submitted
+[2026-09-17T05:13:35Z INFO  picoview] [  1621.1ms] present end (frame tick 52, submitted true)
+[2026-09-17T05:13:35Z INFO  picoview] [  1978.3ms] render submit (tick 74)
+[2026-09-17T05:13:35Z INFO  picoview] [  1979.1ms] frame ready from worker (tick 74), requesting redraw
+[2026-09-17T05:13:35Z INFO  picoview] [  1979.4ms] RedrawRequested
+[2026-09-17T05:13:35Z INFO  picoview] [  1979.6ms] present begin (frame tick 74)
+[2026-09-17T05:13:35Z INFO  picoview] [  1980.2ms] swapchain present submitted
+[2026-09-17T05:13:35Z INFO  picoview] [  1980.4ms] present end (frame tick 74, submitted true)
+[2026-09-17T05:13:35Z INFO  picoview] [  2369.6ms] render submit (tick 97)
+[2026-09-17T05:13:35Z INFO  picoview] [  2370.0ms] frame ready from worker (tick 97), requesting redraw
+[2026-09-17T05:13:35Z INFO  picoview] [  2370.3ms] RedrawRequested
+[2026-09-17T05:13:35Z INFO  picoview] [  2370.5ms] present begin (frame tick 97)
+[2026-09-17T05:13:35Z INFO  picoview] [  2371.1ms] swapchain present submitted
+[2026-09-17T05:13:35Z INFO  picoview] [  2371.2ms] present end (frame tick 97, submitted true)
+[2026-09-17T05:13:36Z INFO  picoview] [  2746.3ms] render submit (tick 120)
+[2026-09-17T05:13:36Z INFO  picoview] [  2747.1ms] frame ready from worker (tick 120), requesting redraw
+[2026-09-17T05:13:36Z INFO  picoview] [  2747.6ms] RedrawRequested
+[2026-09-17T05:13:36Z INFO  picoview] [  2747.8ms] present begin (frame tick 120)
+[2026-09-17T05:13:36Z INFO  picoview] [  2748.3ms] swapchain present submitted
+[2026-09-17T05:13:36Z INFO  picoview] [  2748.5ms] present end (frame tick 120, submitted true)
+[2026-09-17T05:13:36Z INFO  picoview] [  3148.2ms] render submit (tick 144)
+[2026-09-17T05:13:36Z INFO  picoview] [  3148.9ms] frame ready from worker (tick 144), requesting redraw
+[2026-09-17T05:13:36Z INFO  picoview] [  3149.1ms] RedrawRequested
+[2026-09-17T05:13:36Z INFO  picoview] [  3149.2ms] present begin (frame tick 144)
+[2026-09-17T05:13:36Z INFO  picoview] [  3149.7ms] swapchain present submitted
+[2026-09-17T05:13:36Z INFO  picoview] [  3149.9ms] present end (frame tick 144, submitted true)
+[2026-09-17T05:13:37Z DEBUG picoview] guest svc: {"t":"pv","cmd":"next"}
+[2026-09-17T05:13:37Z INFO  picoview] [  3549.4ms] render submit (tick 168)
+[2026-09-17T05:13:37Z INFO  picoview] [  3549.8ms] frame ready from worker (tick 168), requesting redraw
+[2026-09-17T05:13:37Z INFO  picoview] [  3550.1ms] RedrawRequested
+[2026-09-17T05:13:37Z INFO  picoview] [  3550.2ms] present begin (frame tick 168)
+[2026-09-17T05:13:37Z INFO  picoview] [  3550.6ms] swapchain present submitted
+[2026-09-17T05:13:37Z INFO  picoview] [  3550.8ms] present end (frame tick 168, submitted true)
+[2026-09-17T05:13:37Z DEBUG picoview] guest svc: {"t":"pv","cmd":"next"}
+[2026-09-17T05:13:37Z INFO  picoview] [  3951.7ms] render submit (tick 192)
+[2026-09-17T05:13:37Z INFO  picoview] [  3952.1ms] frame ready from worker (tick 192), requesting redraw
+[2026-09-17T05:13:37Z INFO  picoview] [  3952.5ms] RedrawRequested
+[2026-09-17T05:13:37Z INFO  picoview] [  3952.7ms] present begin (frame tick 192)
+[2026-09-17T05:13:37Z INFO  picoview] [  3953.2ms] swapchain present submitted
+[2026-09-17T05:13:37Z INFO  picoview] [  3953.4ms] present end (frame tick 192, submitted true)
+[2026-09-17T05:13:37Z DEBUG picoview] guest svc: {"t":"pv","cmd":"previous"}
+[2026-09-17T05:13:37Z INFO  picoview] [  4345.7ms] render submit (tick 216)
+[2026-09-17T05:13:37Z INFO  picoview] [  4346.1ms] frame ready from worker (tick 216), requesting redraw
+[2026-09-17T05:13:37Z INFO  picoview] [  4346.4ms] RedrawRequested
+[2026-09-17T05:13:37Z INFO  picoview] [  4346.6ms] present begin (frame tick 216)
+[2026-09-17T05:13:37Z INFO  picoview] [  4347.1ms] swapchain present submitted
+[2026-09-17T05:13:37Z INFO  picoview] [  4347.3ms] present end (frame tick 216, submitted true)
+[2026-09-17T05:13:38Z DEBUG picoview] guest svc: {"t":"pv","cmd":"previous"}
+[2026-09-17T05:13:38Z INFO  picoview] [  4744.9ms] render submit (tick 239)
+[2026-09-17T05:13:38Z INFO  picoview] [  4745.5ms] frame ready from worker (tick 239), requesting redraw
+[2026-09-17T05:13:38Z INFO  picoview] [  4745.8ms] RedrawRequested
+[2026-09-17T05:13:38Z INFO  picoview] [  4746.0ms] present begin (frame tick 239)
+[2026-09-17T05:13:38Z INFO  picoview] [  4746.5ms] swapchain present submitted
+[2026-09-17T05:13:38Z INFO  picoview] [  4746.8ms] present end (frame tick 239, submitted true)
+[2026-09-17T05:13:38Z DEBUG picoview] guest svc: {"t":"pv","cmd":"refresh"}
+[2026-09-17T05:13:38Z INFO  picoview] [  5127.0ms] render submit (tick 262)
+[2026-09-17T05:13:38Z INFO  picoview] [  5127.5ms] frame ready from worker (tick 262), requesting redraw
+[2026-09-17T05:13:38Z INFO  picoview] [  5127.8ms] RedrawRequested
+[2026-09-17T05:13:38Z INFO  picoview] [  5127.9ms] present begin (frame tick 262)
+[2026-09-17T05:13:38Z INFO  picoview] [  5128.3ms] swapchain present submitted
+[2026-09-17T05:13:38Z INFO  picoview] [  5128.5ms] present end (frame tick 262, submitted true)
+[2026-09-17T05:13:39Z INFO  picoview] [  5492.4ms] render submit (tick 284)
+[2026-09-17T05:13:39Z INFO  picoview] [  5492.7ms] frame ready from worker (tick 284), requesting redraw
+[2026-09-17T05:13:39Z INFO  picoview] [  5492.9ms] RedrawRequested
+[2026-09-17T05:13:39Z INFO  picoview] [  5493.1ms] present begin (frame tick 284)
+[2026-09-17T05:13:39Z INFO  picoview] [  5493.6ms] swapchain present submitted
+[2026-09-17T05:13:39Z INFO  picoview] [  5493.7ms] present end (frame tick 284, submitted true)
+[2026-09-17T05:13:39Z INFO  picoview] [  5870.6ms] render submit (tick 307)
+[2026-09-17T05:13:39Z INFO  picoview] [  5871.2ms] frame ready from worker (tick 307), requesting redraw
+[2026-09-17T05:13:39Z INFO  picoview] [  5871.4ms] RedrawRequested
+[2026-09-17T05:13:39Z INFO  picoview] [  5871.6ms] present begin (frame tick 307)
+[2026-09-17T05:13:39Z INFO  picoview] [  5872.1ms] swapchain present submitted
+[2026-09-17T05:13:39Z INFO  picoview] [  5872.2ms] present end (frame tick 307, submitted true)
+[2026-09-17T05:13:39Z INFO  picoview] [  6278.5ms] render submit (tick 331)
+[2026-09-17T05:13:39Z INFO  picoview] [  6278.9ms] frame ready from worker (tick 331), requesting redraw
+[2026-09-17T05:13:39Z INFO  picoview] [  6279.1ms] RedrawRequested
+[2026-09-17T05:13:39Z INFO  picoview] [  6279.3ms] present begin (frame tick 331)
+[2026-09-17T05:13:39Z INFO  picoview] [  6279.7ms] swapchain present submitted
+[2026-09-17T05:13:39Z INFO  picoview] [  6279.9ms] present end (frame tick 331, submitted true)

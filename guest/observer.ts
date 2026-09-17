@@ -105,6 +105,10 @@ export interface SvcLine {
   canNext?: unknown;
   w?: unknown;
   h?: unknown;
+  /** Keyboard key events from the desktop host (REAL-VIEWER-TRAIN-1). */
+  k?: unknown;
+  cmd?: unknown;
+  ctl?: unknown;
 }
 
 function isGeneration(v: unknown): v is number {

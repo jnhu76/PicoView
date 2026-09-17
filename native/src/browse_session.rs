@@ -15,7 +15,6 @@
 //! filesystem watcher.
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Supported image extensions (lowercase, without dot). Matches PicoView's
@@ -67,40 +66,30 @@ impl BrowseSession {
     }
 
     /// Rebuild the candidate list from the current directory contents.
+    ///
     /// This is the "Refresh directory" operation — it re-reads the filesystem
-    /// but does NOT touch any image decode or graphics resource.
+    /// but does NOT touch any image decode or graphics resource. Refreshing
+    /// the CURRENT IMAGE alone does not imply a directory rebuild; Product
+    /// asks for a rebuild only when the listing itself must change.
     pub fn rebuild(&mut self) {
+        // Capture the OLD current path BEFORE replacing `candidates`.
+        // `index_path()` after the swap names the NEW occupant at that index
+        // and cannot recover the previous item.
+        let old_path = self.current_path().map(|p| p.to_path_buf());
+        let old_index = self.index;
         let entries = read_dir_sorted(&self.dir);
         self.candidates = entries;
-        // Preserve the current index if the item still exists; otherwise
-        // clamp to the nearest valid position.
-        if let Some(idx) = self.index {
-            if idx < self.candidates.len() {
-                // Check if the item at this index is still the same path.
-                if self.candidates.get(idx).map(|c| &c.path) != self.index_path() {
-                    // The original item may have moved; try to find it.
-                    if let Some(new_pos) = self
-                        .candidates
-                        .iter()
-                        .position(|c| self.index_path().is_some_and(|p| c.path == *p))
-                    {
-                        self.index = Some(new_pos);
-                    } else {
-                        // Item gone — clamp.
-                        self.index = if self.candidates.is_empty() {
-                            None
-                        } else {
-                            Some(idx.min(self.candidates.len() - 1))
-                        };
-                    }
-                }
-            } else {
-                self.index = if self.candidates.is_empty() {
-                    None
-                } else {
-                    Some(self.candidates.len() - 1)
-                };
+        if let Some(path) = old_path {
+            if let Some(new_pos) = self.candidates.iter().position(|c| c.path == path) {
+                self.index = Some(new_pos);
+                return;
             }
+        }
+        // Item gone (or no prior path): clamp the previous index deterministically.
+        match (old_index, self.candidates.is_empty()) {
+            (_, true) => self.index = None,
+            (Some(idx), false) => self.index = Some(idx.min(self.candidates.len() - 1)),
+            (None, false) => self.index = None,
         }
     }
 
@@ -213,14 +202,19 @@ fn read_dir_sorted(dir: &Path) -> Vec<Candidate> {
     sorted
 }
 
-/// Case-insensitive filename ordering with deterministic tie-breaking by
-/// raw byte sequence (lowercase UTF-8).
+/// Case-insensitive filename ordering with a real deterministic secondary key:
+/// 1. lowercased filename (case-fold primary),
+/// 2. original filename representation (distinguishes case-fold collisions),
+/// 3. full path (ultimate tie-break).
 fn compare_candidates(a: &Candidate, b: &Candidate) -> Ordering {
     let name_a = a.path.file_name().unwrap_or_default();
     let name_b = b.path.file_name().unwrap_or_default();
     let lower_a = name_a.to_string_lossy().to_ascii_lowercase();
     let lower_b = name_b.to_string_lossy().to_ascii_lowercase();
-    lower_a.cmp(&lower_b).then_with(|| lower_a.as_bytes().cmp(lower_b.as_bytes()))
+    lower_a
+        .cmp(&lower_b)
+        .then_with(|| name_a.cmp(name_b))
+        .then_with(|| a.path.cmp(&b.path))
 }
 
 #[cfg(test)]
@@ -324,6 +318,69 @@ mod tests {
             })
             .collect();
         assert_eq!(names, vec!["apple", "Banana", "Zebra"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn case_fold_collision_ties_break_on_original_name() {
+        // Case-fold collisions cannot coexist on default NTFS; compare
+        // constructed candidates so the secondary key is still proven.
+        let apple = Candidate {
+            path: PathBuf::from("C:/t/apple.jpg"),
+            name: "apple".into(),
+        };
+        let apple_cap = Candidate {
+            path: PathBuf::from("C:/t/Apple.jpg"),
+            name: "Apple".into(),
+        };
+        let apple_all = Candidate {
+            path: PathBuf::from("C:/t/APPLE.jpg"),
+            name: "APPLE".into(),
+        };
+        // Primary key (lowercase) is equal for all three.
+        assert_eq!(compare_candidates(&apple, &apple_cap), Ordering::Greater);
+        assert_eq!(compare_candidates(&apple_cap, &apple_all), Ordering::Greater);
+        assert_eq!(compare_candidates(&apple_all, &apple), Ordering::Less);
+        // Full path is the ultimate tie-break when file names are identical.
+        let left = Candidate {
+            path: PathBuf::from("C:/t/a/x.jpg"),
+            name: "x".into(),
+        };
+        let right = Candidate {
+            path: PathBuf::from("C:/t/b/x.jpg"),
+            name: "x".into(),
+        };
+        assert_eq!(compare_candidates(&left, &right), Ordering::Less);
+    }
+
+    #[test]
+    fn rebuild_preserves_current_when_earlier_file_inserted() {
+        let dir = make_dir("preserve", &["a.jpg", "b.jpg"]);
+        let mut session = BrowseSession::new(&dir.join("b.jpg"));
+        assert_eq!(session.current_name(), Some("b"));
+        assert_eq!(session.current_index(), Some(1));
+        // Insert aa.jpg (sorts before b.jpg, after a.jpg).
+        fs::write(dir.join("aa.jpg"), b"").unwrap();
+        session.rebuild();
+        assert_eq!(session.count(), 3);
+        // Must still be b.jpg — not the new occupant at the old index.
+        assert_eq!(session.current_name(), Some("b"));
+        assert_eq!(
+            session.current_path(),
+            Some(dir.join("b.jpg").as_path())
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rebuild_clamps_when_current_disappears() {
+        let dir = make_dir("clamp", &["a.jpg", "b.jpg", "c.jpg"]);
+        let mut session = BrowseSession::new(&dir.join("c.jpg"));
+        assert_eq!(session.current_name(), Some("c"));
+        fs::remove_file(dir.join("c.jpg")).unwrap();
+        session.rebuild();
+        assert_eq!(session.count(), 2);
+        assert_eq!(session.current_name(), Some("b"));
         let _ = fs::remove_dir_all(&dir);
     }
 }

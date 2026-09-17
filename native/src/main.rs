@@ -16,7 +16,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
+use winit::event::ElementState;
 use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
+use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
 mod browse_session;
@@ -89,6 +91,34 @@ fn parse_args() -> Result<Args> {
 enum Input {
     Quit,
     Resize(u32, u32),
+    /// Prebuilt svc JSON line pushed into the guest poll queue (key events).
+    Service(String),
+}
+
+/// Map a winit logical key to the guest's lowercase key names.
+/// Guest shortcuts use: left, right, r, 0, 1, =, +, -.
+fn key_name(key: &Key) -> String {
+    match key {
+        Key::Character(s) => s.to_lowercase(),
+        Key::Named(n) => match n {
+            NamedKey::ArrowUp => "up".into(),
+            NamedKey::ArrowDown => "down".into(),
+            NamedKey::ArrowLeft => "left".into(),
+            NamedKey::ArrowRight => "right".into(),
+            NamedKey::Enter => "enter".into(),
+            NamedKey::Escape => "escape".into(),
+            NamedKey::Backspace => "backspace".into(),
+            NamedKey::Delete => "delete".into(),
+            NamedKey::Tab => "tab".into(),
+            NamedKey::Space => "space".into(),
+            NamedKey::Home => "home".into(),
+            NamedKey::End => "end".into(),
+            NamedKey::PageUp => "pageup".into(),
+            NamedKey::PageDown => "pagedown".into(),
+            _ => String::new(),
+        },
+        _ => String::new(),
+    }
 }
 
 /// Parse a guest command from a svc JSON line. The guest sends lines like:
@@ -215,6 +245,10 @@ impl Runtime {
     fn input(&mut self, input: Input) -> Result<bool> {
         match input {
             Input::Quit => return Ok(false),
+            Input::Service(line) => {
+                // Keyboard and other host→guest scalar events.
+                self.surface.svc_push(line);
+            }
             Input::Resize(w, h) => {
                 self.viewport = (w, h);
                 self.surface.with_ui(|ui| ui.set_viewport(w as f32, h as f32));
@@ -393,6 +427,7 @@ struct Host {
     title: String,
     viewport: (u32, u32),
     failure: Option<String>,
+    modifiers: ModifiersState,
 }
 
 impl Host {
@@ -494,6 +529,34 @@ impl ApplicationHandler<Wake> for Host {
                 self.tx.try_send(Input::Quit).ok();
                 event_loop.exit();
             }
+            winit::event::WindowEvent::ModifiersChanged(state) => {
+                self.modifiers = state.state();
+            }
+            winit::event::WindowEvent::KeyboardInput { event, .. } => {
+                if event.state != ElementState::Pressed {
+                    return;
+                }
+                let name = key_name(&event.logical_key);
+                if name.is_empty() {
+                    return;
+                }
+                let cmd = if cfg!(target_os = "macos") {
+                    self.modifiers.super_key()
+                } else {
+                    self.modifiers.control_key()
+                };
+                let ctl = self.modifiers.control_key();
+                // Guest keyboard shortcuts (REAL-VIEWER-TRAIN-1):
+                // left/right navigation, r refresh, 0 Fit, 1 1:1, +/- zoom.
+                let line = json!({
+                    "t": "key",
+                    "k": name,
+                    "cmd": cmd,
+                    "ctl": ctl,
+                })
+                .to_string();
+                self.tx.try_send(Input::Service(line)).ok();
+            }
             winit::event::WindowEvent::RedrawRequested => {
                 tlog("RedrawRequested");
                 if let Err(error) = self.present() {
@@ -536,6 +599,7 @@ fn main() -> Result<()> {
         title: args.title.clone(),
         viewport: args.viewport,
         failure: None,
+        modifiers: ModifiersState::default(),
     };
     host.startup = Some(RuntimeStartup {
         args,

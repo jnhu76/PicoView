@@ -18,20 +18,21 @@ import {
 import {
   initialViewState,
   resetToFit,
+  resetForNewPublication,
   set100Percent,
-  fitScale,
   zoomIn,
   zoomOut,
-  panDelta,
   clampPan,
-  rotateLeft,
-  rotateRight,
-  flipHorizontal,
+  displayScale,
+  effectiveScale,
+  reconcileViewForPublication,
+  publicationViewKeyFrom,
   type ViewState,
-  type QuarterTurns,
+  type ViewGeometry,
+  type PublicationViewKey,
 } from "./view_state.ts";
 
-// PicoView Real Viewer (PICOVIEW-REAL-VIEWER-TRAIN-1).
+// PicoView Real Viewer (PICOVIEW-REAL-VIEWER-TRAIN-1 closeout).
 //
 // The guest is a bounded observer of native Current Item state. It receives
 // svc events carrying only scalars (status, generation, intent, texture
@@ -41,25 +42,26 @@ import {
 // and request (progress/failure, carrying the Product intent).
 //
 // Product commands (Previous/Next/Refresh) are sent to native via svcSend.
-// View state (Fit/100%/Zoom/Pan/Rotate/Flip) is presentation-only: it
-// changes how the image is drawn, not what image is drawn.
+// View state (Fit / truthful 1:1 / Zoom) is presentation-only: it changes
+// how the image is drawn, not what image is drawn.
 //
-// Keyboard shortcuts are handled through the PocketJS desktop host's
-// {"t":"key","k":"<name>","cmd":bool,"ctl":bool} svc messages. The host
-// sends these for every key press that doesn't map to a gamepad button.
-
-// --- Keyboard handling via svc key events ---
+// Shipped capability on the current PocketJS pin:
+//   Previous, Next, Zoom -, Zoom +, Fit, 1:1 (full resolution only), Refresh,
+//   keyboard Left/Right/R/0/1/+/-, status (N/total, dimensions, Proxy/Full).
+//
+// NOT shipped (PocketJS precursor backlog — do not claim as product features):
+//   POCKETJS_GAP_INPUT_GESTURES     — wheel zoom, mouse-drag pan
+//   POCKETJS_GAP_TEXTURED_2D_TRANSFORM — image rotate, image flip
+// Rotate/Flip helpers in view_state.ts stay pure and unwired. This app must
+// not emit CSS `transform: "rotate(...)"`; the pinned PocketJS DrawList
+// culls rotated Image quads.
 
 function processKeyEvents(
   keyEvents: { k: string; cmd?: boolean; ctl?: boolean }[],
-  viewRef: { current: ViewState },
   setView: (fn: (s: ViewState) => ViewState) => void,
   browse: { canPrevious: boolean; canNext: boolean },
   can100: boolean,
-  containerW: number,
-  containerH: number,
-  imgW: number,
-  imgH: number,
+  geo: ViewGeometry,
 ) {
   for (const e of keyEvents) {
     const k = e.k;
@@ -82,10 +84,10 @@ function processKeyEvents(
         break;
       case "=":
       case "+":
-        setView(s => zoomIn(s));
+        setView(s => zoomIn(s, geo));
         break;
       case "-":
-        setView(s => zoomOut(s));
+        setView(s => zoomOut(s, geo));
         break;
     }
   }
@@ -105,6 +107,10 @@ export default function App() {
   // View state: presentation-only, not Product authority.
   const viewRef = useRef<ViewState>(initialViewState());
   const [viewState, setViewState] = useState<ViewState>(initialViewState());
+  // Last publication identity the view state was reconciled against.
+  // Navigation (different browse index/name) resets to Fit; refresh of the
+  // same usable geometry preserves view.
+  const viewKey = useRef<PublicationViewKey | null>(null);
 
   useFrame(() => {
     const ops = getOps();
@@ -120,14 +126,43 @@ export default function App() {
     binding.current = outcome.state.binding;
     // Register before the re-render flush: setSrc resolves the key there.
     if (outcome.register) registerTexture(outcome.register.key, outcome.register.handle);
+
+    // Reconcile presentation view against publication identity. Smallest
+    // guest-side rule keyed by browse position + name + usable geometry.
+    // Does not disturb PR #57 binding/lifetime.
+    const nextKey = publicationViewKeyFrom(item.current);
+    const action = reconcileViewForPublication(viewKey.current, nextKey);
+    if (action === "reset") {
+      viewRef.current = resetForNewPublication(viewRef.current);
+      setViewState(viewRef.current);
+    } else if (action === "revalidate") {
+      viewRef.current = resetToFit(viewRef.current);
+      setViewState(viewRef.current);
+    }
+    viewKey.current = nextKey;
+
     // Process key events for keyboard shortcuts.
     if (outcome.keyEvents.length > 0) {
       const st = item.current;
       const pub = st.publication;
       const vp = st.viewport;
+      const geo: ViewGeometry = {
+        imageW: pub ? (pub.resourceWidth || pub.sourceWidth) : 0,
+        imageH: pub ? (pub.resourceHeight || pub.sourceHeight) : 0,
+        viewportW: vp?.w ?? 960,
+        viewportH: vp?.h ?? 640,
+      };
+      const keys = outcome.keyEvents
+        .filter((e): e is { k: string; cmd?: boolean; ctl?: boolean } =>
+          typeof e.k === "string",
+        )
+        .map(e => ({
+          k: e.k as string,
+          cmd: typeof e.cmd === "boolean" ? e.cmd : undefined,
+          ctl: typeof e.ctl === "boolean" ? e.ctl : undefined,
+        }));
       processKeyEvents(
-        outcome.keyEvents,
-        viewRef,
+        keys,
         (fn) => {
           const next = fn(viewRef.current);
           viewRef.current = next;
@@ -135,10 +170,7 @@ export default function App() {
         },
         st.browse,
         pub?.fullResolution === true,
-        vp?.w ?? 960,
-        vp?.h ?? 640,
-        pub ? (pub.resourceWidth || pub.sourceWidth) : 0,
-        pub ? (pub.resourceHeight || pub.sourceHeight) : 0,
+        geo,
       );
     }
     if (outcome.render) {
@@ -155,26 +187,26 @@ export default function App() {
   const browse = state.browse;
   const viewport = state.viewport;
 
-  // Compute image dimensions for display.
+  // Compute image dimensions for display (resource plane — the admitted
+  // representation the guest binds).
   const imgW = publication ? (publication.resourceWidth || publication.sourceWidth) : 0;
   const imgH = publication ? (publication.resourceHeight || publication.sourceHeight) : 0;
-
-  // Compute Fit dimensions for the image element.
-  const effectiveScale = viewState.mode === "fit"
-    ? fitScale(imgW, imgH, viewport?.w ?? 960, viewport?.h ?? 640, viewState.quarterTurns)
-    : viewState.scale;
-  const rotated = viewState.quarterTurns % 2 === 1;
-  const displayW = rotated ? Math.max(1, Math.round(imgH * effectiveScale)) : Math.max(1, Math.round(imgW * effectiveScale));
-  const displayH = rotated ? Math.max(1, Math.round(imgW * effectiveScale)) : Math.max(1, Math.round(imgH * effectiveScale));
-
-  // Zoom display text.
-  const zoomText = viewState.mode === "fit"
-    ? "Fit"
-    : `${Math.round(viewState.scale * 100)}%`;
-
-  // Image position (centered + pan offset).
   const containerW = viewport?.w ?? 960;
   const containerH = viewport?.h ?? 640;
+  const geo: ViewGeometry = {
+    imageW: imgW,
+    imageH: imgH,
+    viewportW: containerW,
+    viewportH: containerH,
+  };
+
+  // Layout uses the effective displayed scale (Fit materializes for display).
+  const effective = effectiveScale(viewState, geo);
+  const displayW = Math.max(1, Math.round(imgW * effective));
+  const displayH = Math.max(1, Math.round(imgH * effective));
+  const zoomText = displayScale(viewState, geo);
+
+  // Image position (centered + pan offset).
   const imgLeft = Math.round((containerW - displayW) / 2 + viewState.panX);
   const imgTop = Math.round((containerH - displayH) / 2 + viewState.panY);
 
@@ -237,13 +269,12 @@ export default function App() {
         {verdict === "image" && bound ? (
           <Image
             src={textureKeyFor(bound.slot)}
+            class="absolute"
             style={{
-              position: "absolute",
-              left: imgLeft,
-              top: imgTop,
+              insetL: imgLeft,
+              insetT: imgTop,
               width: displayW,
               height: displayH,
-              ...imageTransform(viewState),
             }}
           />
         ) : verdict === "image" ? (
@@ -272,9 +303,9 @@ export default function App() {
         </View>
       ) : null}
 
-      {/* Toolbar */}
+      {/* Toolbar — shipped capability only.
+          Rotate/Flip intentionally absent: PocketJS precursor required. */}
       <View class="flex-row items-center justify-center gap-2 px-4 py-2 bg-slate-950">
-        {/* Navigation */}
         <ToolbarButton
           label="‹"
           disabled={!browse.canPrevious}
@@ -287,29 +318,27 @@ export default function App() {
         />
         <Separator />
 
-        {/* Zoom */}
         <ToolbarButton
           label="−"
           disabled={verdict !== "image"}
           onPress={() => {
-            const next = zoomOut(viewRef.current);
+            const next = zoomOut(viewRef.current, geo);
             viewRef.current = next;
             setViewState(clampPan(next, imgW, imgH, containerW, containerH));
           }}
         />
-        <Text class="text-xs text-slate-300 w-12 text-center">{zoomText}</Text>
+        <Text class="text-xs text-slate-300 w-16 text-center">{zoomText}</Text>
         <ToolbarButton
           label="+"
           disabled={verdict !== "image"}
           onPress={() => {
-            const next = zoomIn(viewRef.current);
+            const next = zoomIn(viewRef.current, geo);
             viewRef.current = next;
             setViewState(clampPan(next, imgW, imgH, containerW, containerH));
           }}
         />
         <Separator />
 
-        {/* Fit / 1:1 */}
         <ToolbarButton
           label="Fit"
           disabled={verdict !== "image"}
@@ -330,37 +359,6 @@ export default function App() {
         />
         <Separator />
 
-        {/* Rotate / Flip */}
-        <ToolbarButton
-          label="↶"
-          disabled={verdict !== "image"}
-          onPress={() => {
-            const next = rotateLeft(viewRef.current);
-            viewRef.current = next;
-            setViewState(resetToFit(next));
-          }}
-        />
-        <ToolbarButton
-          label="↷"
-          disabled={verdict !== "image"}
-          onPress={() => {
-            const next = rotateRight(viewRef.current);
-            viewRef.current = next;
-            setViewState(resetToFit(next));
-          }}
-        />
-        <ToolbarButton
-          label="Flip"
-          disabled={verdict !== "image"}
-          onPress={() => {
-            const next = flipHorizontal(viewRef.current);
-            viewRef.current = next;
-            setViewState(next);
-          }}
-        />
-        <Separator />
-
-        {/* Refresh */}
         <ToolbarButton
           label="↻"
           disabled={verdict !== "image"}
@@ -375,7 +373,7 @@ export default function App() {
           <Text class="text-xs text-slate-500">{dimText}</Text>
         ) : null}
         {resBadge ? (
-          <Text class={`text-xs ${publication?.fullResolution ? "text-slate-500" : "text-amber-500"}`}>
+          <Text class={publication?.fullResolution ? "text-xs text-slate-500" : "text-xs text-amber-500"}>
             {resBadge}
           </Text>
         ) : null}
@@ -416,16 +414,4 @@ function ToolbarButton({
 
 function Separator() {
   return <View class="w-px h-4 bg-slate-700" />;
-}
-
-// Convert ViewState to inline style transform properties.
-function imageTransform(state: ViewState): Record<string, number | string> {
-  const transforms: string[] = [];
-  if (state.flipX) transforms.push("scaleX(-1)");
-  if (state.flipY) transforms.push("scaleY(-1)");
-  if (state.quarterTurns > 0) {
-    transforms.push(`rotate(${state.quarterTurns * 90}deg)`);
-  }
-  if (transforms.length === 0) return {};
-  return { transform: transforms.join(" ") };
 }
