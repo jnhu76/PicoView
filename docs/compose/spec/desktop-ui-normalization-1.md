@@ -138,10 +138,13 @@ Rules:
 
 ### Icon system
 
-- Design grid **16×16**; bake/display **16×16** (`w-4 h-4`). Never 16→20.
-- Grid-conscious coordinates: integer or `.5` logical px preferred.
-- Light Windows-11-like weight: consistent apparent thickness, generous
-  negative space, no heavy blobs, no neighbor twice as heavy.
+- **Design grid 20×20** (`viewBox="0 0 20 20"`); texture root **32×32** (pow2
+  for pak); display **20×20** (`w-5 h-5`). No 16→20 stretch of old artwork —
+  redrawn for the 20-unit grid.
+- Optical stroke/feature weight ≈ **1.8–2** logical px (filled paths/rects).
+- Command fill **#E6E6E6** (chevrons **#F0F0F0**); not secondary gray.
+- Family consistency: zoom/fit/rotate/flip/reset/refresh share apparent ink.
+- `guest/images.json` → `IMG_FLAG_LINEAR` bilinear sampling for all chrome icons.
 - Required semantics (filled PocketJS subset only):
   - `open` — folder/open affordance
   - `zoomOut` / `zoomIn` — magnifier ±
@@ -209,8 +212,15 @@ No synthetic Medium/Semibold. No toolbar-wide label row to “fix” with larger
 PR #62 may: real Regular/Bold slots; baked sizes only; no scaled toolbar text;
 16×16 icons at 16×16; grid-fit SVG; stable button geometry.
 
-PR #62 may **not** claim DPI/sampling/mipmap/resize perfection (Issue #63).
-Correct claim: removes UI-local causes of avoidable fuzz/jaggedness.
+**Icon sampling (follow-up fix):** PocketJS default image sampling is
+**nearest** (PSP heritage). Icons bake `@2x` (32×32) then display at 16×16
+logical → nearest downsample looks jagged next to native UI. Photos already
+admit `FLAG_LINEAR`. Icons use the existing cook path
+`guest/images.json` → `IMG_FLAG_LINEAR` (bilinear). No `POCKETJS.lock` change.
+
+PR #62 may **not** claim DPI/sampling/mipmap/resize perfection for **photo**
+content (Issue #63). Correct claim: UI chrome icons request bilinear sampling
+via the supported pak flag; photo presentation sampling remains Issue #63.
 
 ### Empty / loading / error
 

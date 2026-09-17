@@ -483,9 +483,9 @@ export default function App() {
                 focusable
               >
                 <Image
-                  class="w-4 h-4"
+                  class="w-5 h-5"
                   src={ICON_ASSETS.previous}
-                  style={{ opacity: 0.72 }}
+                  style={{ opacity: 0.78 }}
                 />
               </View>
             ) : (
@@ -499,9 +499,9 @@ export default function App() {
                 focusable
               >
                 <Image
-                  class="w-4 h-4"
+                  class="w-5 h-5"
                   src={ICON_ASSETS.next}
-                  style={{ opacity: 0.72 }}
+                  style={{ opacity: 0.78 }}
                 />
               </View>
             ) : (
@@ -597,7 +597,7 @@ function GroupGap() {
   return <View class="w-2 shrink-0" />;
 }
 
-/** Icon-first toolbar button. Hit 32×32; glyph/text 16×16; no painted caption. */
+/** Icon-first toolbar button. Hit ~40×40; glyph 20×20; no painted caption. */
 function ToolButton({
   icon,
   textIcon,
@@ -615,8 +615,8 @@ function ToolButton({
 }) {
   const off = disabled === true;
   const shell = off
-    ? "w-8 h-8 items-center justify-center rounded overflow-hidden shrink-0"
-    : "w-8 h-8 items-center justify-center rounded overflow-hidden shrink-0 focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
+    ? "w-10 h-10 items-center justify-center rounded overflow-hidden shrink-0"
+    : "w-10 h-10 items-center justify-center rounded overflow-hidden shrink-0 focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
   return (
     <View
       class={shell}
@@ -628,14 +628,14 @@ function ToolButton({
           class={
             off
               ? "text-sm font-bold text-zinc-600"
-              : "text-sm font-bold text-[#e8e8e8]"
+              : "text-sm font-bold text-[#e6e6e6]"
           }
         >
           {textIcon}
         </Text>
       ) : icon ? (
         <Image
-          class="w-4 h-4"
+          class="w-5 h-5"
           src={icon}
           style={{ opacity: off ? 0.3 : 1 }}
         />
