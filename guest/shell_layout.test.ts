@@ -11,7 +11,7 @@ test("chrome height is sum of frozen parts", () => {
   expect(chromeHeight()).toBe(
     SHELL_CHROME.titleH + SHELL_CHROME.toolbarH + SHELL_CHROME.statusH,
   );
-  expect(chromeHeight()).toBe(128);
+  expect(chromeHeight()).toBe(96);
 });
 
 test("image viewport consumes full window minus chrome", () => {

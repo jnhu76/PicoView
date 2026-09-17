@@ -64,15 +64,29 @@ two image-edge sides — never as top-toolbar Previous/Next.
 
 ### Authority / frozen geometry
 
-Unchanged by this PR:
+Product chrome heights are **one shared constant set** (`SHELL_CHROME`), not
+per-call literals. Fit/zoom/pan still consume `imageViewport()`. PR #61
+ViewTransform math is unchanged.
 
-- `SHELL_CHROME.titleH / toolbarH / statusH` (36 / 64 / 28)
-- `imageViewport()`, Fit/zoom/pan/ViewTransform (PR #61)
+PR62 follow-up (user): title + toolbar were too tall and squeezed the photo.
+Compact product chrome:
+
+```text
+titleH:   28
+toolbarH: 44
+statusH: 24
+chrome:   96  (was 128 → +32 logical px for the image)
+```
+
+Unchanged by this PR otherwise:
+
+- ViewTransform / Fit / pan (PR #61 equations)
 - BrowseSession, keyboard Previous/Next, publication/decode ownership
 - `POCKETJS.lock` = `24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb`
 - Issue #63 scope (sampling, DPI, resize, retained presentation)
 
-PR #62 may only change presentation **inside** existing chrome regions.
+PR #62 may only change presentation inside chrome regions; image math always
+reads `imageViewport()`.
 
 ### PocketJS capability facts (locked revision)
 
@@ -113,8 +127,8 @@ Rules:
    `Rotate Left`, `Rotate Right`, `Flip Horizontal`, `Flip Vertical`,
    `Reset View`, `Refresh`.
 6. No tooltip invention; report tooltip as follow-up (PocketJS has none today).
-7. One icon-button contract inside frozen `toolbarH=64`:
-   hit target **36×36** (`w-9 h-9`), icon display **16×16** (`w-4 h-4`),
+7. One icon-button contract inside compact `toolbarH=44`:
+   hit target **32×32** (`w-8 h-8`), icon display **16×16** (`w-4 h-4`),
    vertically centered. Heights bind `SHELL_CHROME` literals. `1:1` may use
    a slightly wider content box.
 8. In-group spacing small (`gap-1` / 4px); semantic group gaps larger

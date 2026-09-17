@@ -44,9 +44,10 @@ test("toolbar chrome actions exclude Previous/Next text controls", () => {
     expect(toolSemantic(key).length).toBeGreaterThan(0);
   }
   // Frozen shell geometry still owns toolbar height (PR #61 authority).
-  expect(SHELL_CHROME.toolbarH).toBe(64);
-  expect(SHELL_CHROME.titleH).toBe(36);
-  expect(SHELL_CHROME.statusH).toBe(28);
+  // Compact product chrome (PR62 follow-up): image viewport priority.
+  expect(SHELL_CHROME.toolbarH).toBe(44);
+  expect(SHELL_CHROME.titleH).toBe(28);
+  expect(SHELL_CHROME.statusH).toBe(24);
 });
 
 test("reset and refresh asset paths are distinct", () => {

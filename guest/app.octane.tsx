@@ -609,7 +609,7 @@ function GroupGap() {
   return <View class="w-2 shrink-0" />;
 }
 
-/** Icon-first toolbar button. Hit 36×36; glyph/text 16×16; no painted caption. */
+/** Icon-first toolbar button. Hit 32×32; glyph/text 16×16; no painted caption. */
 function ToolButton({
   icon,
   textIcon,
@@ -627,8 +627,8 @@ function ToolButton({
 }) {
   const off = disabled === true;
   const shell = off
-    ? "w-9 h-9 items-center justify-center rounded overflow-hidden shrink-0"
-    : "w-9 h-9 items-center justify-center rounded overflow-hidden shrink-0 focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
+    ? "w-8 h-8 items-center justify-center rounded overflow-hidden shrink-0"
+    : "w-8 h-8 items-center justify-center rounded overflow-hidden shrink-0 focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
   return (
     <View
       class={shell}

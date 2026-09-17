@@ -1,16 +1,17 @@
 // Product shell geometry — one canonical image viewport.
 //
 // Fit, centering, pan clamp, pointer anchors, and image placement must all
-// consume `imageViewport()`. Toolbar/status heights are frozen product
-// constants so layout and Fit math cannot silently disagree.
+// consume `imageViewport()`. Chrome heights are product constants so layout
+// and Fit math cannot silently disagree. Compact values: title+toolbar must
+// not eat the photograph (PR62 follow-up: 36/64 was too tall).
 
 import type { ImageViewport } from "./view_transform.ts";
 
-/** Frozen chrome heights in UI logical units (match app.octane.tsx). */
+/** Chrome heights in UI logical units (must match app.octane.tsx via import). */
 export const SHELL_CHROME = {
-  titleH: 36,
-  toolbarH: 64,
-  statusH: 28,
+  titleH: 28,
+  toolbarH: 44,
+  statusH: 24,
 } as const;
 
 export function chromeHeight(): number {
