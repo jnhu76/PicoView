@@ -702,7 +702,8 @@ fn prepare_for_admission(decoded: DecodedImage) -> DecodedImage {
 }
 
 #[cfg(windows)]
-mod wic {
+#[cfg(windows)]
+pub(super) mod wic {
     use super::{bounded, decode_alloc_len, DecodedImage, OpenError};
     use windows::Win32::Graphics::Imaging::{
         CLSID_WICImagingFactory, GUID_WICPixelFormat32bppRGBA, IWICImagingFactory,
@@ -712,8 +713,14 @@ mod wic {
         CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
     };
 
-    /// Baseline JPEG decode through Windows Imaging Component. The encoded
+    /// Baseline image decode through Windows Imaging Component. The encoded
     /// bytes are already fully in memory; WIC never holds a source handle.
+    /// Intrinsic EXIF orientation is materialized into the admitted plane so
+    /// Product receives dimensions in oriented logical image space `O`.
+    /// Named reason for the post-decode transform: WIC does not apply
+    /// System.Photo.Orientation during a plain format conversion; without
+    /// materializing O here, Product would conflate intrinsic orientation
+    /// with user Rotate/Flip.
     pub fn decode_jpeg(bytes: &[u8]) -> Result<DecodedImage, OpenError> {
         unsafe {
             // OK / S_FALSE both mean a usable apartment on this thread.
@@ -735,6 +742,7 @@ mod wic {
             if width == 0 || height == 0 {
                 return Err(OpenError::Decode("image has an empty frame".into()));
             }
+            let orientation = read_exif_orientation(bytes);
             let converter = factory.CreateFormatConverter().map_err(plain)?;
             converter
                 .Initialize(
@@ -751,12 +759,138 @@ mod wic {
             converter
                 .CopyPixels(std::ptr::null(), stride as u32, &mut rgba)
                 .map_err(plain)?;
+            if orientation <= 1 || orientation > 8 {
+                return Ok(DecodedImage { width, height, rgba });
+            }
+            let (ow, oh, oriented) = apply_exif_orientation(width, height, &rgba, orientation);
             Ok(DecodedImage {
-                width,
-                height,
-                rgba,
+                width: ow,
+                height: oh,
+                rgba: oriented,
             })
         }
+    }
+
+    /// Read EXIF orientation (1..=8) from JPEG APP1 IFD tag 0x0112.
+    /// Missing/unreadable metadata means 1 (normal).
+    fn read_exif_orientation(bytes: &[u8]) -> u32 {
+        // Minimal EXIF scanner: find APP1/Exif, parse IFD0 entry 0x0112.
+        if bytes.len() < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8 {
+            return 1;
+        }
+        let mut i = 2usize;
+        while i + 4 <= bytes.len() {
+            if bytes[i] != 0xFF {
+                break;
+            }
+            let marker = bytes[i + 1];
+            if marker == 0xD8 || marker == 0x01 || (0xD0..=0xD7).contains(&marker) {
+                i += 2;
+                continue;
+            }
+            if marker == 0xDA || marker == 0xD9 {
+                break;
+            }
+            if i + 4 > bytes.len() {
+                break;
+            }
+            let seglen = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+            if seglen < 2 || i + 2 + seglen > bytes.len() {
+                break;
+            }
+            let seg = &bytes[i + 4..i + 2 + seglen];
+            if marker == 0xE1 && seg.len() > 6 && &seg[0..6] == b"Exif\0\0" {
+                if let Some(o) = parse_exif_orientation(&seg[6..]) {
+                    return o;
+                }
+            }
+            i += 2 + seglen;
+        }
+        1
+    }
+
+    fn parse_exif_orientation(tiff: &[u8]) -> Option<u32> {
+        if tiff.len() < 8 {
+            return None;
+        }
+        let le = match &tiff[0..2] {
+            b"II" => true,
+            b"MM" => false,
+            _ => return None,
+        };
+        let u16at = |off: usize| -> Option<u16> {
+            if off + 2 > tiff.len() {
+                return None;
+            }
+            let b = [tiff[off], tiff[off + 1]];
+            Some(if le { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
+        };
+        let u32at = |off: usize| -> Option<u32> {
+            if off + 4 > tiff.len() {
+                return None;
+            }
+            let b = [tiff[off], tiff[off + 1], tiff[off + 2], tiff[off + 3]];
+            Some(if le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+        };
+        let ifd0 = u32at(4)? as usize;
+        let count = u16at(ifd0)? as usize;
+        for e in 0..count {
+            let base = ifd0 + 2 + e * 12;
+            let tag = u16at(base)?;
+            if tag == 0x0112 {
+                let typ = u16at(base + 2)?;
+                // SHORT or LONG
+                let v = if typ == 3 {
+                    u16at(base + 8)? as u32
+                } else {
+                    u32at(base + 8)?
+                };
+                if (1..=8).contains(&v) {
+                    return Some(v);
+                }
+                return Some(1);
+            }
+        }
+        None
+    }
+
+    /// Materialize EXIF orientation 2..=8 into an RGBA plane (O space).
+    /// Image-layer semantic normalization — one transform at decode, never
+    /// conflated with Product user Rotate/Flip.
+    pub(super) fn apply_exif_orientation(
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+        orientation: u32,
+    ) -> (u32, u32, Vec<u8>) {
+        let (w, h) = (width as usize, height as usize);
+        let mut out_w = width;
+        let mut out_h = height;
+        let swaps = matches!(orientation, 5..=8);
+        if swaps {
+            out_w = height;
+            out_h = width;
+        }
+        let mut out = vec![0u8; w * h * 4];
+        for y in 0..h {
+            for x in 0..w {
+                let si = (y * w + x) * 4;
+                // Destination (dx, dy) per EXIF orientation (y-down).
+                let (dx, dy) = match orientation {
+                    2 => (w - 1 - x, y),          // mirror horizontal
+                    3 => (w - 1 - x, h - 1 - y),  // rotate 180
+                    4 => (x, h - 1 - y),          // mirror vertical
+                    5 => (y, x),                  // transpose
+                    6 => (h - 1 - y, x),          // rotate 90 CW
+                    7 => (h - 1 - y, w - 1 - x),  // transverse
+                    8 => (y, w - 1 - x),          // rotate 270 CW
+                    _ => (x, y),
+                };
+                let di = (dy * out_w as usize + dx) * 4;
+                out[di..di + 4].copy_from_slice(&rgba[si..si + 4]);
+            }
+        }
+        (out_w, out_h, out)
     }
 
     fn plain(e: windows::core::Error) -> OpenError {
@@ -847,6 +981,38 @@ mod tests {
             // move into PocketJS is still this one allocation.
             assert!(std::ptr::eq(prepared.rgba.as_ptr(), source_ptr));
         }
+    }
+
+    /// Corrective-2 MAJOR-3 lock (rewritten after adversarial review): the
+    /// production path is apply_exif_orientation → prepare_for_admission →
+    /// source/resource/fullResolution. A hand-built already-O DecodedImage
+    /// would be tautological; this walks the real EXIF transform first so a
+    /// S/O mixup in open()'s formula fails the test.
+    #[cfg(windows)]
+    #[test]
+    fn exif_oriented_decode_keeps_full_resolution_in_o_space() {
+        // Storage 2x3; EXIF 6 rotates 90° CW → O is 3x2.
+        let (sw, sh) = (2usize, 3usize);
+        let plane = vec![9u8; sw * sh * 4];
+        let (ow, oh, oriented) = wic::apply_exif_orientation(sw as u32, sh as u32, &plane, 6);
+        assert_eq!((ow, oh), (3, 2), "EXIF 6 must swap into O extent");
+        let decode = DecodedImage {
+            width: ow,
+            height: oh,
+            rgba: oriented,
+        };
+        let source_w = decode.width;
+        let source_h = decode.height;
+        let image = prepare_for_admission(decode);
+        let resource_w = image.width;
+        let resource_h = image.height;
+        let full_resolution = source_w == resource_w && source_h == resource_h;
+        assert_eq!((source_w, source_h), (3, 2), "source is O, not S");
+        assert_eq!((resource_w, resource_h), (3, 2));
+        assert!(
+            full_resolution,
+            "full-res EXIF-6 must not be demoted to Proxy by S/O mixup"
+        );
     }
 
     #[test]
@@ -1115,6 +1281,71 @@ mod tests {
     }
 
     #[cfg(windows)]
+    #[test]
+    fn exif_orientation_materializes_all_eight_semantic_cases() {
+        // 2x3 asymmetric fixture: pixel A at (0,0), B at (1,0), C at (0,2).
+        // Each EXIF case must place A at a distinct, predictable destination.
+        let (w, h) = (2usize, 3usize);
+        let mut rgba = vec![0u8; w * h * 4];
+        let put = |rgba: &mut [u8], x: usize, y: usize, r: u8, g: u8, b: u8| {
+            let i = (y * w + x) * 4;
+            rgba[i] = r;
+            rgba[i + 1] = g;
+            rgba[i + 2] = b;
+            rgba[i + 3] = 255;
+        };
+        put(&mut rgba, 0, 0, 255, 0, 0); // A red top-left
+        put(&mut rgba, 1, 0, 0, 255, 0); // B green top-right
+        put(&mut rgba, 0, 2, 0, 0, 255); // C blue bottom-left
+
+        let at = |buf: &[u8], ow: usize, x: usize, y: usize| -> (u8, u8, u8) {
+            let i = (y * ow + x) * 4;
+            (buf[i], buf[i + 1], buf[i + 2])
+        };
+
+        // 1 normal
+        let (ow, oh, o) = wic::apply_exif_orientation(2, 3, &rgba, 1);
+        assert_eq!((ow, oh), (2, 3));
+        assert_eq!(at(&o, 2, 0, 0), (255, 0, 0));
+
+        // 2 mirror H: A → (1,0)
+        let (ow, _oh, o) = wic::apply_exif_orientation(2, 3, &rgba, 2);
+        assert_eq!(at(&o, ow as usize, 1, 0), (255, 0, 0));
+        assert_eq!(at(&o, ow as usize, 0, 0), (0, 255, 0));
+
+        // 3 rotate 180: A → (1,2)
+        let (ow, oh, o) = wic::apply_exif_orientation(2, 3, &rgba, 3);
+        assert_eq!((ow, oh), (2, 3));
+        assert_eq!(at(&o, 2, 1, 2), (255, 0, 0));
+
+        // 4 mirror V: A → (0,2)
+        let (ow, _oh, o) = wic::apply_exif_orientation(2, 3, &rgba, 4);
+        assert_eq!(at(&o, ow as usize, 0, 2), (255, 0, 0));
+
+        // 5 transpose: A → (0,0), extent 3x2
+        let (ow, oh, o) = wic::apply_exif_orientation(2, 3, &rgba, 5);
+        assert_eq!((ow, oh), (3, 2));
+        assert_eq!(at(&o, 3, 0, 0), (255, 0, 0));
+        // Distinguish 5 from 7: B (encoded 1,0) → (0,1) under transpose
+        assert_eq!(at(&o, 3, 0, 1), (0, 255, 0));
+
+        // 6 rotate 90 CW: A → (2,0) in 3x2
+        let (ow, oh, o) = wic::apply_exif_orientation(2, 3, &rgba, 6);
+        assert_eq!((ow, oh), (3, 2));
+        assert_eq!(at(&o, 3, 2, 0), (255, 0, 0));
+
+        // 7 transverse: A → (2,1); B → (2,0) — opposite of 5 for B
+        let (ow, oh, o) = wic::apply_exif_orientation(2, 3, &rgba, 7);
+        assert_eq!((ow, oh), (3, 2));
+        assert_eq!(at(&o, 3, 2, 1), (255, 0, 0));
+        assert_eq!(at(&o, 3, 2, 0), (0, 255, 0));
+
+        // 8 rotate 270 CW: A → (0,1)
+        let (ow, oh, o) = wic::apply_exif_orientation(2, 3, &rgba, 8);
+        assert_eq!((ow, oh), (3, 2));
+        assert_eq!(at(&o, 3, 0, 1), (255, 0, 0));
+    }
+
     #[test]
     fn wic_decodes_a_real_jpeg_roundtrip() {
         let bytes = wic_encode_jpeg(64, 48);

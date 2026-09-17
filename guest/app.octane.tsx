@@ -4,176 +4,284 @@ import { registerTexture } from "@pocketjs/framework/octane/renderer";
 import { getOps } from "@pocketjs/framework/host";
 import { useFrame } from "@pocketjs/framework/octane/lifecycle";
 import {
+  focusNode,
+  hitFocusable,
+  pressNode,
+  setActiveNode,
+} from "@pocketjs/framework/input";
+import {
   displayVerdict,
   initialObserverState,
   type ObserverState,
 } from "./observer.ts";
 import { textureKeyFor, type BoundPublication } from "./binding.ts";
 import { runGuestTurn } from "./turn.ts";
+import { cmdPrevious, cmdNext, cmdRefresh } from "./commands.ts";
 import {
-  cmdPrevious,
-  cmdNext,
-  cmdRefresh,
-} from "./commands.ts";
+  imageViewport,
+  pointInImageViewport,
+  wheelFocusPoint,
+} from "./shell_layout.ts";
 import {
-  initialViewState,
-  resetToFit,
-  resetForNewPublication,
-  set100Percent,
-  zoomIn,
-  zoomOut,
-  clampPan,
-  displayScale,
-  effectiveScale,
-  reconcileViewForPublication,
   publicationViewKeyFrom,
-  type ViewState,
-  type ViewGeometry,
+  reconcileViewForPublication,
   type PublicationViewKey,
 } from "./view_state.ts";
+import {
+  actualSize,
+  fitView,
+  flipHorizontal,
+  flipVertical,
+  initialViewTransform,
+  panBy,
+  pocketImageStyle,
+  reconcileViewEnvironment,
+  resetForNewPublication,
+  resetView,
+  rotateLeft,
+  rotateRight,
+  setUserOrientation,
+  zoomAt,
+  zoomIn,
+  zoomLabel,
+  zoomOut,
+  type OrientedImage,
+  type ViewEnvironment,
+  type ViewTransform,
+} from "./view_transform.ts";
+import {
+  createPointerPress,
+  IDLE_GESTURE,
+  classifyGestureOwner,
+  nextHeldGesture,
+  type HeldGesture,
+} from "./pointer_press.ts";
 
-// PicoView Real Viewer (PICOVIEW-REAL-VIEWER-TRAIN-1 closeout).
+// PicoView viewer shell (PICOVIEW-VIEW-GEOMETRY-CORRECTIVE-1).
 //
-// The guest is a bounded observer of native Current Item state. It receives
-// svc events carrying only scalars (status, generation, intent, texture
-// handle, dimensions, browse state, capability truth, error text); the pixels
-// stay in the native texture registry. The observation state is split into
-// publication (last-good, stays visible across a refresh's loading/failure)
-// and request (progress/failure, carrying the Product intent).
-//
-// Product commands (Previous/Next/Refresh) are sent to native via svcSend.
-// View state (Fit / truthful 1:1 / Zoom) is presentation-only: it changes
-// how the image is drawn, not what image is drawn.
-//
-// Shipped capability on the current PocketJS pin:
-//   Previous, Next, Zoom -, Zoom +, Fit, 1:1 (full resolution only), Refresh,
-//   keyboard Left/Right/R/0/1/+/-, status (N/total, dimensions, Proxy/Full).
-//
-// NOT shipped (PocketJS precursor backlog — do not claim as product features):
-//   POCKETJS_GAP_INPUT_GESTURES     — wheel zoom, mouse-drag pan
-//   POCKETJS_GAP_TEXTURED_2D_TRANSFORM — image rotate, image flip
-// Rotate/Flip helpers in view_state.ts stay pure and unwired. This app must
-// not emit CSS `transform: "rotate(...)"`; the pinned PocketJS DrawList
-// culls rotated Image quads.
+// All Fit / zoom / pan / rotate / flip geometry goes through
+// guest/view_transform.ts. The image viewport comes from shell_layout.ts —
+// never magic -16/-80 deductions. DPI arrives as viewport.dpi from the host.
+// Pointer and wheel events are host-forwarded (desktop host parity).
 
-function processKeyEvents(
-  keyEvents: { k: string; cmd?: boolean; ctl?: boolean }[],
-  setView: (fn: (s: ViewState) => ViewState) => void,
-  browse: { canPrevious: boolean; canNext: boolean },
-  can100: boolean,
-  geo: ViewGeometry,
-) {
-  for (const e of keyEvents) {
-    const k = e.k;
-    const ctrl = !!(e.cmd || e.ctl);
-    switch (k) {
-      case "left":
-        if (browse.canPrevious) cmdPrevious();
-        break;
-      case "right":
-        if (browse.canNext) cmdNext();
-        break;
-      case "r":
-        if (!ctrl) cmdRefresh();
-        break;
-      case "0":
-        setView(s => resetToFit(s));
-        break;
-      case "1":
-        if (can100) setView(s => clampPan(set100Percent(s), geo.imageW, geo.imageH, geo.viewportW, geo.viewportH));
-        break;
-      case "=":
-      case "+":
-        setView(s => clampPan(zoomIn(s, geo), geo.imageW, geo.imageH, geo.viewportW, geo.viewportH));
-        break;
-      case "-":
-        setView(s => clampPan(zoomOut(s, geo), geo.imageW, geo.imageH, geo.viewportW, geo.viewportH));
-        break;
-    }
-  }
-}
+type PointerDrag = {
+  lastX: number;
+  lastY: number;
+};
 
 export default function App() {
-  // Current Item observations live in a plain ref that the pure reducer
-  // folds per svc line: one frame's svcPoll drain applies every line in
-  // order. The tick counter only schedules the re-render.
   const item = useRef<ObserverState>(initialObserverState());
   const revision = useRef(0);
   const [, setRevision] = useState(0);
-  // The publication the mounted Image currently resolves to, plus the
-  // texture-key slot its src string names. Not Product authority — it
-  // remembers a rendering fact only (binding.ts).
   const binding = useRef<BoundPublication | null>(null);
-  // View state: presentation-only, not Product authority.
-  const viewRef = useRef<ViewState>(initialViewState());
-  const [viewState, setViewState] = useState<ViewState>(initialViewState());
-  // Last publication identity the view state was reconciled against.
-  // Navigation (different browse index/name) resets to Fit; refresh of the
-  // same usable geometry preserves view.
+  const viewRef = useRef<ViewTransform>(initialViewTransform());
+  const [viewState, setViewState] = useState<ViewTransform>(initialViewTransform());
   const viewKey = useRef<PublicationViewKey | null>(null);
+  const envKey = useRef<ViewEnvironment | null>(null);
+  const drag = useRef<PointerDrag>({ lastX: 0, lastY: 0 });
+  const gesture = useRef<HeldGesture>(IDLE_GESTURE);
+  // MAJOR-B: last logical pointer known to the guest — survives across turns.
+  const lastPointer = useRef({ x: 0, y: 0, known: false });
+  const wheelAcc = useRef(0);
+  // MAJOR-2: svc mouse is not onPress. Wire PocketJS hit→press so toolbar
+  // ToolButtons work with a real Windows mouse (keyboard stays on shortcuts).
+  const pointerPress = useRef(
+    createPointerPress({
+      hit: (x, y) => hitFocusable(x, y),
+      active: (node) => {
+        if (node) {
+          focusNode(node as never);
+          setActiveNode(node as never);
+        }
+      },
+      press: (node) => {
+        if (node) pressNode(node as never);
+      },
+      clearActive: () => setActiveNode(null),
+    }),
+  );
 
   useFrame(() => {
     const ops = getOps();
     const poll = ops.svcPoll;
     if (!poll) return;
-    // One guest turn: reduce every queued svc batch in order, then commit
-    // exactly ONE view binding against the final observed publication.
     const outcome = runGuestTurn(
       { observer: item.current, binding: binding.current },
       () => poll.call(ops),
     );
     item.current = outcome.state.observer;
     binding.current = outcome.state.binding;
-    // Register before the re-render flush: setSrc resolves the key there.
-    if (outcome.register) registerTexture(outcome.register.key, outcome.register.handle);
+    if (outcome.register) {
+      registerTexture(outcome.register.key, outcome.register.handle);
+    }
 
-    // Reconcile presentation view against publication identity. Smallest
-    // guest-side rule keyed by browse position + name + usable geometry.
-    // Does not disturb PR #57 binding/lifetime.
+    const st = item.current;
+    const pub = st.publication;
+    const vpRaw = st.viewport;
+    const dpi = vpRaw?.dpi && vpRaw.dpi > 0 ? vpRaw.dpi : 1;
+    const winW = vpRaw?.w ?? 960;
+    const winH = vpRaw?.h ?? 640;
+    const vp = imageViewport(winW, winH);
+    const img: OrientedImage = {
+      width: pub ? pub.resourceWidth || pub.sourceWidth : 0,
+      height: pub ? pub.resourceHeight || pub.sourceHeight : 0,
+    };
+    const hasImage = img.width > 0 && img.height > 0;
+
     const nextKey = publicationViewKeyFrom(item.current);
     const action = reconcileViewForPublication(viewKey.current, nextKey);
     if (action === "reset") {
-      viewRef.current = resetForNewPublication(viewRef.current);
+      viewRef.current = hasImage
+        ? resetForNewPublication(img, vp, dpi)
+        : initialViewTransform(dpi);
       setViewState(viewRef.current);
-    } else if (action === "revalidate") {
-      viewRef.current = resetToFit(viewRef.current);
+    } else if (action === "revalidate" && hasImage) {
+      viewRef.current = fitView(img, vp, viewRef.current);
       setViewState(viewRef.current);
     }
     viewKey.current = nextKey;
 
-    // Process key events for keyboard shortcuts.
-    if (outcome.keyEvents.length > 0) {
-      const st = item.current;
-      const pub = st.publication;
-      const vp = st.viewport;
-      const geo: ViewGeometry = {
-        imageW: pub ? (pub.resourceWidth || pub.sourceWidth) : 0,
-        imageH: pub ? (pub.resourceHeight || pub.sourceHeight) : 0,
-        viewportW: vp?.w ?? 960,
-        viewportH: vp?.h ?? 640,
-      };
-      const keys = outcome.keyEvents
-        .filter((e): e is { k: string; cmd?: boolean; ctl?: boolean } =>
-          typeof e.k === "string",
-        )
-        .map(e => ({
-          k: e.k as string,
-          cmd: typeof e.cmd === "boolean" ? e.cmd : undefined,
-          ctl: typeof e.ctl === "boolean" ? e.ctl : undefined,
-        }));
-      processKeyEvents(
-        keys,
-        (fn) => {
-          const next = fn(viewRef.current);
-          viewRef.current = next;
-          setViewState(next);
-        },
-        st.browse,
-        pub?.fullResolution === true,
-        geo,
-      );
+    // MAJOR-A: viewport/DPI are a separate reconciliation layer from
+    // publication identity. Fit recomputes; Manual preserves zoom and clamps.
+    const env: ViewEnvironment = { viewport: vp, dpiScale: dpi };
+    const nextView = reconcileViewEnvironment(
+      img,
+      envKey.current,
+      env,
+      viewRef.current,
+    );
+    if (nextView !== viewRef.current) {
+      viewRef.current = nextView;
+      setViewState(nextView);
     }
-    if (outcome.render) {
+    envKey.current = env;
+
+    const apply = (fn: (s: ViewTransform) => ViewTransform) => {
+      const next = fn(viewRef.current);
+      viewRef.current = next;
+      setViewState(next);
+    };
+    const applyView = (next: ViewTransform) => {
+      viewRef.current = next;
+      setViewState(next);
+    };
+
+    const canImage = displayVerdict(st) === "image" && hasImage;
+    const can100 = pub?.fullResolution === true;
+
+    // --- keyboard ---
+    for (const e of outcome.keyEvents) {
+      const k = typeof e.k === "string" ? e.k : "";
+      const ctrl = !!(e.cmd || e.ctl);
+      switch (k) {
+        case "left":
+          if (st.browse.canPrevious) cmdPrevious();
+          break;
+        case "right":
+          if (st.browse.canNext) cmdNext();
+          break;
+        case "r":
+          if (!ctrl && pub) cmdRefresh();
+          break;
+        case "f5":
+          if (pub) cmdRefresh();
+          break;
+        case "0":
+          if (canImage) applyView(fitView(img, vp, viewRef.current));
+          break;
+        case "1":
+          if (canImage && can100) applyView(actualSize(viewRef.current));
+          break;
+        case "=":
+        case "+":
+          if (canImage) applyView(zoomIn(img, vp, viewRef.current));
+          break;
+        case "-":
+          if (canImage) applyView(zoomOut(img, vp, viewRef.current));
+          break;
+      }
+    }
+
+    // --- pointer drag pan + toolbar onPress (MAJOR-C ownership) ---
+    for (const e of outcome.mouseEvents) {
+      const x = typeof e.x === "number" ? e.x : 0;
+      const y = typeof e.y === "number" ? e.y : 0;
+      const down = e.d === true;
+      const cancel = e.cancel === true;
+      // Latest logical pointer is authority for later wheel turns (MAJOR-B).
+      lastPointer.current = { x, y, known: true };
+
+      if (cancel) {
+        pointerPress.current.cancel();
+        gesture.current = IDLE_GESTURE;
+        continue;
+      }
+
+      const claimed = pointerPress.current.update({ x, y, down });
+      const inCanvas = pointInImageViewport(vp, x, y);
+      const prev = gesture.current;
+      gesture.current = nextHeldGesture(prev, { down }, () =>
+        classifyGestureOwner({
+          claimedFocusable: claimed,
+          inImageViewport: inCanvas,
+          canImage,
+        }),
+      );
+      const owner = gesture.current.owner;
+
+      // Canvas pan only when THIS down-edge chose canvas. Ownership never
+      // transfers toolbar→canvas / canvas→toolbar / none→canvas while held.
+      if (owner === "canvas" && canImage) {
+        if (!prev.wasDown || prev.owner !== "canvas") {
+          drag.current = { lastX: x, lastY: y };
+        } else {
+          const dx = x - drag.current.lastX;
+          const dy = y - drag.current.lastY;
+          drag.current.lastX = x;
+          drag.current.lastY = y;
+          if (dx !== 0 || dy !== 0) {
+            applyView(panBy(img, vp, viewRef.current, dx, dy));
+          }
+        }
+      }
+    }
+
+    // Host scroll may carry latest logical pointer; guest also keeps its own
+    // persistent pointer so a wheel turn without CursorMoved still anchors.
+    for (const e of outcome.scrollEvents) {
+      if (typeof e.x === "number" && typeof e.y === "number") {
+        lastPointer.current = { x: e.x, y: e.y, known: true };
+      }
+    }
+
+    // --- wheel zoom (coalesce high-res deltas; MAJOR-B anchor) ---
+    if (canImage) {
+      let acc = wheelAcc.current;
+      for (const e of outcome.scrollEvents) {
+        const dy = typeof e.dy === "number" ? e.dy : 0;
+        acc += dy;
+      }
+      // 24 logical units ≈ one notch (host LineDelta * 24).
+      const NOTCH = 24;
+      if (Math.abs(acc) >= NOTCH) {
+        const steps = Math.trunc(acc / NOTCH);
+        acc -= steps * NOTCH;
+        const focus = wheelFocusPoint(vp, lastPointer.current);
+        let next = viewRef.current;
+        for (let i = 0; i < Math.abs(steps); i++) {
+          const stepped =
+            steps > 0
+              ? zoomIn(img, vp, next)
+              : zoomOut(img, vp, next);
+          // Re-anchor each step at the persistent pointer.
+          next = zoomAt(img, vp, next, focus.x, focus.y, stepped.productZoom);
+        }
+        applyView(next);
+      }
+      wheelAcc.current = acc;
+    }
+
+    if (outcome.render || outcome.keyEvents.length || outcome.mouseEvents.length || outcome.scrollEvents.length) {
       revision.current += 1;
       setRevision(revision.current);
     }
@@ -186,233 +294,210 @@ export default function App() {
   const bound = binding.current;
   const browse = state.browse;
   const viewport = state.viewport;
-
-  // Compute image dimensions for display (resource plane — the admitted
-  // representation the guest binds).
-  const imgW = publication ? (publication.resourceWidth || publication.sourceWidth) : 0;
-  const imgH = publication ? (publication.resourceHeight || publication.sourceHeight) : 0;
-  const containerW = viewport?.w ?? 960;
-  const containerH = viewport?.h ?? 640;
-  const geo: ViewGeometry = {
-    imageW: imgW,
-    imageH: imgH,
-    viewportW: containerW,
-    viewportH: containerH,
+  const dpi = viewport?.dpi && viewport.dpi > 0 ? viewport.dpi : 1;
+  const winW = viewport?.w ?? 960;
+  const winH = viewport?.h ?? 640;
+  const vp = imageViewport(winW, winH);
+  const img: OrientedImage = {
+    width: publication ? publication.resourceWidth || publication.sourceWidth : 0,
+    height: publication ? publication.resourceHeight || publication.sourceHeight : 0,
   };
+  const canImage = verdict === "image" && img.width > 0;
+  const can100 = publication?.fullResolution === true;
+  const style = canImage
+    ? pocketImageStyle(img, viewState, vp)
+    : null;
+  const zoomText = zoomLabel(viewState, {
+    fullResolution: publication?.fullResolution === true,
+    hasImage: canImage,
+  });
 
-  // Layout uses the effective displayed scale (Fit materializes for display).
-  const effective = effectiveScale(viewState, geo);
-  const displayW = Math.max(1, Math.round(imgW * effective));
-  const displayH = Math.max(1, Math.round(imgH * effective));
-  const zoomText = displayScale(viewState, geo);
-
-  // Image position (centered + pan offset).
-  const imgLeft = Math.round((containerW - displayW) / 2 + viewState.panX);
-  const imgTop = Math.round((containerH - displayH) / 2 + viewState.panY);
-
-  // Refresh indicator.
-  const refreshIndicator =
-    verdict === "image" && request
-      ? request.status === "loading"
-        ? "Refreshing…"
-        : "Refresh failed"
-      : null;
-  const statusText =
-    refreshIndicator ??
-    (verdict === "error"
-      ? "Error"
-      : verdict === "loading"
-        ? "Opening…"
-        : "Ready");
   const shownName =
     verdict === "image"
       ? publication?.name
       : verdict === "loading" || verdict === "error"
         ? request?.name
         : undefined;
-
-  // Position text: "3 / 17"
-  const posText = browse.count > 0 && browse.index !== null
-    ? `${browse.index + 1} / ${browse.count}`
-    : "";
-
-  // Dimension text.
+  const posText =
+    browse.count > 0 && browse.index !== null
+      ? `${browse.index + 1} / ${browse.count}`
+      : "";
   const dimText = publication
-    ? publication.fullResolution
-      ? `${publication.sourceWidth} × ${publication.sourceHeight}`
-      : `${publication.resourceWidth} × ${publication.resourceHeight} (proxy)`
+    ? `${publication.sourceWidth} × ${publication.sourceHeight}`
     : "";
 
-  // Full resolution badge.
-  const resBadge = publication
-    ? publication.fullResolution ? "Full resolution" : "Proxy"
-    : "";
-
-  // Can the user use 1:1? Only when full resolution is available.
-  const can100 = publication?.fullResolution === true;
+  const apply = (fn: (s: ViewTransform) => ViewTransform) => {
+    const next = fn(viewRef.current);
+    viewRef.current = next;
+    setViewState(next);
+  };
 
   return (
-    <View class="w-full h-full flex-col bg-slate-900">
-      {/* Top bar: title + filename + position */}
-      <View class="flex-row items-center justify-between px-4 py-2 bg-slate-950">
-        <Text class="text-sm text-white font-bold">PicoView</Text>
-        {shownName ? (
-          <Text class="text-xs text-slate-400 flex-1 text-center">{shownName}</Text>
-        ) : null}
-        {posText ? (
-          <Text class="text-xs text-slate-500">{posText}</Text>
-        ) : null}
-      </View>
-
-      {/* Image canvas */}
-      <View class="flex-1 bg-slate-800 overflow-hidden">
-        {verdict === "image" && bound ? (
-          <Image
-            src={textureKeyFor(bound.slot)}
-            style={{
-              // PocketJS PROP contract (not CSS): posType Absolute + insets.
-              posType: 1,
-              insetL: imgLeft,
-              insetT: imgTop,
-              width: displayW,
-              height: displayH,
-            }}
-          />
-        ) : verdict === "image" ? (
-          <View class="flex-1 flex-col items-center justify-center">
-            <Text class="text-sm text-slate-400">Preparing image…</Text>
-          </View>
-        ) : verdict === "loading" ? (
-          <View class="flex-1 flex-col items-center justify-center">
-            <Text class="text-sm text-slate-400">{`Opening ${request?.name ?? "image"}…`}</Text>
-          </View>
-        ) : verdict === "error" ? (
-          <View class="flex-1 flex-col items-center justify-center">
-            <Text class="text-sm text-red-400">{request?.error ?? "Could not open image"}</Text>
-          </View>
-        ) : (
-          <View class="flex-1 flex-col items-center justify-center">
-            <Text class="text-sm text-slate-400">No image open</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Refresh error bar */}
-      {refreshIndicator === "Refresh failed" && request?.error ? (
-        <View class="px-4 py-1 bg-slate-950 overflow-hidden">
-          <Text class="text-xs text-red-400">{request.error}</Text>
+    <View class="w-full h-full flex-col bg-[#1e1e1e]">
+      {/* Title — height frozen in SHELL_CHROME.titleH */}
+      <View class="flex-row items-center px-3 bg-[#252526]" style={{ height: 36 }}>
+        <Text class="text-sm font-bold text-[#f0f0f0]">PicoView</Text>
+        <View class="flex-1 items-center justify-center overflow-hidden">
+          <Text class="text-sm text-[#a0a0a0]">
+            {shownName ? (posText ? `${shownName} (${posText})` : shownName) : ""}
+          </Text>
         </View>
-      ) : null}
+        <View class="w-12" />
+      </View>
 
-      {/* Toolbar — shipped capability only.
-          Rotate/Flip intentionally absent: PocketJS precursor required. */}
-      <View class="flex-row items-center justify-center gap-2 px-4 py-2 bg-slate-950">
-        <ToolbarButton
-          label="‹"
-          disabled={!browse.canPrevious}
-          onPress={() => cmdPrevious()}
-        />
-        <ToolbarButton
-          label="›"
-          disabled={!browse.canNext}
-          onPress={() => cmdNext()}
-        />
-        <Separator />
-
-        <ToolbarButton
-          label="−"
-          disabled={verdict !== "image"}
-          onPress={() => {
-            const next = clampPan(zoomOut(viewRef.current, geo), imgW, imgH, containerW, containerH);
-            viewRef.current = next;
-            setViewState(next);
-          }}
-        />
-        <Text class="text-xs text-slate-300 w-16 text-center">{zoomText}</Text>
-        <ToolbarButton
-          label="+"
-          disabled={verdict !== "image"}
-          onPress={() => {
-            const next = clampPan(zoomIn(viewRef.current, geo), imgW, imgH, containerW, containerH);
-            viewRef.current = next;
-            setViewState(next);
-          }}
-        />
-        <Separator />
-
-        <ToolbarButton
-          label="Fit"
-          disabled={verdict !== "image"}
-          onPress={() => {
-            const next = resetToFit(viewRef.current);
-            viewRef.current = next;
-            setViewState(next);
-          }}
-        />
-        <ToolbarButton
+      {/* Toolbar — height frozen in SHELL_CHROME.toolbarH */}
+      <View class="flex-row items-center px-2 bg-[#252526]" style={{ height: 64 }}>
+        <ToolBtn label="Prev" disabled={!browse.canPrevious} onPress={() => cmdPrevious()} />
+        <ToolBtn label="Next" disabled={!browse.canNext} onPress={() => cmdNext()} />
+        <Sep />
+        <ToolBtn label="−" disabled={!canImage} onPress={() => apply(s => zoomOut(img, vp, s))} />
+        <Text class="text-xs text-[#f0f0f0] w-14 text-center">{zoomText}</Text>
+        <ToolBtn label="+" disabled={!canImage} onPress={() => apply(s => zoomIn(img, vp, s))} />
+        <Sep />
+        <ToolBtn label="Fit" disabled={!canImage} onPress={() => apply(s => fitView(img, vp, s))} />
+        <ToolBtn
           label="1:1"
-          disabled={!can100 || verdict !== "image"}
-          onPress={() => {
-            const next = set100Percent(viewRef.current);
-            viewRef.current = next;
-            setViewState(clampPan(next, imgW, imgH, containerW, containerH));
-          }}
+          disabled={!canImage || !can100}
+          onPress={() => apply(s => actualSize(s))}
         />
-        <Separator />
-
-        <ToolbarButton
-          label="↻"
-          disabled={verdict !== "image"}
+        <Sep />
+        <ToolBtn
+          label="RotL"
+          disabled={!canImage}
+          onPress={() =>
+            apply(s => setUserOrientation(img, vp, s, rotateLeft(s.orientation)))
+          }
+        />
+        <ToolBtn
+          label="RotR"
+          disabled={!canImage}
+          onPress={() =>
+            apply(s => setUserOrientation(img, vp, s, rotateRight(s.orientation)))
+          }
+        />
+        <ToolBtn
+          label="FlipH"
+          disabled={!canImage}
+          onPress={() =>
+            apply(s =>
+              setUserOrientation(img, vp, s, flipHorizontal(s.orientation)),
+            )
+          }
+        />
+        <ToolBtn
+          label="FlipV"
+          disabled={!canImage}
+          onPress={() =>
+            apply(s =>
+              setUserOrientation(img, vp, s, flipVertical(s.orientation)),
+            )
+          }
+        />
+        <ToolBtn
+          label="Reset"
+          disabled={!canImage}
+          onPress={() => apply(s => resetView(img, vp, s))}
+        />
+        <Sep />
+        <ToolBtn
+          label="Refresh"
+          disabled={!publication}
           onPress={() => cmdRefresh()}
         />
       </View>
 
-      {/* Status bar */}
-      <View class="flex-row items-center justify-between px-4 py-1 bg-slate-950">
-        <Text class="text-xs text-slate-500">{statusText}</Text>
-        {dimText ? (
-          <Text class="text-xs text-slate-500">{dimText}</Text>
-        ) : null}
-        {resBadge ? (
-          <Text class={publication?.fullResolution ? "text-xs text-slate-500" : "text-xs text-amber-500"}>
-            {resBadge}
+      {/* Image canvas — geometry always matches imageViewport() */}
+      <View class="flex-1 bg-[#111111] overflow-hidden">
+        {verdict === "image" && bound && style ? (
+          <Image
+            src={textureKeyFor(bound.slot)}
+            style={{
+              posType: 1,
+              insetL: Math.round(style.insetL - vp.x),
+              insetT: Math.round(style.insetT - vp.y),
+              width: Math.round(style.width),
+              height: Math.round(style.height),
+              rotate: style.rotate,
+              scaleX: style.scaleX,
+              scaleY: style.scaleY,
+              originX: style.originX,
+              originY: style.originY,
+            }}
+          />
+        ) : verdict === "image" ? (
+          <View class="flex-1 flex-col items-center justify-center">
+            <Text class="text-sm text-[#a0a0a0]">Preparing image...</Text>
+          </View>
+        ) : verdict === "loading" ? (
+          <View class="flex-1 flex-col items-center justify-center">
+            <Text class="text-sm text-[#a0a0a0]">
+              {`Opening ${request?.name ?? "image"}...`}
+            </Text>
+          </View>
+        ) : verdict === "error" ? (
+          <View class="flex-1 flex-col items-center justify-center">
+            <Text class="text-sm text-[#f0f0f0]">Could not open this image</Text>
+            <Text class="text-xs text-[#a0a0a0]">
+              {request?.error ?? "The file may be corrupted or not supported."}
+            </Text>
+          </View>
+        ) : (
+          <View class="flex-1 flex-col items-center justify-center">
+            <Text class="text-sm text-[#a0a0a0]">Open an image to get started</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Status — height frozen in SHELL_CHROME.statusH */}
+      <View class="flex-row items-center px-3 bg-[#252526] gap-3" style={{ height: 28 }}>
+        {dimText ? <Text class="text-xs text-[#a0a0a0]">{dimText}</Text> : null}
+        {publication ? (
+          <Text
+            class={
+              publication.fullResolution
+                ? "text-xs text-[#a0a0a0]"
+                : "text-xs text-amber-400"
+            }
+          >
+            {publication.fullResolution ? "Full resolution" : "Proxy"}
           </Text>
         ) : null}
-        {verdict === "image" ? (
-          <Text class="text-xs text-slate-500">{zoomText}</Text>
-        ) : null}
+        <View class="flex-1" />
+        {canImage ? <Text class="text-xs text-[#a0a0a0]">{zoomText}</Text> : null}
+        <Text class="text-xs text-[#a0a0a0]">{`dpi ${dpi}`}</Text>
+        {posText ? <Text class="text-xs text-[#a0a0a0]">{posText}</Text> : null}
       </View>
     </View>
   );
 }
 
-// --- Toolbar helpers ---
-
-function ToolbarButton({
+function ToolBtn({
   label,
   disabled,
   onPress,
 }: {
   label: string;
-  disabled: boolean;
+  disabled?: boolean;
   onPress: () => void;
 }) {
+  const off = disabled === true;
   return (
     <View
-      class={disabled
-        ? "px-3 py-1 bg-slate-800 rounded"
-        : "px-3 py-1 bg-slate-700 rounded focus:bg-slate-600 active:bg-slate-500"
+      class={
+        off
+          ? "px-2 py-1 rounded"
+          : "px-2 py-1 rounded focus:bg-[#1e1e1e] active:bg-[#1e1e1e]"
       }
-      onPress={disabled ? undefined : onPress}
-      focusable={!disabled}
+      onPress={off ? undefined : onPress}
+      focusable={!off}
     >
-      <Text class={disabled ? "text-xs text-slate-600" : "text-xs text-white"}>
+      <Text class={off ? "text-xs text-zinc-600" : "text-xs text-[#f0f0f0]"}>
         {label}
       </Text>
     </View>
   );
 }
 
-function Separator() {
-  return <View class="w-px h-4 bg-slate-700" />;
+function Sep() {
+  return <View class="w-px h-4 mx-1 bg-[#3a3a3a]" />;
 }
