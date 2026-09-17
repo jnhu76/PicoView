@@ -16,13 +16,14 @@ export const ICON_ASSETS = {
 
 export type IconName = keyof typeof ICON_ASSETS;
 
-/** Product label under the glyph (toolbar text). */
+/** Product label under the glyph (toolbar text).
+ *  Keep labels short enough for ToolButton width — long names truncate. */
 const ICON_LABEL: Record<"open" | "previous" | "next" | "zoomOut" | "zoomIn" | "fit" | "oneToOne" | "refresh", string> = {
   open: "Open",
-  previous: "Previous",
+  previous: "Prev",
   next: "Next",
-  zoomOut: "Zoom Out",
-  zoomIn: "Zoom In",
+  zoomOut: "Zoom-",
+  zoomIn: "Zoom+",
   fit: "Fit",
   oneToOne: "1:1",
   refresh: "Refresh",

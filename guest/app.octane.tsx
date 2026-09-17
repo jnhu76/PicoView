@@ -370,7 +370,7 @@ export default function App() {
     <View class="w-full h-full flex-col bg-[#1e1e1e]">
       {/* Title — height frozen in SHELL_CHROME.titleH */}
       <View class="flex-row items-center px-3 bg-[#252526]" style={{ height: 36 }}>
-        <Text class="text-sm font-bold text-[#f0f0f0]">PicoView</Text>
+        <Text class="text-sm text-[#d0d0d0]">PicoView</Text>
         <View class="flex-1 items-center justify-center overflow-hidden">
           <Text class="text-sm text-[#a0a0a0]">{headerCenter}</Text>
         </View>
@@ -404,9 +404,9 @@ export default function App() {
           disabled={!canImage}
           onPress={() => apply(s => zoomOut(img, vp, s))}
         />
-        <View class="w-14 items-center justify-center">
-          <View class="px-2 py-1 rounded bg-[#1e1e1e]">
-            <Text class="text-xs text-[#f0f0f0]">{canImage ? zoomText : "-"}</Text>
+        <View class="w-20 items-center justify-center">
+          <View class="px-2 py-1 rounded bg-[#1a1a1a]">
+            <Text class="text-xs text-[#c8c8c8]">{canImage ? zoomText : "-"}</Text>
           </View>
         </View>
         <ToolButton
@@ -529,6 +529,8 @@ export default function App() {
           </View>
         ) : null}
 
+        {/* Overlay only for non-image states. When an image is bound, never
+            stack empty/loading/error on top of the publication. */}
         {verdict === "image" && !bound ? (
           <View class="flex-1 flex-col items-center justify-center">
             <Text class="text-sm text-[#a0a0a0]">Preparing image...</Text>
@@ -567,7 +569,7 @@ export default function App() {
               </View>
             ) : null}
           </View>
-        ) : (
+        ) : verdict === "empty" ? (
           <View class="flex-1 flex-col items-center justify-center gap-3">
             <Image class="w-12 h-12" src={ICON_ASSETS.empty} />
             <Text class="text-base text-[#a0a0a0]">Open an image to get started</Text>
@@ -579,7 +581,7 @@ export default function App() {
               <Text class="text-sm text-[#f0f0f0]">Open File...</Text>
             </View>
           </View>
-        )}
+        ) : null}
       </View>
 
       {/* Status — height frozen in SHELL_CHROME.statusH */}
@@ -623,8 +625,8 @@ function ToolButton({
 }) {
   const off = disabled === true;
   const shell = off
-    ? "w-16 h-14 flex-col items-center justify-center gap-0.5 rounded"
-    : "w-16 h-14 flex-col items-center justify-center gap-0.5 rounded focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
+    ? "w-16 h-14 flex-col items-center justify-center gap-0.5 rounded overflow-hidden"
+    : "w-16 h-14 flex-col items-center justify-center gap-0.5 rounded overflow-hidden focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
   return (
     <View
       class={shell}
@@ -632,7 +634,7 @@ function ToolButton({
       focusable={!off}
     >
       {textIcon ? (
-        <Text class={off ? "text-sm text-zinc-600" : "text-sm text-[#f0f0f0]"}>{label}</Text>
+        <Text class={off ? "text-sm text-zinc-600" : "text-sm text-[#e8e8e8]"}>{label}</Text>
       ) : icon ? (
         <Image
           class="w-5 h-5"
@@ -641,7 +643,7 @@ function ToolButton({
         />
       ) : null}
       {!textIcon ? (
-        <Text class={off ? "text-xs text-zinc-600" : "text-xs text-[#a0a0a0]"}>{label}</Text>
+        <Text class={off ? "text-sm text-zinc-600" : "text-sm text-[#c8c8c8]"}>{label}</Text>
       ) : null}
     </View>
   );

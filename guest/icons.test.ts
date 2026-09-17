@@ -7,5 +7,6 @@ test("toolbar icon assets exist as string literals for the compiler", () => {
   }
   expect(iconLabel("open")).toBe("Open");
   expect(iconLabel("oneToOne")).toBe("1:1");
-  expect(iconLabel("zoomOut")).toBe("Zoom Out");
+  expect(iconLabel("zoomOut")).toBe("Zoom-");
+  expect(iconLabel("previous")).toBe("Prev");
 });
