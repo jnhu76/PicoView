@@ -1,12 +1,103 @@
 ---
 feature: view-geometry-1
 status: ready-for-pr
-updated: 2026-09-17
+updated: 2026-09-18
 branch: corrective/view-geometry-1
 commits: bbda8db50a99d8c35380e8831670219b75f5e962..HEAD
 ---
 
 # View Geometry Corrective 1
+
+## PR61-CORRECTIVE-1
+
+Fresh PR-diff review of head `33844a0` raised three MAJOR blockers. This
+corrective closes exactly those three. No feature expansion. PocketJS pin
+unchanged. PR #60 untouched.
+
+### MAJOR-A — viewport / DPI Fit reconcile
+
+Root cause: view reconciliation was keyed only by `PublicationViewKey`
+(browseIndex / name / resource dims / fullResolution). Viewport width/height
+and DPI were not a reconcile trigger, so Fit kept a stale cached
+`productZoom` after resize or `ScaleFactorChanged`.
+
+Fix: separate `ViewEnvironment { viewport, dpiScale }` layer in
+`guest/view_transform.ts` (`reconcileViewEnvironment`). Publication identity
+is still `PublicationViewKey`. On environment change:
+- Fit → `fitView` (pan 0, mode fit) with the new dpi already applied.
+- Manual → preserve Product zoom + orientation, `clampPan` against the new
+  realized scale. Do not silently return to Fit.
+Equivalent environment facts are reference-stable (idempotent).
+
+Oracle: pure tests A1–A6 + idempotence in `guest/view_transform.test.ts`;
+live shrink/enlarge Fit smoke (`.smoke-evidence/pr61-corrective/A*`).
+
+Fresh-review follow-up on the dirty tree found a related Fit hole: RotL/RotR
+/ FlipH / FlipV while `mode === "fit"` only mutated orientation and left a
+stale pre-rotate `productZoom` (ARCHITECTURE §5.4: Fit uses post-user-transform
+extent). Closed by `setUserOrientation` — Fit re-materializes after D4;
+manual keeps Product zoom and clamps pan. Locked by A6b/A6c.
+
+### MAJOR-B — persistent wheel pointer anchor
+
+Root cause: host scroll was `{"t":"scroll","dy"}` only; guest looked for
+pointer coords in the *current turn* mouse/scroll batch. Normal Windows
+ordering is `CursorMoved` in turn N, `MouseWheel` in turn N+1 with no mouse
+packet in the wheel turn → anchor fell back to viewport center.
+
+Fix:
+- Host `MouseWheel` now emits latest logical `x/y` from `self.pointer`
+  (`native/src/main.rs`). Not physical pixels.
+- Guest keeps persistent `lastPointer {x,y,known}` updated on every mouse
+  and on scroll packets that carry coords (`guest/app.octane.tsx`).
+- Anchor selection: `wheelFocusPoint` in `guest/shell_layout.ts` — use the
+  pointer only when it is inside the image viewport; otherwise center.
+  Never anchor to toolbar chrome.
+
+Oracle: pure B1–B3 + cross-turn pipeline tests; live smoke moves the mouse
+once, pauses, then wheels several times without re-motion
+(`B0`/`B1-after-wheel-in`).
+
+### MAJOR-C — frozen gesture ownership
+
+Root cause: drag started on any later `down=true` mouse packet inside the
+canvas, not only on the original down edge. Toolbar-down → move into canvas
+while held → drag started.
+
+Fix: `HeldGesture { owner, wasDown }` + `classifyGestureOwner` +
+`nextHeldGesture` in `guest/pointer_press.ts`. App chooses owner exactly on
+the UP→DOWN edge:
+- focusable hit → `toolbar`
+- else inside image viewport + image → `canvas`
+- else `none`
+Held packets never reclassify. Release/cancel clear the owner.
+`pointerPress` remains the toolbar activate authority; canvas pan runs only
+when owner is `canvas`. Cancel (`Focused(false)` / `cancel:true`) clears
+both press owner and gesture owner without onPress. Late physical release
+cannot resurrect a cancelled owner.
+
+Oracle: pure C1–C7 ownership tests; live toolbar→canvas (no Next, no pan)
+and canvas→toolbar (pan only) plus existing Alt-Tab D2 cancel oracle.
+
+### Evidence
+
+Campaign: `PICOVIEW-VIEW-GEOMETRY-PR61-CORRECTIVE-1`
+
+| Check | Result |
+| --- | --- |
+| guest tests | **148 pass** (was 121; +27, no deletions) |
+| cargo tests | **31 pass** |
+| guest bundle | `dist/picoview.js` + `.pak` rebuilt |
+| release exe | `native/target/release/picoview.exe` rebuilt |
+| live A resize Fit | PASS |
+| live B wheel anchor (no re-motion) | PASS |
+| live C ownership | PASS (toolbar→canvas no-op; canvas→toolbar pans) |
+| live D Alt-Tab cancel | PASS (D1/D2/D3 + normal click once) |
+
+Resource invariants unchanged: no decode / generation / handle / revision /
+admission / upload from these presentation-only fixes.
+
+High-DPI >100% live remains pre-release evidence debt (not claimed closed).
 
 ## Report
 
