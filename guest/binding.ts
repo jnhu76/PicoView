@@ -44,7 +44,14 @@ export interface PublicationIdentity {
 }
 
 /** The publication the mounted Image currently resolves to, and the
- *  texture-key slot its `src` string names. */
+ *  texture-key slot its `src` string names.
+ *
+ *  Invariant the render sites rely on: ONLY the current slot's key is ever
+ *  rendered. The other slot's registry entry may still name a superseded
+ *  (by then freed) handle — harmless while nothing renders it, because a
+ *  freed handle resolves to nothing in Core rather than to wrong pixels.
+ *  A second Image consumer (or a hand-written key) must therefore
+ *  reconcile through this module, never resolve an inactive slot. */
 export interface BoundPublication extends PublicationIdentity {
   slot: 0 | 1;
 }

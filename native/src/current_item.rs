@@ -1265,6 +1265,8 @@ mod tests {
             "/../guest/app.octane.tsx"
         ))
         .expect("guest source readable from the workspace");
-        assert!(guest_app.contains("textureKeyFor("));
+        // The single Image render site must resolve the RECONCILED binding,
+        // not a publication field or a hand-rolled key.
+        assert!(guest_app.contains("src={textureKeyFor(bound.slot)}"));
     }
 }

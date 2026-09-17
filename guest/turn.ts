@@ -51,7 +51,11 @@ export function runGuestTurn(
   let changed = false;
   for (;;) {
     const batch = nextBatch();
-    if (batch === undefined) break;
+    // The pinned host returns undefined for an empty queue and never an
+    // empty string (svcPoll drains the whole queue and newline-terminates
+    // every line); accepting null/"" too keeps a future host from throwing
+    // inside the frame hook or spinning the drain forever.
+    if (batch == null || batch === "") break;
     for (const line of batch.split("\n")) {
       if (!line) continue;
       let v: SvcLine;

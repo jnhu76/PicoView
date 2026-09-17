@@ -103,3 +103,25 @@ test("the turn is the only place a binding moves (no double register)", () => {
   expect(outcome.register).toBeNull();
   expect(outcome.state.binding).toEqual({ generation: 3, handle: 33, slot: 1 });
 });
+
+test("null and empty batches terminate the drain instead of throwing or spinning", () => {
+  // The pinned host returns undefined for an empty queue; a future host
+  // returning null must not throw inside the frame hook, and an empty
+  // string must not loop the drain forever.
+  let calls = 0;
+  const withNull = runGuestTurn(freshState(), () => {
+    calls += 1;
+    return null as unknown as string | undefined;
+  });
+  expect(calls).toBe(1); // terminated on the null batch, no throw
+  expect(withNull.render).toBe(false);
+  expect(withNull.state.binding).toBeNull();
+
+  let emptyCalls = 0;
+  const withEmpty = runGuestTurn(freshState(), () => {
+    emptyCalls += 1;
+    return "";
+  });
+  expect(emptyCalls).toBe(1);
+  expect(withEmpty.render).toBe(false);
+});

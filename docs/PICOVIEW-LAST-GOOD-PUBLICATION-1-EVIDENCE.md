@@ -347,11 +347,36 @@ growth across rounds.
 | Suite | Command | Result |
 | --- | --- | --- |
 | native state machine + oracles | `cd native && cargo test` | 19 passed, 0 failed (16 pre-corrective + 3 corrective-1; `two_commits_before_one_boundary_release_every_superseded` extended for CORRECTIVE-2 with the "final candidate is the publication" assertion) |
-| guest observation + binding suites | `bun test guest/` | 33 passed, 0 failed (13 `observer.test.ts` + 11 `binding.test.ts` + 6 `turn.test.ts` + 3 `framework-binding.test.ts`) |
+| guest observation + binding suites | `bun test guest/` | 34 passed, 0 failed (13 `observer.test.ts` + 11 `binding.test.ts` + 7 `turn.test.ts` + 3 `framework-binding.test.ts`) |
 | clippy | `cargo clippy --all-targets` | pre-existing warnings only, byte-identical set before/after (6, all in test-only code; `Refresh` dead-code allowed with named reason) |
-| guest bundle | `pocket.ts compile --target windows-app` | pass 2 ok, 345064 bytes |
+| guest bundle | `pocket.ts compile --target windows-app` | pass 2 ok, 345074 bytes |
 | release smoke (good) | `picoview.exe … smoke-lgp.jpg` | open handle=Some(0), render tick 1, present ok |
 | release smoke (corrupt) | `picoview.exe … corrupt.jpg` | open handle=None, error item, present ok |
+
+CORRECTIVE-2 release smokes (2026-09-17, PicoView head with the
+CORRECTIVE-2 guest sources; PocketJS `24bab5e`; Windows 11 10.0.26200;
+AMD Radeon(TM) Graphics iGPU / Vulkan / driver 25.8.1; bundle 345074
+bytes = the final reviewed bundle):
+
+```text
+good:    test-media/real-screenshot.jpg → current item generation=1
+         handle=Some(0) → render submit tick 1 → present submitted true;
+         the window shows the image fitted to the window (1153 x 1198,
+         "Ready") — the new binding path renders, never blank.
+corrupt: test-media/corrupt.jpg → current item generation=1 handle=None →
+         render submit tick 1 → present submitted true; the window shows
+         the bounded error item ("could not decode image…", status
+         "Error") — the NewItem-failure path unmounts the Image and binds
+         nothing (publication null → binding null).
+```
+
+Both instances were terminated after the render/present sequence had been
+observed and the window inspected (these are startup/present smokes, not
+graceful-exit runs); no stale-handle, panic, or binding error was logged.
+Both were re-run after the review NOTEs were actioned, so the inspected
+binaries match the final guest sources. These smokes exercise the
+single-commit boot path only (V1 has no runtime refresh trigger); the
+multi-commit batch cases remain covered by §Q.4.
 
 Native coverage map (§18): initial success / initial failure /
 replacement success / refresh decode failure / refresh admission failure /
@@ -790,6 +815,7 @@ it is current.
 | `two svc batches in one frame commit exactly one binding` | the commit boundary is the TURN: per-batch commits would reintroduce the MAJOR one level up |
 | `three batches in one frame still commit exactly one binding` | same, at the next parity |
 | `an empty drain changes nothing and schedules no render` | idle turns are no-ops |
+| `null and empty batches terminate the drain instead of throwing or spinning` | a future host's null/"" batch cannot throw inside the frame hook or hang the drain |
 | `a turn with no Publication change schedules no render and no register` | refresh loading: status render, no rebind |
 | `malformed and foreign lines are skipped without disturbing the binding` | robustness cannot move the binding |
 | `the turn is the only place a binding moves (no double register)` | repeat turns do not re-register |
@@ -798,7 +824,7 @@ it is current.
 | `a full image node unmount/remount cycle is always a fresh src` | a remount applies its src regardless of key repetition |
 | `publication carries no view-binding mechanics` (`observer.test.ts`) | the semantic split is enforced in the Product state |
 | `several ready events in one turn collapse to the final publication` | the reducer has no per-event binding machinery |
-| `guest_texture_key_matches_host_hint` (native, extended) | the host hint and the guest key owner (`guest/binding.ts`) stay one contract, and the app consumes the derivation |
+| `guest_texture_key_matches_host_hint` (native, tightened) | the host hint and the guest key owner (`guest/binding.ts`) stay one contract, and the single Image render site resolves the reconciled binding (`src={textureKeyFor(bound.slot)}`) rather than a publication field or a hand-rolled key |
 
 ### Q.5 Honest statement of the guarantee
 
@@ -811,3 +837,61 @@ publication while a renderable guest state still references it.
 Not claimed: safety for a fabricated illegal `RequestPhase`; end-to-end
 execution of the compiled bundle through a live multi-commit batch (V1 has
 no runtime trigger — see §L E2E note).
+
+## R. Fresh adversarial review 3 (post-CORRECTIVE-2)
+
+Fresh-context reviewer against the CORRECTIVE-2 head, locked PocketJS
+`24bab5e` (PicoView worktree and the PocketJS checkout both verified). The
+reviewer re-ran every suite itself, re-verified the framework facts at
+source level, and — beyond reading — built its own harnesses outside the
+repository: a model fuzz (400 seeds x 60 ticks = 24 000 ticks, 16 486 of
+them with a mounted image, generation-tagged handle model) and a real-bundle
+driver that executed the compiled `dist/picoview.js` for ~4 500 frames with
+a recording native-ops layer, checking after every frame that the mounted
+Image node resolved the handle the native model considered live.
+
+Verdict: **PASS — 0 BLOCKER, 0 MAJOR, 4 NOTE.**
+
+Attack results (12 vectors, each traced to file:line): two `ready` in one
+batch; three `ready` in one batch; even-number wrap (2/4/6/8 collapsed
+commits); intermediate publication never rendered; `new-item` error after an
+intermediate success; `refresh` error after an intermediate success; final
+`src` string equal to the mounted one under a changed identity (searched
+directly, including a power check showing the pre-corrective code fails the
+same oracle); registry moved but node not rebound; A/B freed while the
+DrawList still references A; key-namespace growth (max registry 2 over the
+fuzz); native deferred-release regression (comment-stripped diff: no
+mechanism change); plus extra surface (multi-batch turns, `changed`
+semantics, mount ordering, resize-only turns, malformed lines, duplicate
+generations, leftover `bindSlot` consumers). **All NOT EXPLOITABLE**, and
+the reviewer additionally confirmed the pre-change code fails its own
+oracle — i.e. the new oracles have power over the defect they target.
+
+Dispositions of the four NOTEs:
+
+1. [NOTE → documentation] The inactive slot's registry entry can still name
+   a superseded (freed) handle; harmless because nothing renders an
+   inactive slot (a freed handle resolves to nothing in Core, never wrong
+   pixels). **Actioned**: the invariant is now named on `BoundPublication`
+   in `guest/binding.ts`, with the rule that a future second consumer must
+   reconcile through the module rather than resolve an inactive slot.
+2. [NOTE → actioned] The drain terminator recognised only `undefined`; a
+   future host returning `null` would throw inside the frame hook and `""`
+   would spin. **Actioned**: `runGuestTurn` now terminates on
+   `null`/`""` as well, with a test pinning it.
+3. [NOTE → actioned] §Q.4's row for the native key-hint test overstated what
+   a source-text assertion proves. **Actioned**: the test now pins the exact
+   single render site (`src={textureKeyFor(bound.slot)}`) and the §Q.4 row
+   states exactly that; the behavioural coverage lives in the guest suites.
+4. [NOTE → resolved] The smoke block added after the docs commit made §0's
+   `WORKTREE: clean` momentarily untrue. **Actioned**: committed with this
+   section; the final head's tree is clean.
+
+Residual uncertainty recorded by the reviewer, unchanged here: V1 has no
+native multi-commit runtime trigger, so the multi-commit cases are proven by
+the native unit oracles plus the real-guest-bundle harness, not by a live
+native session; the corrupt-image smoke was not re-run by the reviewer (the
+author ran both smokes against the final reviewed bundle after the NOTEs
+above were actioned, §L); and the bundle the reviewer inspected predates the
+docs commit, with byte-for-byte reproducibility from the reviewed sources
+verified.
