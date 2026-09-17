@@ -1,24 +1,505 @@
-[2026-09-17T16:37:16Z INFO  picoview] [     0.0ms] process start
-[2026-09-17T16:37:16Z INFO  picoview] [    51.7ms] window created (hidden until first frame)
-[2026-09-17T16:37:16Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
-[2026-09-17T16:37:17Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
-[2026-09-17T16:37:17Z INFO  picoview] [   787.6ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
-[2026-09-17T16:37:17Z INFO  picoview] [   788.2ms] window scale_factor = 1 (hello dpi)
-[2026-09-17T16:37:17Z INFO  picoview] [   788.7ms] Resized 960x640
-[2026-09-17T16:37:17Z INFO  picoview] [   840.3ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
-[2026-09-17T16:37:17Z INFO  picoview] [   868.4ms] render submit (tick 1)
-[2026-09-17T16:37:17Z INFO  picoview] [   868.9ms] frame ready from worker (tick 1)
-[2026-09-17T16:37:17Z INFO  picoview] [   869.1ms] present begin (frame tick 1)
-[2026-09-17T16:37:17Z INFO  picoview] [   869.3ms] first-present recovery: reconfigure swapchain
-[2026-09-17T16:37:17Z INFO  picoview] [   887.2ms] swapchain present submitted
-[2026-09-17T16:37:17Z INFO  picoview] [   887.5ms] present end (frame tick 1, submitted true)
-[2026-09-17T16:37:17Z INFO  picoview] [   936.2ms] window shown after first presented frame
-[2026-09-17T16:37:17Z INFO  picoview] [   936.5ms] Resized 960x640
-[2026-09-17T16:37:17Z INFO  picoview] [   937.3ms] RedrawRequested
-[2026-09-17T16:37:17Z INFO  picoview] [   937.5ms] present begin (frame tick 1)
-[2026-09-17T16:37:17Z INFO  picoview] [   938.4ms] swapchain present submitted
-[2026-09-17T16:37:17Z INFO  picoview] [   938.6ms] present end (frame tick 1, submitted true)
-[2026-09-17T16:37:19Z INFO  picoview] [  3697.9ms] RedrawRequested
-[2026-09-17T16:37:19Z INFO  picoview] [  3698.4ms] present begin (frame tick 1)
-[2026-09-17T16:37:19Z INFO  picoview] [  3699.4ms] swapchain present submitted
-[2026-09-17T16:37:19Z INFO  picoview] [  3700.0ms] present end (frame tick 1, submitted true)
+[2026-09-17T17:00:06Z INFO  picoview] [     0.0ms] process start
+[2026-09-17T17:00:06Z INFO  picoview] [    62.5ms] window created (hidden until first frame)
+[2026-09-17T17:00:06Z ERROR wgpu_hal::vulkan::adapter] get_physical_device_surface_capabilities: An unknown error has occurred, due to an implementation or application bug
+[2026-09-17T17:00:07Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-17T17:00:07Z WARN  wgpu_core::instance] Missing downlevel flags: DownlevelFlags(VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW)
+    The underlying API or device in use does not support enough features to be a fully compliant implementation of WebGPU. A subset of the features can still be used. If you are running this program on native and not in a browser and wish to limit the features you use to the supported subset, call Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current platform supports.
+[2026-09-17T17:00:07Z WARN  wgpu_core::instance] DownlevelCapabilities {
+        flags: DownlevelFlags(
+            COMPUTE_SHADERS | FRAGMENT_WRITABLE_STORAGE | INDIRECT_EXECUTION | BASE_VERTEX | READ_ONLY_DEPTH_STENCIL | NON_POWER_OF_TWO_MIPMAPPED_TEXTURES | CUBE_ARRAY_TEXTURES | COMPARISON_SAMPLERS | INDEPENDENT_BLEND | VERTEX_STORAGE | ANISOTROPIC_FILTERING | FRAGMENT_STORAGE | MULTISAMPLED_SHADING | DEPTH_TEXTURE_AND_BUFFER_COPIES | WEBGPU_TEXTURE_FORMAT_SUPPORT | BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED | UNRESTRICTED_INDEX_BUFFER | FULL_DRAW_INDEX_UINT32 | DEPTH_BIAS_CLAMP | VIEW_FORMATS | UNRESTRICTED_EXTERNAL_TEXTURE_COPIES | SURFACE_VIEW_FORMATS | NONBLOCKING_QUERY_RESOLVE,
+        ),
+        limits: DownlevelLimits,
+        shader_model: Sm5,
+    }
+[2026-09-17T17:00:07Z INFO  wgpu_hal::dx12::device] Naga generated shader for "main" at Compute:
+    struct __dynamic_buffer_offsetsTy1 {
+        uint _0;
+    };
+    ConstantBuffer<__dynamic_buffer_offsetsTy1> __dynamic_buffer_offsets1: register(b1, space1);
+    
+    struct OffsetPc {
+        uint inner;
+    };
+    
+    RWByteAddressBuffer dst_ : register(u0);
+    ByteAddressBuffer src : register(t0);
+    ConstantBuffer<OffsetPc> offset: register(b0);
+    
+    typedef uint ret_Constructarray6_uint_[6];
+    ret_Constructarray6_uint_ Constructarray6_uint_(uint arg0, uint arg1, uint arg2, uint arg3, uint arg4, uint arg5) {
+        uint ret[6] = { arg0, arg1, arg2, arg3, arg4, arg5 };
+        return ret;
+    }
+    
+    [numthreads(1, 1, 1)]
+    void main()
+    {
+        uint _e3 = offset.inner;
+        uint _e5 = asuint(src.Load(_e3*4+__dynamic_buffer_offsets1._0));
+        uint _e9 = offset.inner;
+        uint _e13 = asuint(src.Load((_e9 + 1u)*4+__dynamic_buffer_offsets1._0));
+        uint _e17 = offset.inner;
+        uint _e21 = asuint(src.Load((_e17 + 2u)*4+__dynamic_buffer_offsets1._0));
+        uint3 src_1 = uint3(_e5, _e13, _e21);
+        if ((((src_1.x > 65535u) || (src_1.y > 65535u)) || (src_1.z > 65535u))) {
+            {
+                uint _value3[6] = Constructarray6_uint_(0u, 0u, 0u, 0u, 0u, 0u);
+                dst_.Store(0, asuint(_value3[0]));
+                dst_.Store(4, asuint(_value3[1]));
+                dst_.Store(8, asuint(_value3[2]));
+                dst_.Store(12, asuint(_value3[3]));
+                dst_.Store(16, asuint(_value3[4]));
+                dst_.Store(20, asuint(_value3[5]));
+            }
+            return;
+        } else {
+            {
+                uint _value3[6] = Constructarray6_uint_(src_1.x, src_1.y, src_1.z, src_1.x, src_1.y, src_1.z);
+                dst_.Store(0, asuint(_value3[0]));
+                dst_.Store(4, asuint(_value3[1]));
+                dst_.Store(8, asuint(_value3[2]));
+                dst_.Store(12, asuint(_value3[3]));
+                dst_.Store(16, asuint(_value3[4]));
+                dst_.Store(20, asuint(_value3[5]));
+            }
+            return;
+        }
+    }
+    
+[2026-09-17T17:00:07Z INFO  wgpu_hal::dx12::device] Naga generated shader for "main" at Compute:
+    struct __dynamic_buffer_offsetsTy1 {
+        uint _0;
+    };
+    ConstantBuffer<__dynamic_buffer_offsetsTy1> __dynamic_buffer_offsets1: register(b1, space1);
+    
+    struct MetadataEntry {
+        uint src_offset;
+        uint dst_offset;
+        uint vertex_or_index_limit;
+        uint instance_limit;
+    };
+    
+    struct MetadataRange {
+        uint start;
+        uint count;
+    };
+    
+    static const bool supports_indirect_first_instance = false;
+    
+    ConstantBuffer<MetadataRange> metadata_range: register(b0);
+    ByteAddressBuffer metadata : register(t0);
+    ByteAddressBuffer src : register(t1);
+    RWByteAddressBuffer dst_ : register(u0);
+    
+    bool is_bit_set(uint data, uint index)
+    {
+        return (((data >> index) & 1u) == 1u);
+    }
+    
+    MetadataEntry ConstructMetadataEntry(uint arg0, uint arg1, uint arg2, uint arg3) {
+        MetadataEntry ret = (MetadataEntry)0;
+        ret.src_offset = arg0;
+        ret.dst_offset = arg1;
+        ret.vertex_or_index_limit = arg2;
+        ret.instance_limit = arg3;
+        return ret;
+    }
+    
+    [numthreads(64, 1, 1)]
+    void main(uint3 global_invocation_id : SV_DispatchThreadID)
+    {
+        bool failed = false;
+    
+        uint _e4 = metadata_range.count;
+        if ((global_invocation_id.x >= _e4)) {
+            return;
+        }
+        uint _e9 = metadata_range.start;
+        MetadataEntry metadata_1 = ConstructMetadataEntry(asuint(metadata.Load((_e9 + global_invocation_id.x)*16+0)), asuint(metadata.Load((_e9 + global_invocation_id.x)*16+4)), asuint(metadata.Load((_e9 + global_invocation_id.x)*16+8)), asuint(metadata.Load((_e9 + global_invocation_id.x)*16+12)));
+        const bool _e18 = is_bit_set(metadata_1.src_offset, 31u);
+        uint src_base_offset = ((metadata_1.src_offset << 2u) >> 2u);
+        uint dst_base_offset = ((metadata_1.dst_offset << 2u) >> 2u);
+        uint first_vertex_or_index = asuint(src.Load((src_base_offset + 2u)*4+__dynamic_buffer_offsets1._0));
+        uint vertex_or_index_count = asuint(src.Load((src_base_offset + 0u)*4+__dynamic_buffer_offsets1._0));
+        {
+            const bool _e41 = is_bit_set(metadata_1.dst_offset, 30u);
+            bool sub_overflows = (metadata_1.vertex_or_index_limit < first_vertex_or_index);
+            bool _e46 = failed;
+            failed = (_e46 | (sub_overflows && !(_e41)));
+            uint vertex_or_index_limit = (metadata_1.vertex_or_index_limit - first_vertex_or_index);
+            bool _e51 = failed;
+            failed = (_e51 | (vertex_or_index_limit < vertex_or_index_count));
+        }
+        uint first_instance = asuint(src.Load(((src_base_offset + 3u) + uint(_e18))*4+__dynamic_buffer_offsets1._0));
+        uint instance_count = asuint(src.Load((src_base_offset + 1u)*4+__dynamic_buffer_offsets1._0));
+        {
+            const bool _e67 = is_bit_set(metadata_1.dst_offset, 31u);
+            bool sub_overflows_1 = (metadata_1.instance_limit < first_instance);
+            bool _e72 = failed;
+            failed = (_e72 | (sub_overflows_1 && !(_e67)));
+            uint instance_limit = (metadata_1.instance_limit - first_instance);
+            bool _e77 = failed;
+            failed = (_e77 | (instance_limit < instance_count));
+        }
+        if (true) {
+            bool _e84 = failed;
+            failed = (_e84 | (first_instance != 0u));
+        }
+        bool _e86 = failed;
+        if (_e86) {
+            dst_.Store((dst_base_offset + 0u)*4, asuint(0u));
+            dst_.Store((dst_base_offset + 1u)*4, asuint(0u));
+            dst_.Store((dst_base_offset + 2u)*4, asuint(0u));
+            dst_.Store((dst_base_offset + 3u)*4, asuint(0u));
+            if (_e18) {
+                dst_.Store((dst_base_offset + 4u)*4, asuint(0u));
+                return;
+            } else {
+                return;
+            }
+        } else {
+            uint _e120 = asuint(src.Load((src_base_offset + 0u)*4+__dynamic_buffer_offsets1._0));
+            dst_.Store((dst_base_offset + 0u)*4, asuint(_e120));
+            uint _e129 = asuint(src.Load((src_base_offset + 1u)*4+__dynamic_buffer_offsets1._0));
+            dst_.Store((dst_base_offset + 1u)*4, asuint(_e129));
+            uint _e138 = asuint(src.Load((src_base_offset + 2u)*4+__dynamic_buffer_offsets1._0));
+            dst_.Store((dst_base_offset + 2u)*4, asuint(_e138));
+            uint _e147 = asuint(src.Load((src_base_offset + 3u)*4+__dynamic_buffer_offsets1._0));
+            dst_.Store((dst_base_offset + 3u)*4, asuint(_e147));
+            if (_e18) {
+                uint _e156 = asuint(src.Load((src_base_offset + 4u)*4+__dynamic_buffer_offsets1._0));
+                dst_.Store((dst_base_offset + 4u)*4, asuint(_e156));
+                return;
+            } else {
+                return;
+            }
+        }
+    }
+    
+[2026-09-17T17:00:07Z INFO  picoview::gpu] PicoView GPU: Dx12 / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-17T17:00:07Z INFO  picoview] [  1203.5ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "31.0.21923.11000", driver_info: "", backend: Dx12 }, present Fifo, latency 1)
+[2026-09-17T17:00:07Z INFO  picoview] [  1203.7ms] window scale_factor = 1 (hello dpi)
+[2026-09-17T17:00:07Z INFO  picoview] [  1204.0ms] Resized 960x640
+[2026-09-17T17:00:07Z INFO  wgpu_hal::dx12::device] Naga generated shader for "vs_main" at Vertex:
+    struct NagaConstants {
+        int first_vertex;
+        int first_instance;
+        uint other;
+    };
+    ConstantBuffer<NagaConstants> _NagaConstants: register(b0);
+    
+    struct VsIn {
+        float2 pos : LOC0;
+        float2 uv : LOC1;
+        float4 color : LOC2;
+        nointerpolation uint mode : LOC3;
+    };
+    
+    struct VsOut {
+        float4 pos : SV_Position;
+        float2 uv : LOC0;
+        float4 color : LOC1;
+        nointerpolation uint mode : LOC2;
+    };
+    
+    static const bool LINEAR_OUTPUT = true;
+    
+    Texture2D<float4> tex : register(t0);
+    SamplerState nagaSamplerHeap[2048]: register(s0, space0);
+    SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s2048, space0);
+    StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t1, space0);
+    static const SamplerState samp = nagaSamplerHeap[nagaGroup0SamplerIndexArray[0]];
+    
+    struct VertexOutput_vs_main {
+        float2 uv : LOC0;
+        float4 color : LOC1;
+        nointerpolation uint mode : LOC2;
+        float4 pos : SV_Position;
+    };
+    
+    struct FragmentInput_fs_main {
+        float2 uv_1 : LOC0;
+        float4 color_1 : LOC1;
+        nointerpolation uint mode_1 : LOC2;
+        float4 pos_1 : SV_Position;
+    };
+    
+    float3 srgb_to_linear(float3 c)
+    {
+        float3 lo = (c / (12.92).xxx);
+        float3 hi = pow(((c + (0.055).xxx) / (1.055).xxx), (2.4).xxx);
+        return ((c <= (0.04045).xxx) ? lo : hi);
+    }
+    
+    VertexOutput_vs_main vs_main(VsIn in_)
+    {
+        VsOut out_ = (VsOut)0;
+    
+        out_.pos = float4(in_.pos, 0.0, 1.0);
+        out_.uv = in_.uv;
+        out_.color = in_.color;
+        out_.mode = in_.mode;
+        VsOut _e13 = out_;
+        const VsOut vsout = _e13;
+        const VertexOutput_vs_main vsout_1 = { vsout.uv, vsout.color, vsout.mode, vsout.pos };
+        return vsout_1;
+    }
+    
+    float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
+    {
+        VsOut in_1 = { fragmentinput_fs_main.pos_1, fragmentinput_fs_main.uv_1, fragmentinput_fs_main.color_1, fragmentinput_fs_main.mode_1 };
+        float3 rgb = (float3)0;
+        float a = (float)0;
+    
+        float4 t = tex.Sample(samp, in_1.uv);
+        rgb = in_1.color.xyz;
+        if (LINEAR_OUTPUT) {
+            float3 _e9 = rgb;
+            const float3 _e10 = srgb_to_linear(_e9);
+            rgb = _e10;
+        }
+        a = in_1.color.w;
+        if ((in_1.mode == 1u)) {
+            float3 _e17 = rgb;
+            rgb = (_e17 * t.xyz);
+            float _e20 = a;
+            a = (_e20 * t.w);
+        } else {
+            if ((in_1.mode == 2u)) {
+                float _e26 = a;
+                a = (_e26 * t.x);
+            }
+        }
+        float3 _e29 = rgb;
+        float _e30 = a;
+        return float4(_e29, _e30);
+    }
+    
+[2026-09-17T17:00:07Z INFO  wgpu_hal::dx12::device] Naga generated shader for "fs_main" at Fragment:
+    struct NagaConstants {
+        int first_vertex;
+        int first_instance;
+        uint other;
+    };
+    ConstantBuffer<NagaConstants> _NagaConstants: register(b0);
+    
+    struct VsIn {
+        float2 pos : LOC0;
+        float2 uv : LOC1;
+        float4 color : LOC2;
+        nointerpolation uint mode : LOC3;
+    };
+    
+    struct VsOut {
+        float4 pos : SV_Position;
+        float2 uv : LOC0;
+        float4 color : LOC1;
+        nointerpolation uint mode : LOC2;
+    };
+    
+    static const bool LINEAR_OUTPUT = false;
+    
+    Texture2D<float4> tex : register(t0);
+    SamplerState nagaSamplerHeap[2048]: register(s0, space0);
+    SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s2048, space0);
+    StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t1, space0);
+    static const SamplerState samp = nagaSamplerHeap[nagaGroup0SamplerIndexArray[0]];
+    
+    struct VertexOutput_vs_main {
+        float2 uv : LOC0;
+        float4 color : LOC1;
+        nointerpolation uint mode : LOC2;
+        float4 pos : SV_Position;
+    };
+    
+    struct FragmentInput_fs_main {
+        float2 uv_1 : LOC0;
+        float4 color_1 : LOC1;
+        nointerpolation uint mode_1 : LOC2;
+        float4 pos_1 : SV_Position;
+    };
+    
+    float3 srgb_to_linear(float3 c)
+    {
+        float3 lo = (c / (12.92).xxx);
+        float3 hi = pow(((c + (0.055).xxx) / (1.055).xxx), (2.4).xxx);
+        return ((c <= (0.04045).xxx) ? lo : hi);
+    }
+    
+    VertexOutput_vs_main vs_main(VsIn in_)
+    {
+        VsOut out_ = (VsOut)0;
+    
+        out_.pos = float4(in_.pos, 0.0, 1.0);
+        out_.uv = in_.uv;
+        out_.color = in_.color;
+        out_.mode = in_.mode;
+        VsOut _e13 = out_;
+        const VsOut vsout = _e13;
+        const VertexOutput_vs_main vsout_1 = { vsout.uv, vsout.color, vsout.mode, vsout.pos };
+        return vsout_1;
+    }
+    
+    float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
+    {
+        VsOut in_1 = { fragmentinput_fs_main.pos_1, fragmentinput_fs_main.uv_1, fragmentinput_fs_main.color_1, fragmentinput_fs_main.mode_1 };
+        float3 rgb = (float3)0;
+        float a = (float)0;
+    
+        float4 t = tex.Sample(samp, in_1.uv);
+        rgb = in_1.color.xyz;
+        if (LINEAR_OUTPUT) {
+            float3 _e9 = rgb;
+            const float3 _e10 = srgb_to_linear(_e9);
+            rgb = _e10;
+        }
+        a = in_1.color.w;
+        if ((in_1.mode == 1u)) {
+            float3 _e17 = rgb;
+            rgb = (_e17 * t.xyz);
+            float _e20 = a;
+            a = (_e20 * t.w);
+        } else {
+            if ((in_1.mode == 2u)) {
+                float _e26 = a;
+                a = (_e26 * t.x);
+            }
+        }
+        float3 _e29 = rgb;
+        float _e30 = a;
+        return float4(_e29, _e30);
+    }
+    
+[2026-09-17T17:00:07Z INFO  picoview] [  1343.4ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-17T17:00:07Z INFO  picoview] [  1363.0ms] render submit (tick 1)
+[2026-09-17T17:00:07Z INFO  picoview] [  1363.5ms] frame ready from worker (tick 1)
+[2026-09-17T17:00:07Z INFO  picoview] [  1363.7ms] present begin (frame tick 1)
+[2026-09-17T17:00:07Z INFO  picoview] [  1363.9ms] first-present recovery: reconfigure swapchain
+[2026-09-17T17:00:07Z INFO  wgpu_hal::dx12::device] Naga generated shader for "vs_main" at Vertex:
+    struct NagaConstants {
+        int first_vertex;
+        int first_instance;
+        uint other;
+    };
+    ConstantBuffer<NagaConstants> _NagaConstants: register(b0);
+    
+    struct VsOut {
+        float4 pos : SV_Position;
+        float2 uv : LOC0;
+    };
+    
+    Texture2D<float4> tex : register(t0);
+    SamplerState nagaSamplerHeap[2048]: register(s0, space0);
+    SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s2048, space0);
+    StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t1, space0);
+    static const SamplerState samp = nagaSamplerHeap[nagaGroup0SamplerIndexArray[0]];
+    
+    struct VertexOutput_vs_main {
+        float2 uv : LOC0;
+        float4 pos : SV_Position;
+    };
+    
+    struct FragmentInput_fs_main {
+        float2 uv_1 : LOC0;
+        float4 pos_1 : SV_Position;
+    };
+    
+    uint naga_mod(uint lhs, uint rhs) {
+        return lhs % (rhs == 0u ? 1u : rhs);
+    }
+    
+    uint naga_div(uint lhs, uint rhs) {
+        return lhs / (rhs == 0u ? 1u : rhs);
+    }
+    
+    VertexOutput_vs_main vs_main(uint i : SV_VertexID)
+    {
+        VsOut out_ = (VsOut)0;
+    
+        float x = float(asint(asuint(asint(asuint(int(naga_mod((_NagaConstants.first_vertex + i), 2u))) * asuint(int(4)))) - asuint(int(1))));
+        float y = float(asint(asuint(asint(asuint(int(naga_div((_NagaConstants.first_vertex + i), 2u))) * asuint(int(4)))) - asuint(int(1))));
+        out_.pos = float4(x, y, 0.0, 1.0);
+        out_.uv = float2(((x + 1.0) * 0.5), ((1.0 - y) * 0.5));
+        VsOut _e32 = out_;
+        const VsOut vsout = _e32;
+        const VertexOutput_vs_main vsout_1 = { vsout.uv, vsout.pos };
+        return vsout_1;
+    }
+    
+    float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
+    {
+        VsOut in_ = { fragmentinput_fs_main.pos_1, fragmentinput_fs_main.uv_1 };
+        float4 _e4 = tex.Sample(samp, in_.uv);
+        return _e4;
+    }
+    
+[2026-09-17T17:00:07Z INFO  wgpu_hal::dx12::device] Naga generated shader for "fs_main" at Fragment:
+    struct NagaConstants {
+        int first_vertex;
+        int first_instance;
+        uint other;
+    };
+    ConstantBuffer<NagaConstants> _NagaConstants: register(b0);
+    
+    struct VsOut {
+        float4 pos : SV_Position;
+        float2 uv : LOC0;
+    };
+    
+    Texture2D<float4> tex : register(t0);
+    SamplerState nagaSamplerHeap[2048]: register(s0, space0);
+    SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s2048, space0);
+    StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t1, space0);
+    static const SamplerState samp = nagaSamplerHeap[nagaGroup0SamplerIndexArray[0]];
+    
+    struct VertexOutput_vs_main {
+        float2 uv : LOC0;
+        float4 pos : SV_Position;
+    };
+    
+    struct FragmentInput_fs_main {
+        float2 uv_1 : LOC0;
+        float4 pos_1 : SV_Position;
+    };
+    
+    uint naga_mod(uint lhs, uint rhs) {
+        return lhs % (rhs == 0u ? 1u : rhs);
+    }
+    
+    uint naga_div(uint lhs, uint rhs) {
+        return lhs / (rhs == 0u ? 1u : rhs);
+    }
+    
+    VertexOutput_vs_main vs_main(uint i : SV_VertexID)
+    {
+        VsOut out_ = (VsOut)0;
+    
+        float x = float(asint(asuint(asint(asuint(int(naga_mod((_NagaConstants.first_vertex + i), 2u))) * asuint(int(4)))) - asuint(int(1))));
+        float y = float(asint(asuint(asint(asuint(int(naga_div((_NagaConstants.first_vertex + i), 2u))) * asuint(int(4)))) - asuint(int(1))));
+        out_.pos = float4(x, y, 0.0, 1.0);
+        out_.uv = float2(((x + 1.0) * 0.5), ((1.0 - y) * 0.5));
+        VsOut _e32 = out_;
+        const VsOut vsout = _e32;
+        const VertexOutput_vs_main vsout_1 = { vsout.uv, vsout.pos };
+        return vsout_1;
+    }
+    
+    float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
+    {
+        VsOut in_ = { fragmentinput_fs_main.pos_1, fragmentinput_fs_main.uv_1 };
+        float4 _e4 = tex.Sample(samp, in_.uv);
+        return _e4;
+    }
+    
+[2026-09-17T17:00:07Z INFO  picoview] [  1428.1ms] swapchain present submitted
+[2026-09-17T17:00:07Z INFO  picoview] [  1428.5ms] present end (frame tick 1, submitted true)
+[2026-09-17T17:00:07Z INFO  picoview] [  1470.2ms] window shown after first presented frame
+[2026-09-17T17:00:07Z INFO  picoview] [  1471.1ms] Resized 960x640
+[2026-09-17T17:00:07Z INFO  picoview] [  1472.0ms] RedrawRequested
+[2026-09-17T17:00:07Z INFO  picoview] [  1472.3ms] present begin (frame tick 1)
+[2026-09-17T17:00:07Z INFO  picoview] [  1475.1ms] swapchain present submitted
+[2026-09-17T17:00:07Z INFO  picoview] [  1475.6ms] present end (frame tick 1, submitted true)
+[2026-09-17T17:00:10Z INFO  picoview] [  4139.9ms] RedrawRequested
+[2026-09-17T17:00:10Z INFO  picoview] [  4140.3ms] present begin (frame tick 1)
+[2026-09-17T17:00:10Z INFO  picoview] [  4141.1ms] swapchain present submitted
+[2026-09-17T17:00:10Z INFO  picoview] [  4141.3ms] present end (frame tick 1, submitted true)

@@ -39,14 +39,11 @@ import {
   actualSize,
   fitView,
   flipHorizontal,
-  flipVertical,
   initialViewTransform,
   panBy,
   pocketImageStyle,
   reconcileViewEnvironment,
   resetForNewPublication,
-  resetView,
-  rotateLeft,
   rotateRight,
   setUserOrientation,
   zoomAt,
@@ -366,8 +363,10 @@ export default function App() {
       {/* No in-app title strip — native window caption owns "PicoView".
           Filename / index stay in the status bar. */}
 
-      {/* Toolbar — icon-first actions only; state stays in the status bar.
-          Previous/Next are viewport navigation on the image edges, not here.
+      {/* Toolbar — exact command bar:
+          Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · Reflect
+          Previous/Next stay on viewport edges + keyboard (not toolbar).
+          Rotate = single CW 90°; Reflect = horizontal only (PR #61 math).
           Flex flow only; group gaps are spacer Views, not absolute x hacks. */}
       <View class="flex-row items-center px-2 gap-1 bg-[#252526]" style={{ height: SHELL_CHROME.toolbarH }}>
         <ToolButton
@@ -402,53 +401,22 @@ export default function App() {
         />
         <GroupGap />
         <ToolButton
-          icon={ICON_ASSETS.rotateLeft}
-          semantic={toolSemantic("rotateLeft")}
-          disabled={!canImage}
-          onPress={() =>
-            apply(s => setUserOrientation(img, vp, s, rotateLeft(s.orientation)))
-          }
-        />
-        <ToolButton
-          icon={ICON_ASSETS.rotateRight}
-          semantic={toolSemantic("rotateRight")}
+          icon={ICON_ASSETS.rotate}
+          semantic={toolSemantic("rotate")}
           disabled={!canImage}
           onPress={() =>
             apply(s => setUserOrientation(img, vp, s, rotateRight(s.orientation)))
           }
         />
         <ToolButton
-          icon={ICON_ASSETS.flipHorizontal}
-          semantic={toolSemantic("flipHorizontal")}
+          icon={ICON_ASSETS.reflect}
+          semantic={toolSemantic("reflect")}
           disabled={!canImage}
           onPress={() =>
             apply(s =>
               setUserOrientation(img, vp, s, flipHorizontal(s.orientation)),
             )
           }
-        />
-        <ToolButton
-          icon={ICON_ASSETS.flipVertical}
-          semantic={toolSemantic("flipVertical")}
-          disabled={!canImage}
-          onPress={() =>
-            apply(s =>
-              setUserOrientation(img, vp, s, flipVertical(s.orientation)),
-            )
-          }
-        />
-        <ToolButton
-          icon={ICON_ASSETS.reset}
-          semantic={toolSemantic("reset")}
-          disabled={!canImage}
-          onPress={() => apply(s => resetView(img, vp, s))}
-        />
-        <GroupGap />
-        <ToolButton
-          icon={ICON_ASSETS.refresh}
-          semantic={toolSemantic("refresh")}
-          disabled={!canRefresh}
-          onPress={() => cmdRefresh()}
         />
       </View>
 
@@ -478,14 +446,14 @@ export default function App() {
           <View class="absolute inset-0 flex-row items-center justify-between px-3">
             {browse.canPrevious ? (
               <View
-                class="w-10 h-10 items-center justify-center rounded-full bg-[#00000033] focus:bg-[#00000088] active:bg-[#000000aa]"
+                class="w-10 h-10 items-center justify-center rounded-full bg-[#00000044] focus:bg-[#00000099] active:bg-[#000000bb]"
                 onPress={() => cmdPrevious()}
                 focusable
               >
                 <Image
                   class="w-5 h-5"
                   src={ICON_ASSETS.previous}
-                  style={{ opacity: 0.78 }}
+                  style={{ opacity: 0.92 }}
                 />
               </View>
             ) : (
@@ -494,14 +462,14 @@ export default function App() {
             <View class="flex-1" />
             {browse.canNext ? (
               <View
-                class="w-10 h-10 items-center justify-center rounded-full bg-[#00000033] focus:bg-[#00000088] active:bg-[#000000aa]"
+                class="w-10 h-10 items-center justify-center rounded-full bg-[#00000044] focus:bg-[#00000099] active:bg-[#000000bb]"
                 onPress={() => cmdNext()}
                 focusable
               >
                 <Image
                   class="w-5 h-5"
                   src={ICON_ASSETS.next}
-                  style={{ opacity: 0.78 }}
+                  style={{ opacity: 0.92 }}
                 />
               </View>
             ) : (
@@ -597,7 +565,7 @@ function GroupGap() {
   return <View class="w-2 shrink-0" />;
 }
 
-/** Icon-first toolbar button. Hit ~40×40; glyph 20×20; no painted caption. */
+/** Icon-first toolbar button. Hit 36×36; glyph 20×20 (authored size). */
 function ToolButton({
   icon,
   textIcon,
@@ -615,8 +583,8 @@ function ToolButton({
 }) {
   const off = disabled === true;
   const shell = off
-    ? "w-10 h-10 items-center justify-center rounded overflow-hidden shrink-0"
-    : "w-10 h-10 items-center justify-center rounded overflow-hidden shrink-0 focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
+    ? "w-9 h-9 items-center justify-center rounded overflow-hidden shrink-0"
+    : "w-9 h-9 items-center justify-center rounded overflow-hidden shrink-0 focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
   return (
     <View
       class={shell}
@@ -637,7 +605,7 @@ function ToolButton({
         <Image
           class="w-5 h-5"
           src={icon}
-          style={{ opacity: off ? 0.3 : 1 }}
+          style={{ opacity: off ? 0.38 : 1 }}
         />
       ) : null}
     </View>

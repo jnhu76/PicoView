@@ -3,237 +3,167 @@ feature: desktop-ui-normalization-1
 status: delivered
 updated: 2026-09-18
 branch: fix/ui-chrome-1
-commits: 880d58a00d90087558292f80f4366b7f92a23298..e44ee21d74d3ddfd874a9cc87e002a9c233b684c
+commits: 880d58a00d90087558292f80f4366b7f92a23298..c0aa39804d6b51aa113a4852658c14b883d8b043
+corrective: PICOVIEW-PR62-UI-ICON-CORRECTIVE-2
 ---
 
 # Desktop UI Normalization 1 (PR #62)
 
 ## Report
 
-**What was built** — PR #62 chrome is now icon-first desktop viewer UI.
-Top toolbar is actions only: Open · Zoom−/Zoom+/Fit/1:1 · Rotate L/R ·
-Flip H/V · Reset View · Refresh. Previous/Next and the Proxy/zoom badge
-were removed from the toolbar; navigation stays on the image-edge
-chevrons + keyboard/BrowseSession. Semantic full names live in
-`TOOL_SEMANTIC` / tests (PocketJS has no tooltip primitive at `24bab5e`).
-Icons bake and display at 16×16 (`w-4 h-4`). Edge chevrons are translucent
-(`#00000033` rest / `#00000088` focus / `#000000aa` active), sides only,
-unavailable direction has no control node. Title uses real Inter Bold;
-status owns dimensions / Full|Proxy / zoom / dpi / index / name.
-`SHELL_CHROME` and PR #61 ViewTransform/`imageViewport` are unchanged.
+**What was built** — PR #62 chrome is icon-first desktop viewer UI after
+corrective-2. Top toolbar is **exactly** seven commands:
 
-**Verification** — `bun test guest/` 162 pass / 0 fail; `pocket.ts compile
---target windows-app` pass (14 SVGs baked 32×32 @2x from 16×16 design);
-`cargo build --release` OK (pre-existing dead_code/unused_mut warnings only).
-Windows smoke screenshots:
-`experiments/desktop-ui-normalization-1/screenshots/{A-image-ready,B-image-b,C-empty}.png`.
-Adversarial review: **no MAJOR**; MINOR polish applied (SHELL_CHROME binding,
-GroupGap ≈12px, iconLabel comment, SVG comment cleanup, reset glyph documented
-as return-to-baseline). Issue #63 rendering work untouched.
+```text
+Open    Zoom Out  Zoom In  Fit  1:1    Rotate  Reflect
+```
+
+Removed from the toolbar: Previous, Next, Reset, Refresh, Rotate Left,
+Rotate Right, Flip Horizontal, Flip Vertical, passive Proxy/zoom badge.
+Previous/Next remain viewport-edge chevrons + keyboard/BrowseSession.
+Keyboard Refresh (R / F5) remains a recovery path — not a toolbar command.
+
+**Rotate** is one command: each press rotates **clockwise 90°**
+(`0 → 90 → 180 → 270 → 0`), implemented via PR #61 `rotateRight`.
+**Reflect** is one command: **horizontal reflection only**, product name
+`Reflect` (not Mirror), via PR #61 `flipHorizontal`.
+
+**Icon size policy** — design grid **20×20** (`viewBox="0 0 20 20"`),
+display **20×20** (`w-5 h-5`). Texture root stays **32/64 pow2** solely
+because the pak baker rejects non-pow2 textures; that is **not** a display
+scale. No 16→20 stretch. Command fill **#E6E6E6**; chevrons **#F0F0F0**;
+Reflect axis **#F2F2F2**. `guest/images.json` sets `linear: true` for all
+chrome SVGs → bilinear cook path. ToolButton hit target **36×36** (`w-9 h-9`).
+`1:1` remains real Bold `text-sm` `#e6e6e6`.
+
+**Icon family** — Open (folder), Zoom Out/In (magnifier ±), Fit (thick
+corner brackets), Rotate (image plate + CW quarter-turn arm — not circular
+refresh), Reflect (mirrored triangles around a strong vertical axis — not
+L/R swap arrows). Edge chevrons: translucent rest `#00000044`, focus
+`#00000099`, active `#000000bb`, glyph opacity **0.92** (legible, not a
+heavy black sticker).
+
+**Verification** — `bun test guest/` **167 pass / 0 fail**; `pocket.ts
+compile --target windows-app` pass (10 chrome SVGs baked **64×64 @2x**,
+log `sampled linear (images.json)`); `cargo build --release` OK
+(pre-existing dead_code/unused_mut warnings only). Live Windows smoke
+screenshots (PrintWindow 960×640):
+
+- before (c0aa398): `…/screenshots/{A-image-ready,B-image-b,C-empty}-before.png`
+- after: `…/screenshots/{A-image-ready,B-image-b,C-empty}.png`
+
+Adversarial review: **no MAJOR**. Residual glyph-edge softness in the
+96 DPI PrintWindow capture is attributed to final presentation sampling
+(Issue #63); PR #62 removed UI-local causes (vocabulary clutter, gray/thin
+art, size mismatch, multi-transform toolbar). Issue #63 / PR #61 /
+`POCKETJS.lock=24bab5e` untouched.
 
 **Journey log**
-- PocketJS `24bab5e` has no tooltip; `hover:` is a compile error — use
-  focus/active only; semantic names stay in constants/tests.
+- PocketJS `24bab5e` has no tooltip; `hover:` is a compile error — semantic
+  names stay in `TOOL_SEMANTIC` / tests.
 - SVG baker: filled circle/rect/path, no arcs `A`, no stroke; `rx` ignored.
-- 16×16 design + `w-4 h-4` display is the anti-fuzz contract (not 16→20);
-  @2x bake density is physical quality, not display scale.
-- Edge rest must stay light enough that the photograph remains dominant;
-  opaque dark circles were rejected in review.
-- Reset must not look like refresh (circular) or fit (corners) — delivered
-  as return-to-baseline arrow + bar.
+- Pak image dims must be pow2 — 20×20 bake fails; 32/64 root + 20 viewBox
+  keeps design/display at 20 without stretch.
+- Command bar must feel like a photo viewer, not a debug strip — one Rotate,
+  one Reflect, no Reset/Refresh in chrome.
+- Reset was redesigned earlier then **removed** from the toolbar; download-like
+  glyph confusion is gone by deletion, not re-art.
+- Edge rest must stay translucent; raise **glyph** opacity for legibility
+  instead of making the pill opaque.
 
 ## [S1] Problem
 
-PR #62 chrome still looks like a developer/debug toolbar:
+PR #62 chrome still looked like a developer/debug toolbar after the first
+optical pass:
 
-- Previous/Next appear both in the top toolbar and as edge chevrons.
-- Toolbar carries passive state (`Proxy ×14.6%`) that belongs in the status bar.
-- Rotate/Flip/Reset render as text (`RotL` / `RotR` / `FlipH` / `FlipV` / `Reset`).
-- Icons bake at 16×16 then display at `w-5 h-5` (20×20), introducing avoidable fuzz.
-- Edge chevrons are opaque dark circles that compete with the photograph.
-- Toolbar uses uneven separators and label rows instead of icon-first action groups.
+- Transform controls too many (RotL/RotR/FlipH/FlipV/Reset/Refresh).
+- Icon vocabulary too heavy; “毛边 / 发虚 / 不够利落”.
+- Toolbar not product-clean enough for a Windows photo viewer.
 
-Product target for this pass: **lightweight, icon-first, clear desktop chrome**.
-Structural reference: PocketJS native desktop app layout. Visual/product reference:
-Windows 11 Photos. This is **not** a rendering-quality task (Issue #63).
-
-User confirmation this pass: left/right navigation controls **only** show on the
-two image-edge sides — never as top-toolbar Previous/Next.
+Product target for this corrective: **exactly** Open / Zoom Out / Zoom In /
+Fit / 1:1 / Rotate / Reflect. Structural reference: PocketJS native desktop
+app layout. Visual/product reference: Windows 11 Photos-style command bar.
+This is **not** a rendering-quality task (Issue #63).
 
 ## [S2] Design
 
 ### Authority / frozen geometry
 
-Product chrome heights are **one shared constant set** (`SHELL_CHROME`), not
-per-call literals. Fit/zoom/pan still consume `imageViewport()`. PR #61
-ViewTransform math is unchanged.
-
-PR62 follow-up (user): title + toolbar were too tall and squeezed the photo.
-Compact product chrome:
+Product chrome heights remain one shared constant set (`SHELL_CHROME`).
+Fit/zoom/pan still consume `imageViewport()`. PR #61 ViewTransform math is
+unchanged (`rotateRight`, `flipHorizontal`, Fit, pan).
 
 ```text
-titleH:   28
+titleH:   0    (in-app title strip removed; native caption owns the name)
 toolbarH: 44
 statusH: 24
-chrome:   96  (was 128 → +32 logical px for the image)
+chrome:   68
 ```
 
-Unchanged by this PR otherwise:
-
-- ViewTransform / Fit / pan (PR #61 equations)
-- BrowseSession, keyboard Previous/Next, publication/decode ownership
-- `POCKETJS.lock` = `24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb`
-- Issue #63 scope (sampling, DPI, resize, retained presentation)
-
-PR #62 may only change presentation inside chrome regions; image math always
-reads `imageViewport()`.
-
-### PocketJS capability facts (locked revision)
-
-Verified against `24bab5e` `framework/compiler/*`:
-
-| Capability | Reality |
-| --- | --- |
-| `font-bold` | supported — real Inter Bold slot |
-| `font-medium` / 500 / 600 | **not** supported — do not invent |
-| `text-xs` / `text-sm` | 12 / 14 logical px |
-| `gap-N`, `px/mt/ml`, flex row/col | supported (spacing N = N×4) |
-| `opacity-N` + `style.opacity` | supported |
-| `bg-[#rrggbbaa]` | supported 8-digit hex alpha |
-| `focus:` / `active:` | supported |
-| `hover:` | **not** supported on this target — use focus/active |
-| tooltip / hover-label | **no** primitive — follow-up only |
-| SVG baker | filled `circle` / `rect` / `path`; path cmds `M/L/H/V/C/S/Q/T/Z`; **no** arcs `A`; `fill="hole"`; `opacity` / `fill-opacity` |
-| native dark titlebar in PocketJS desktop host | not present — report, do not build custom-titlebar subsystem |
-
-### Toolbar product model (actions, not strings)
-
-Top toolbar is **commands only**. Status bar owns observations.
-
-Visible grouping (Flex only — no absolute, no translate, no hand-tuned x):
+### Toolbar product model (corrective-2)
 
 ```text
-Open    Zoom- Zoom+ Fit 1:1    RotL RotR FlipH FlipV Reset    Refresh
+Open    Zoom- Zoom+ Fit 1:1    Rotate  Reflect
 ```
 
 Rules:
 
-1. Remove Previous / Next from the toolbar (edge + keyboard only).
-2. Remove Proxy/zoom badge from the toolbar (status bar keeps zoom / Full|Proxy).
-3. Icon-first controls; do **not** paint `RotL` / `RotR` / `FlipH` / `FlipV`.
-4. `1:1` may remain textual (compact visual symbol); real Bold allowed.
-5. Semantic names stay in constants/tests:
-   `Open`, `Zoom Out`, `Zoom In`, `Fit`, `1:1`,
-   `Rotate Left`, `Rotate Right`, `Flip Horizontal`, `Flip Vertical`,
-   `Reset View`, `Refresh`.
-6. No tooltip invention; report tooltip as follow-up (PocketJS has none today).
-7. One icon-button contract inside compact `toolbarH=44`:
-   hit target **32×32** (`w-8 h-8`), icon display **16×16** (`w-4 h-4`),
-   vertically centered. Heights bind `SHELL_CHROME` literals. `1:1` may use
-   a slightly wider content box.
-8. In-group spacing small (`gap-1` / 4px); semantic group gaps larger
-   (`GroupGap` `w-2` + surrounding `gap-1` ≈ 12px). Avoid ToolSep after
-   every control; separators only if they mark a true group boundary.
-9. Disabled: icon opacity 0.3, not focusable, no action wiring change.
+1. Toolbar = action commands only — no Previous/Next, no Reset/Refresh,
+   no RotL/RotR/FlipH/FlipV, no passive badges.
+2. Rotate = single CW 90° command (uses PR #61 `rotateRight` each press).
+3. Reflect = single horizontal reflection command (`Reflect`, not Mirror).
+4. `1:1` remains textual Bold command-like glyph.
+5. Semantic names in `TOOL_SEMANTIC` / `TOOLBAR_COMMANDS` / tests:
+   `Open`, `Zoom Out`, `Zoom In`, `Fit`, `1:1`, `Rotate`, `Reflect`
+   (+ edge-only `Previous` / `Next`).
+6. No tooltip invention (PocketJS has none at `24bab5e`).
+7. Icon-button contract: hit **36×36** (`w-9 h-9`), glyph **20×20** (`w-5 h-5`),
+   vertically centered in `toolbarH=44`. Flex only; `GroupGap` for groups.
+8. Disabled: icon opacity 0.38, not focusable.
 
-### Icon system
+### Icon system (corrective-2)
 
-- **Design grid 20×20** (`viewBox="0 0 20 20"`); texture root **32×32** (pow2
-  for pak); display **20×20** (`w-5 h-5`). No 16→20 stretch of old artwork —
-  redrawn for the 20-unit grid.
-- Optical stroke/feature weight ≈ **1.8–2** logical px (filled paths/rects).
-- Command fill **#E6E6E6** (chevrons **#F0F0F0**); not secondary gray.
-- Family consistency: zoom/fit/rotate/flip/reset/refresh share apparent ink.
-- `guest/images.json` → `IMG_FLAG_LINEAR` bilinear sampling for all chrome icons.
-- Required semantics (filled PocketJS subset only):
-  - `open` — folder/open affordance
+- Design grid **20×20**; display **20×20**; texture **pow2 32/64 @2x** only
+  for the baker — **source/display mapping is 20→20**, never 16↔20 stretch.
+- Feature weight ≈ **1.8–2.5** logical px filled geometry; integer / .5 coords.
+- Command fill **#E6E6E6**; edge chevrons **#F0F0F0**; Reflect axis **#F2F2F2**.
+- Required semantics:
+  - `open` — solid folder
   - `zoomOut` / `zoomIn` — magnifier ±
-  - `fit` — fit-to-frame corners
-  - `rotateLeft` / `rotateRight` — CCW / CW arrows
-  - `flipHorizontal` / `flipVertical` — opposing shapes around vertical/horizontal axis
-  - `reset` — recenter/default-view as return-to-baseline arrow + bar (not circular reload, not fit corners)
-  - `refresh` — reload-current-item (open circular arrow)
-- Reset vs refresh must be distinguishable.
+  - `fit` — thick fit-to-frame corner brackets
+  - `rotate` — image plate + CW quarter-turn arm (not refresh loop)
+  - `reflect` — mirrored triangles + strong vertical axis (not L/R arrows)
+- `images.json` → bilinear for every chrome icon.
+- Obsolete files deleted: `icon-rotate-left/right`, `icon-flip-h/v`,
+  `icon-reset`, `icon-refresh`.
 
 ### Edge navigation (left/right only)
 
-Treat Previous/Next as **viewport navigation**, not toolbar commands.
-
-Resting:
-
-- translucent backdrop (not opaque black sticker)
-- light glyph
-- photograph remains dominant / visible through the affordance
-- no thick opaque circle, heavy border, or large shadow
-
-Focus / active (PocketJS has no hover):
-
-- backdrop more opaque
-- glyph remains light; clarity rises via contrast (no layout move)
-- hit target geometry frozen — no position animation, no springs
-
-Contract:
-
-- hit target **40×40** (`w-10 h-10`)
-- visible glyph **16×16** (`w-4 h-4`)
-- edge inset **~8–16** logical px (`px-2` / `px-3`)
-- left/right pair symmetrical
-- unavailable direction: **no control node** (layout-only empty spacer is
-  allowed so the remaining control stays on its side; spacer is not focusable
-  and has no chrome)
-- overlays existing `imageViewport()`; does **not** change `SHELL_CHROME`
-- keyboard Previous/Next and BrowseSession semantics unchanged
-
-Color encoding (documented values, 8-digit hex ABGR-style `#rrggbbaa`):
-
-| State | Backdrop | Notes |
-| --- | --- | --- |
-| rest | `#00000033` | ~20% black |
-| focus | `#00000088` | ~53% black |
-| active | `#000000aa` | ~67% black |
-
-Glyph fill baked `#f0f0f0` with Image `opacity` 0.72 at rest; focus/active
-rely on backdrop contrast because PocketJS has no parent→child focus cascade.
-True child-brighten-on-focus is a framework follow-up if required later.
+- rest backdrop `#00000044`, focus `#00000099`, active `#000000bb`
+- glyph `#F0F0F0`, Image opacity **0.92** (legible without heavy pills)
+- hit target 40×40; glyph `w-5 h-5`; sides only; spacer when direction missing
+- keyboard Previous/Next + BrowseSession unchanged
 
 ### Typography
 
 | Slot | Spec |
 | --- | --- |
-| App title `PicoView` | `text-sm font-bold`, primary `#f0f0f0` |
-| Header center filename | `text-sm` Regular, secondary `#a0a0a0` |
-| Status | `text-xs` Regular, secondary |
-| `1:1` | `text-sm font-bold` (glyph-like) |
+| Native caption `PicoView` | OS-owned (in-app title strip removed) |
+| Status / filename | `text-xs` Regular secondary `#a0a0a0` |
+| `1:1` | `text-sm font-bold text-[#e6e6e6]` |
+| Error recovery Previous/Next | text buttons in overlay only (not toolbar) |
 
-No synthetic Medium/Semibold. No toolbar-wide label row to “fix” with larger type.
+No synthetic Medium/Semibold.
 
 ### Anti-jaggedness (UI-local only)
 
-PR #62 may: real Regular/Bold slots; baked sizes only; no scaled toolbar text;
-16×16 icons at 16×16; grid-fit SVG; stable button geometry.
+PR #62 owns: command vocabulary, icon design, optical weight, source/display
+normalization, bilinear cook flag, Flex geometry, contrast. It does **not**
+own mipmaps, live DPI, resize coalescing, framebuffer scaling, decode, or
+view-transform math (Issue #63 / PR #61).
 
-**Icon sampling (follow-up fix):** PocketJS default image sampling is
-**nearest** (PSP heritage). Icons bake `@2x` (32×32) then display at 16×16
-logical → nearest downsample looks jagged next to native UI. Photos already
-admit `FLAG_LINEAR`. Icons use the existing cook path
-`guest/images.json` → `IMG_FLAG_LINEAR` (bilinear). No `POCKETJS.lock` change.
-
-PR #62 may **not** claim DPI/sampling/mipmap/resize perfection for **photo**
-content (Issue #63). Correct claim: UI chrome icons request bilinear sampling
-via the supported pak flag; photo presentation sampling remains Issue #63.
-
-### Empty / loading / error
-
-Preserve #62 fix: when a valid image publication is bound, do **not** stack
-empty/loading/error overlays on top of it. State rendering stays explicit
-(no z-index/opacity hide tricks).
-
-### Native title bar
-
-Do not fake Windows caption in TSX. PocketJS `hosts/desktop` at the locked
-revision does not apply a dark native title-bar theme, and expanding Windows
-host scope is out of this PR. **Report** as follow-up; keep internal product
-header.
+Residual softness after this pass, if any, is recorded as Issue #63
+evidence — not claimed as #62 raster perfection.
 
 ## [S3] Out of Scope
 
@@ -243,12 +173,12 @@ header.
 - WIC decode, publication, texture ownership
 - `POCKETJS.lock` advance
 - Custom title-bar subsystem / tooltip framework feature
-- Claiming final raster perfection under every Windows DPI mode
+- Vertical reflection command in the toolbar (v1 Reflect is horizontal only)
 
 ## Tasks
 
-- [x] T1: Spec locked on worktree `fix/ui-chrome-1` — acceptance: this doc exists under `docs/compose/spec/desktop-ui-normalization-1.md` at base `880d58a` (covers: S2)
-- [x] T2: Icon assets + semantic action map — acceptance: rotate/flip/reset/refresh/open/zoom/fit SVGs bake; 16×16 grid; reset≠refresh; `icons.ts` holds full semantic names (covers: S2)
-- [x] T3: Toolbar + title/status + edge-nav rewrite in `app.octane.tsx` — acceptance: no toolbar Prev/Next, no proxy badge, no RotL text; Flex groups; icon-first; translucent edge chevrons only on sides; SHELL_CHROME unchanged (covers: S1,S2)
-- [x] T4: Tests + compile + native build — acceptance: `bun test guest/` pass; pocket compile bakes icons; `cargo build --release` succeeds; shell_layout tests still freeze 36/64/28 (covers: S2; depends: T2,T3)
-- [x] T5: Adversarial review + delivery report — acceptance: MAJOR findings fixed; report lists BASE/OLD_HEAD/NEW_HEAD, tests, screenshots if available, Issue #63 untouched (covers: S2; depends: T4)
+- [x] T1: Spec locked on worktree `fix/ui-chrome-1`
+- [x] T2: Icon assets + semantic action map (corrective-2 vocabulary)
+- [x] T3: Toolbar rewrite — exact command bar Open/Zoom/Fit/1:1/Rotate/Reflect
+- [x] T4: Tests + compile + native build (167 pass; icons bake linear @2x)
+- [x] T5: Adversarial review + delivery report + live before/after screenshots

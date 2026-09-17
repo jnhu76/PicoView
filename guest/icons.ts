@@ -1,7 +1,11 @@
-// Icon assets + toolbar action semantics (PR #62).
+// Icon assets + toolbar action semantics (PR #62 corrective-2).
 // SVGs live next to the guest entry and are baked at compile time.
 // PocketJS baker @ 24bab5e: filled circle/rect/path only — no stroke, no arcs A.
-// Design grid and display size are both 16×16 logical px (`w-4 h-4`).
+//
+// Size policy: design grid is 20×20 logical units (viewBox 0 0 20 20);
+// display is w-5 h-5 (20×20 logical). Texture roots stay pow2 (32/64) solely
+// because the pak baker rejects non-pow2 textures — not as a display scale.
+// Never bake one design size and display another.
 
 export const ICON_ASSETS = {
   open: "icon-open.svg",
@@ -10,12 +14,8 @@ export const ICON_ASSETS = {
   zoomOut: "icon-zoom-out.svg",
   zoomIn: "icon-zoom-in.svg",
   fit: "icon-fit.svg",
-  rotateLeft: "icon-rotate-left.svg",
-  rotateRight: "icon-rotate-right.svg",
-  flipHorizontal: "icon-flip-h.svg",
-  flipVertical: "icon-flip-v.svg",
-  reset: "icon-reset.svg",
-  refresh: "icon-refresh.svg",
+  rotate: "icon-rotate.svg",
+  reflect: "icon-reflect.svg",
   empty: "icon-empty.svg",
   warn: "icon-warn.svg",
 } as const;
@@ -26,6 +26,11 @@ export type IconName = keyof typeof ICON_ASSETS;
  * Product semantic names for toolbar/edge actions.
  * PocketJS has no tooltip primitive at 24bab5e — these names are the
  * accessibility/metadata + test authority, not painted chrome labels.
+ *
+ * Toolbar command bar (exact product model):
+ *   Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · Reflect
+ * Previous/Next stay viewport-edge + keyboard only.
+ * Rotate = one CW 90° command; Reflect = horizontal reflection only.
  */
 export const TOOL_SEMANTIC = {
   open: "Open",
@@ -33,15 +38,22 @@ export const TOOL_SEMANTIC = {
   zoomIn: "Zoom In",
   fit: "Fit",
   oneToOne: "1:1",
-  rotateLeft: "Rotate Left",
-  rotateRight: "Rotate Right",
-  flipHorizontal: "Flip Horizontal",
-  flipVertical: "Flip Vertical",
-  reset: "Reset View",
-  refresh: "Refresh",
+  rotate: "Rotate",
+  reflect: "Reflect",
   previous: "Previous",
   next: "Next",
 } as const;
+
+/** Exact toolbar command vocabulary — order is the visual toolbar order. */
+export const TOOLBAR_COMMANDS = [
+  "open",
+  "zoomOut",
+  "zoomIn",
+  "fit",
+  "oneToOne",
+  "rotate",
+  "reflect",
+] as const satisfies readonly (keyof typeof TOOL_SEMANTIC)[];
 
 export type ToolSemanticName = keyof typeof TOOL_SEMANTIC;
 
