@@ -4,6 +4,12 @@ import { registerTexture } from "@pocketjs/framework/octane/renderer";
 import { getOps } from "@pocketjs/framework/host";
 import { useFrame } from "@pocketjs/framework/octane/lifecycle";
 import {
+  focusNode,
+  hitFocusable,
+  pressNode,
+  setActiveNode,
+} from "@pocketjs/framework/input";
+import {
   displayVerdict,
   initialObserverState,
   type ObserverState,
@@ -37,6 +43,7 @@ import {
   type OrientedImage,
   type ViewTransform,
 } from "./view_transform.ts";
+import { createPointerPress } from "./pointer_press.ts";
 
 // PicoView viewer shell (PICOVIEW-VIEW-GEOMETRY-CORRECTIVE-1).
 //
@@ -61,6 +68,23 @@ export default function App() {
   const viewKey = useRef<PublicationViewKey | null>(null);
   const drag = useRef<PointerDrag>({ active: false, lastX: 0, lastY: 0 });
   const wheelAcc = useRef(0);
+  // MAJOR-2: svc mouse is not onPress. Wire PocketJS hit→press so toolbar
+  // ToolButtons work with a real Windows mouse (keyboard stays on shortcuts).
+  const pointerPress = useRef(
+    createPointerPress({
+      hit: (x, y) => hitFocusable(x, y),
+      active: (node) => {
+        if (node) {
+          focusNode(node as never);
+          setActiveNode(node as never);
+        }
+      },
+      press: (node) => {
+        if (node) pressNode(node as never);
+      },
+      clearActive: () => setActiveNode(null),
+    }),
+  );
 
   useFrame(() => {
     const ops = getOps();
@@ -154,12 +178,16 @@ export default function App() {
       }
     }
 
-    // --- pointer drag pan ---
+    // --- pointer drag pan + toolbar onPress ---
     for (const e of outcome.mouseEvents) {
       const x = typeof e.x === "number" ? e.x : 0;
       const y = typeof e.y === "number" ? e.y : 0;
       const down = e.d === true;
+      // Feed the shared press authority first (toolbar / any focusable).
+      // Host Focused(false) sends d:false, which also releases a held press.
+      pointerPress.current.update({ x, y, down });
       const inCanvas = pointInImageViewport(vp, x, y);
+      // Drag-pan only from the image canvas — never from a toolbar press.
       if (down && !drag.current.active && inCanvas && canImage) {
         drag.current = { active: true, lastX: x, lastY: y };
       }

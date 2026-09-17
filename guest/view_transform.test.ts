@@ -10,6 +10,7 @@ import {
   flipVertical,
   initialViewTransform,
   isIdentityOrientation,
+  normalizeOrientation,
   orientationsEqual,
   panBy,
   pocketImageStyle,
@@ -318,4 +319,99 @@ test("viewportToUserImage + userImageToViewport roundtrip", () => {
   const q = userImageToViewport(s, vp, landscape, p.x, p.y);
   almost(q.x, 100);
   almost(q.y, 200);
+});
+
+// --- D4 canonicality (Corrective-2 MAJOR-4) ----------------------------------
+
+/** The 8 canonical D4 field-tuples (rotations +1/+1, reflections -1/+1). */
+const CANONICAL_D4: UserOrientation[] = [
+  { rotate: 0, scaleX: 1, scaleY: 1 },
+  { rotate: 90, scaleX: 1, scaleY: 1 },
+  { rotate: 180, scaleX: 1, scaleY: 1 },
+  { rotate: 270, scaleX: 1, scaleY: 1 },
+  { rotate: 0, scaleX: -1, scaleY: 1 },
+  { rotate: 90, scaleX: -1, scaleY: 1 },
+  { rotate: 180, scaleX: -1, scaleY: 1 },
+  { rotate: 270, scaleX: -1, scaleY: 1 },
+];
+
+function keyOf(o: UserOrientation) {
+  return `${o.rotate}/${o.scaleX}/${o.scaleY}`;
+}
+
+test("normalize folds scale(-1,-1) into R180 and FV into FH∘R180", () => {
+  expect(normalizeOrientation({ rotate: 0, scaleX: -1, scaleY: -1 })).toEqual({
+    rotate: 180,
+    scaleX: 1,
+    scaleY: 1,
+  });
+  expect(normalizeOrientation({ rotate: 90, scaleX: -1, scaleY: -1 })).toEqual({
+    rotate: 270,
+    scaleX: 1,
+    scaleY: 1,
+  });
+  // FV is canonical as FH∘R180.
+  expect(normalizeOrientation({ rotate: 0, scaleX: 1, scaleY: -1 })).toEqual({
+    rotate: 180,
+    scaleX: -1,
+    scaleY: 1,
+  });
+  expect(normalizeOrientation(IDENTITY_ORIENTATION)).toEqual(
+    IDENTITY_ORIENTATION,
+  );
+  // Idempotent.
+  for (const o of CANONICAL_D4) {
+    expect(normalizeOrientation(o)).toEqual(o);
+  }
+});
+
+test("op closure stays in the 8 canonical D4 states", () => {
+  const seen = new Set<string>([keyOf(IDENTITY_ORIENTATION)]);
+  let frontier: UserOrientation[] = [IDENTITY_ORIENTATION];
+  for (let depth = 0; depth < 4 && frontier.length; depth++) {
+    const next: UserOrientation[] = [];
+    for (const o of frontier) {
+      for (const step of [
+        rotateRight(o),
+        rotateLeft(o),
+        flipHorizontal(o),
+        flipVertical(o),
+      ]) {
+        const k = keyOf(step);
+        if (!seen.has(k)) {
+          seen.add(k);
+          next.push(step);
+        }
+      }
+    }
+    frontier = next;
+  }
+  expect(seen.size).toBe(8);
+  for (const o of CANONICAL_D4) {
+    expect(seen.has(keyOf(o))).toBe(true);
+  }
+  // Canonical reflections are always FH-flavored; never both scales negative.
+  for (const k of seen) {
+    expect(k.endsWith("/-1/-1")).toBe(false);
+    const [, sx, sy] = k.split("/");
+    if (sx === "1" && sy === "-1") {
+      throw new Error(`non-canonical FV-flavored tuple survived: ${k}`);
+    }
+  }
+});
+
+test("FH then FV is semantically R180, not a stuck double-flip", () => {
+  const o = flipVertical(flipHorizontal(IDENTITY_ORIENTATION));
+  // Double flip ≡ pure R180 (not a reflection).
+  expect(o).toEqual({ rotate: 180, scaleX: 1, scaleY: 1 });
+  expect(isIdentityOrientation(o)).toBe(false);
+  // Four FH recover identity.
+  const back = flipHorizontal(flipHorizontal(flipHorizontal(flipHorizontal(IDENTITY_ORIENTATION))));
+  expect(isIdentityOrientation(back)).toBe(true);
+  // FV alone is the canonical FH∘R180 reflection.
+  expect(flipVertical(IDENTITY_ORIENTATION)).toEqual({
+    rotate: 180,
+    scaleX: -1,
+    scaleY: 1,
+  });
 });

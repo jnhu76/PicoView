@@ -24,7 +24,20 @@
 // origin is the node center, so AABB center == node center for every D4
 // element. Positioning therefore uses the node box, not a second AABB guess.
 
-/** Canonical D4 user orientation as PocketJS paint facts. */
+/** Canonical D4 user orientation as PocketJS paint facts.
+ *
+ *  PocketJS paints `translate(origin) * rotate * scale * translate(-origin)`
+ *  (draw.rs), so the point map is Scale then Rot — matching the visible-frame
+ *  flip composition below.
+ *
+ *  Representation note (Corrective-2 MAJOR-4): the raw triple has 16 field
+ *  tuples but D4 has only 8 elements. The kernel is
+ *  `Rot(θ)∘Scale(sx,sy) ≡ Rot(θ+180)∘Scale(-sx,-sy)` (because
+ *  `Rot(180) ≡ Scale(-1,-1)`). `normalizeOrientation` maps every op result
+ *  onto the 8 canonical tuples:
+ *    rotations:  {0|90|180|270, 1, 1}
+ *    reflections:{0|90|180|270, -1, 1}   // FH ∘ Rot(θ); FV is {180,-1,1}
+ */
 export interface UserOrientation {
   /** Degrees about the node center (0 | 90 | 180 | 270). */
   rotate: 0 | 90 | 180 | 270;
@@ -39,6 +52,27 @@ export const IDENTITY_ORIENTATION: UserOrientation = {
   scaleX: 1,
   scaleY: 1,
 };
+
+/** Map onto the 8 canonical D4 field-tuples. */
+export function normalizeOrientation(o: UserOrientation): UserOrientation {
+  let rotate = o.rotate;
+  let scaleX = o.scaleX;
+  let scaleY = o.scaleY;
+  // Fold Scale(-1,-1) into R180: never keep a double-negative scale.
+  if (scaleX === -1 && scaleY === -1) {
+    rotate = ((rotate + 180) % 360) as 0 | 90 | 180 | 270;
+    scaleX = 1;
+    scaleY = 1;
+  }
+  // Reflections are canonical as FH-flavored {θ, -1, 1}.
+  // FV-flavored {θ, 1, -1} uses the same kernel as {θ+180, -1, 1}.
+  if (scaleX === 1 && scaleY === -1) {
+    rotate = ((rotate + 180) % 360) as 0 | 90 | 180 | 270;
+    scaleX = -1;
+    scaleY = 1;
+  }
+  return { rotate, scaleX, scaleY };
+}
 
 /** Authoritative image viewport in window-logical coordinates. */
 export interface ImageViewport {
@@ -359,24 +393,38 @@ export function clampPan(
 // --- D4 user orientation ops (visible-frame semantics) -----------------------
 
 export function rotateRight(o: UserOrientation): UserOrientation {
-  return { ...o, rotate: (((o.rotate + 90) % 360) as 0 | 90 | 180 | 270) };
+  return normalizeOrientation({
+    ...o,
+    rotate: (((o.rotate + 90) % 360) as 0 | 90 | 180 | 270),
+  });
 }
 
 export function rotateLeft(o: UserOrientation): UserOrientation {
-  return { ...o, rotate: (((o.rotate + 270) % 360) as 0 | 90 | 180 | 270) };
+  return normalizeOrientation({
+    ...o,
+    rotate: (((o.rotate + 270) % 360) as 0 | 90 | 180 | 270),
+  });
 }
 
 /** Flip horizontal in the current visible frame. */
 export function flipHorizontal(o: UserOrientation): UserOrientation {
   // FlipH_screen ∘ Rot(θ) ∘ Scale(sx,sy) = Rot(-θ) ∘ Scale(-sx, sy)
   const rotate = ((360 - o.rotate) % 360) as 0 | 90 | 180 | 270;
-  return { rotate, scaleX: (o.scaleX * -1) as 1 | -1, scaleY: o.scaleY };
+  return normalizeOrientation({
+    rotate,
+    scaleX: (o.scaleX * -1) as 1 | -1,
+    scaleY: o.scaleY,
+  });
 }
 
 /** Flip vertical in the current visible frame. */
 export function flipVertical(o: UserOrientation): UserOrientation {
   const rotate = ((360 - o.rotate) % 360) as 0 | 90 | 180 | 270;
-  return { rotate, scaleX: o.scaleX, scaleY: (o.scaleY * -1) as 1 | -1 };
+  return normalizeOrientation({
+    rotate,
+    scaleX: o.scaleX,
+    scaleY: (o.scaleY * -1) as 1 | -1,
+  });
 }
 
 export function orientationsEqual(

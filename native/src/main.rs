@@ -175,7 +175,7 @@ struct Runtime {
 }
 
 impl Runtime {
-    fn boot(args: &Args) -> Result<Self> {
+    fn boot(args: &Args, initial_scale: f64) -> Result<Self> {
         let pak = std::fs::read(&args.pak)
             .with_context(|| format!("missing pak {}", args.pak.display()))?;
         let source = std::fs::read_to_string(&args.js)
@@ -198,8 +198,14 @@ impl Runtime {
         if !guest.has_frame() {
             return Err(anyhow!("bundle installed no frame handler"));
         }
+        // MAJOR-1 (Corrective-2): hello must carry the REAL window scale at
+        // boot. A 1.0 placeholder makes Actual Size display 150% DPI as 100%
+        // for the whole session when the user never resizes or crosses
+        // monitors. Host measures `window.scale_factor()` after create and
+        // hands it here before any guest frame.
+        let dpi_scale = if initial_scale > 0.0 { initial_scale } else { 1.0 };
         surface.svc_push(
-            json!({"t":"hello","w":args.viewport.0,"h":args.viewport.1,"scale":1.0,"epoch":epoch_ms()})
+            json!({"t":"hello","w":args.viewport.0,"h":args.viewport.1,"scale":dpi_scale,"epoch":epoch_ms()})
                 .to_string(),
         );
         let mut current = if let Some(path) = &args.image {
@@ -241,7 +247,7 @@ impl Runtime {
             offload,
             viewport: args.viewport,
             density: args.density,
-            dpi_scale: 1.0,
+            dpi_scale,
             ticks: 0,
             current,
         })
@@ -348,11 +354,12 @@ fn run_runtime(
     outputs: SyncSender<Output>,
     proxy: EventLoopProxy<Wake>,
     gpu: Arc<pocket3d::gpu::Gpu>,
+    initial_scale: f64,
 ) -> Result<()> {
     use std::sync::atomic::AtomicBool;
     let available = Arc::new(AtomicBool::new(true));
     let mut renderer = gpu::Renderer::new(gpu);
-    let mut runtime = Runtime::boot(&args)?;
+    let mut runtime = Runtime::boot(&args, initial_scale)?;
     let mut hash = None;
     let mut deadline = Instant::now();
     // Fixed tick order (PICOVIEW-LAST-GOOD-PUBLICATION-1-CORRECTIVE-1):
@@ -422,6 +429,8 @@ struct RuntimeStartup {
     inputs: Receiver<Input>,
     outputs: SyncSender<Output>,
     proxy: EventLoopProxy<Wake>,
+    /// Measured after the window exists; 1.0 until `resumed` fills it.
+    initial_scale: f64,
 }
 
 struct Host {
@@ -485,17 +494,26 @@ impl ApplicationHandler<Wake> for Host {
         };
         let gpu = presentation.gpu.clone();
         self.surface = Some(presentation);
+        let mut startup = self.startup.take().expect("runtime startup");
+        // Real OS scale for hello / 100% math — not a 1.0 placeholder.
+        let measured = window.scale_factor();
+        startup.initial_scale = if measured > 0.0 { measured } else { 1.0 };
+        tlog(&format!(
+            "window scale_factor = {} (hello dpi)",
+            startup.initial_scale
+        ));
         let RuntimeStartup {
             args,
             inputs,
             outputs,
             proxy,
-        } = self.startup.take().expect("runtime startup");
+            initial_scale,
+        } = startup;
         if let Err(error) = std::thread::Builder::new()
             .name("picoview-runtime".into())
             .spawn(move || {
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_runtime(args, inputs, outputs, proxy.clone(), gpu)
+                    run_runtime(args, inputs, outputs, proxy.clone(), gpu, initial_scale)
                 }))
                 .unwrap_or_else(|_| Err(anyhow!("Runtime worker panicked")));
                 let _ = proxy.send_event(Wake::Exit(result.err().map(|e| format!("{e:#}"))));
@@ -544,8 +562,12 @@ impl ApplicationHandler<Wake> for Host {
                 self.modifiers = state.state();
             }
             winit::event::WindowEvent::Focused(false) => {
+                // MAJOR-5 (Corrective-2): winit/Win32 captures the mouse on
+                // button-down so a release outside the window still arrives.
+                // Focus loss is the other strand path (alt-tab mid-drag):
+                // clear host down-state AND push a synthetic d:false so the
+                // guest's drag + pointer-press controllers both release.
                 self.pointer_down = false;
-                // Focus-loss resets in-progress pointer gestures.
                 self.tx
                     .try_send(Input::Service(
                         json!({"t":"mouse","x":self.pointer.0,"y":self.pointer.1,"d":false,"b":0,"sh":false})
@@ -684,6 +706,7 @@ fn main() -> Result<()> {
         inputs,
         outputs,
         proxy: event_loop.create_proxy(),
+        initial_scale: 1.0,
     });
     event_loop.run_app(&mut host)?;
     if let Some(error) = host.failure {

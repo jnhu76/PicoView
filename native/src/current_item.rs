@@ -983,6 +983,35 @@ mod tests {
         }
     }
 
+    /// Corrective-2 MAJOR-3 lock: EXIF materialization happens INSIDE
+    /// decode_jpeg, so `DecodedImage.width/height` are already O (oriented)
+    /// extents. `open()` then sets source_* and resource_* from that same
+    /// O-space pair. A full-res EXIF-6 portrait therefore reports
+    /// source == resource == O, and fullResolution stays true — it must not
+    /// compare S (storage) against O (oriented).
+    #[test]
+    fn exif_oriented_decode_keeps_full_resolution_in_o_space() {
+        // Simulate decode_jpeg AFTER apply_exif_orientation(6): storage was
+        // 2x3, O is 3x2.
+        let decode = DecodedImage {
+            width: 3,
+            height: 2,
+            rgba: vec![9u8; 3 * 2 * 4],
+        };
+        let source_w = decode.width;
+        let source_h = decode.height;
+        let image = prepare_for_admission(decode);
+        let resource_w = image.width;
+        let resource_h = image.height;
+        let full_resolution = source_w == resource_w && source_h == resource_h;
+        assert_eq!((source_w, source_h), (3, 2), "source is O, not S");
+        assert_eq!((resource_w, resource_h), (3, 2));
+        assert!(
+            full_resolution,
+            "full-res EXIF-6 must not be demoted to Proxy by S/O mixup"
+        );
+    }
+
     #[test]
     fn giant_decodes_prepare_as_fitted_planes() {
         // One axis above the admission ceiling (8192): the resource is
