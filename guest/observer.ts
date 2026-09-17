@@ -1,4 +1,5 @@
-// Pure Current Item observer state (PICOVIEW-LAST-GOOD-PUBLICATION-1).
+// Pure Current Item observer state (PICOVIEW-LAST-GOOD-PUBLICATION-1
+// + PICOVIEW-REAL-VIEWER-TRAIN-1).
 //
 // The native CurrentItem stays the single Product publication authority; this
 // module is the guest's bounded observation of it. It deliberately splits the
@@ -15,6 +16,10 @@
 // new-item failure deliberately clears it (a corrupt new item publishes an
 // error item instead). Zero imports: the reducer must stay testable without
 // the framework (`bun test guest/observer.test.ts`).
+//
+// REAL-VIEWER-TRAIN-1 additions:
+//   - browse: directory navigation state (index, count, canPrev, canNext)
+//   - capability: source vs resource dimensions, fullResolution truth
 
 export type OpenIntent = "new-item" | "refresh";
 
@@ -27,8 +32,14 @@ export type OpenIntent = "new-item" | "refresh";
 export interface Publication {
   generation: number;
   handle: number;
-  width: number;
-  height: number;
+  /** Source dimensions (before any resource-level downsampling). */
+  sourceWidth: number;
+  sourceHeight: number;
+  /** Resource dimensions (after admission; may differ from source for giant images). */
+  resourceWidth: number;
+  resourceHeight: number;
+  /** True when source and resource dimensions are equal (full resolution available). */
+  fullResolution: boolean;
   name?: string;
 }
 
@@ -38,6 +49,14 @@ export interface RequestObservation {
   status: "loading" | "error";
   name?: string;
   error?: string;
+}
+
+/** Directory navigation state. */
+export interface BrowseState {
+  index: number | null;
+  count: number;
+  canPrevious: boolean;
+  canNext: boolean;
 }
 
 export interface ObserverState {
@@ -50,10 +69,18 @@ export interface ObserverState {
    *  same-generation event after the terminal is stale and never wins. */
   seenClosed: boolean;
   viewport?: { w: number; h: number };
+  /** Browse state (directory navigation). */
+  browse: BrowseState;
 }
 
 export function initialObserverState(): ObserverState {
-  return { publication: null, request: null, seenGeneration: 0, seenClosed: false };
+  return {
+    publication: null,
+    request: null,
+    seenGeneration: 0,
+    seenClosed: false,
+    browse: { index: null, count: 0, canPrevious: false, canNext: false },
+  };
 }
 
 /** Loosely-typed wire form (svc events arrive as parsed JSON lines). */
@@ -65,13 +92,30 @@ export interface SvcLine {
   name?: unknown;
   error?: unknown;
   handle?: unknown;
+  sourceWidth?: unknown;
+  sourceHeight?: unknown;
+  resourceWidth?: unknown;
+  resourceHeight?: unknown;
+  fullResolution?: unknown;
   width?: unknown;
   height?: unknown;
+  browseIndex?: unknown;
+  browseCount?: unknown;
+  canPrevious?: unknown;
+  canNext?: unknown;
   w?: unknown;
   h?: unknown;
+  /** Keyboard key events from the desktop host (REAL-VIEWER-TRAIN-1). */
+  k?: unknown;
+  cmd?: unknown;
+  ctl?: unknown;
 }
 
 function isGeneration(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+function isNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
 
@@ -79,6 +123,17 @@ function isGeneration(v: unknown): v is number {
  *  never the accidental default for a malformed event. */
 function asIntent(v: unknown): OpenIntent {
   return v === "refresh" ? "refresh" : "new-item";
+}
+
+/** Extract browse state from a svc event line. */
+function extractBrowse(v: SvcLine): Partial<BrowseState> {
+  const browse: Partial<BrowseState> = {};
+  if (isNumber(v.browseIndex)) browse.index = v.browseIndex;
+  else if (v.browseIndex === null) browse.index = null;
+  if (isNumber(v.browseCount)) browse.count = v.browseCount;
+  if (typeof v.canPrevious === "boolean") browse.canPrevious = v.canPrevious;
+  if (typeof v.canNext === "boolean") browse.canNext = v.canNext;
+  return browse;
 }
 
 /** Apply one svc event; returns the SAME state reference when nothing
@@ -94,25 +149,33 @@ export function reduceObserver(state: ObserverState, v: SvcLine): ObserverState 
     return state;
   }
   const terminal = v.g === state.seenGeneration && !state.seenClosed;
+  const browseUpdate = extractBrowse(v);
 
   if (
     v.status === "ready" &&
-    typeof v.handle === "number" &&
-    typeof v.width === "number" &&
-    typeof v.height === "number"
+    typeof v.handle === "number"
   ) {
+    const sourceWidth = isNumber(v.sourceWidth) ? v.sourceWidth : (isNumber(v.width) ? v.width : 0);
+    const sourceHeight = isNumber(v.sourceHeight) ? v.sourceHeight : (isNumber(v.height) ? v.height : 0);
+    const resourceWidth = isNumber(v.resourceWidth) ? v.resourceWidth : sourceWidth;
+    const resourceHeight = isNumber(v.resourceHeight) ? v.resourceHeight : sourceHeight;
+    const fullResolution = typeof v.fullResolution === "boolean" ? v.fullResolution : (sourceWidth === resourceWidth && sourceHeight === resourceHeight);
     return {
       publication: {
         generation: v.g,
         handle: v.handle,
-        width: v.width,
-        height: v.height,
+        sourceWidth,
+        sourceHeight,
+        resourceWidth,
+        resourceHeight,
+        fullResolution,
         name: typeof v.name === "string" ? v.name : undefined,
       },
       request: null,
       seenGeneration: v.g,
       seenClosed: true,
       viewport: state.viewport,
+      browse: { ...state.browse, ...browseUpdate },
     };
   }
   if (v.status === "loading") {
@@ -127,6 +190,7 @@ export function reduceObserver(state: ObserverState, v: SvcLine): ObserverState 
         status: "loading",
         name: typeof v.name === "string" ? v.name : undefined,
       },
+      browse: { ...state.browse, ...browseUpdate },
     };
   }
   if (v.status === "error") {
@@ -145,6 +209,7 @@ export function reduceObserver(state: ObserverState, v: SvcLine): ObserverState 
         status: "error",
         error: typeof v.error === "string" ? v.error : undefined,
       },
+      browse: { ...state.browse, ...browseUpdate },
     };
   }
   return state;

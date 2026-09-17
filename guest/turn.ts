@@ -1,4 +1,5 @@
-// One guest observation turn (PICOVIEW-LAST-GOOD-PUBLICATION-1 CORRECTIVE-2).
+// One guest observation turn (PICOVIEW-LAST-GOOD-PUBLICATION-1 CORRECTIVE-2
+// + PICOVIEW-REAL-VIEWER-TRAIN-1 key event extraction).
 // Zero imports beyond the pure observer/binding state: testable without the
 // framework (`bun test guest/`).
 //
@@ -19,6 +20,10 @@
 // Image would keep resolving a superseded handle the native observation
 // boundary then frees. Product reduction and rendering realization are
 // separate; this module keeps them that way.
+//
+// REAL-VIEWER-TRAIN-1: non-observer events (key presses, character input)
+// are collected into an array so the app can process them for keyboard
+// shortcuts without consuming them from the observer.
 
 import { reduceObserver, type ObserverState, type SvcLine } from "./observer.ts";
 import { reconcileBinding, type BoundPublication } from "./binding.ts";
@@ -39,6 +44,9 @@ export interface GuestTurnOutcome {
   register: { key: string; handle: number } | null;
   /** True when the guest must re-render (Product state or binding moved). */
   render: boolean;
+  /** Key events collected during this turn. Each entry is a svc line with
+   *  t:"key" — the guest app can process these for keyboard shortcuts. */
+  keyEvents: SvcLine[];
 }
 
 /** Run one guest turn: `nextBatch` returns the next svc batch (a string of
@@ -49,6 +57,7 @@ export function runGuestTurn(
 ): GuestTurnOutcome {
   let observer = state.observer;
   let changed = false;
+  const keyEvents: SvcLine[] = [];
   for (;;) {
     const batch = nextBatch();
     // The pinned host returns undefined for an empty queue and never an
@@ -65,6 +74,11 @@ export function runGuestTurn(
         continue;
       }
       if (!v || typeof v !== "object") continue;
+      // Collect key events for the app to process (REAL-VIEWER-TRAIN-1).
+      if (v.t === "key" && typeof v.k === "string") {
+        keyEvents.push(v);
+        continue;
+      }
       const next = reduceObserver(observer, v);
       if (next === observer) continue;
       observer = next;
@@ -75,11 +89,12 @@ export function runGuestTurn(
   if (!changed && recon.binding === state.binding) {
     // Nothing to commit: no event moved the Product state and the binding
     // did not move. Hand the same state back — an idle turn is a no-op.
-    return { state, register: null, render: false };
+    return { state, register: null, render: false, keyEvents };
   }
   return {
     state: { observer, binding: recon.binding },
     register: recon.register,
     render: changed || recon.changed,
+    keyEvents,
   };
 }

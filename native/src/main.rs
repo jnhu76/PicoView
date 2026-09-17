@@ -16,12 +16,15 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
+use winit::event::ElementState;
 use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
+use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
+mod browse_session;
 mod current_item;
 mod gpu;
-use current_item::{CurrentItem, ObservationBoundary, OpenIntent, RequestPhase};
+use current_item::{Command, CurrentItem, ObservationBoundary, OpenIntent, RequestPhase};
 
 const HOST_ID: &str = "windows-app";
 const HOST_ABI: u32 = 4;
@@ -88,6 +91,51 @@ fn parse_args() -> Result<Args> {
 enum Input {
     Quit,
     Resize(u32, u32),
+    /// Prebuilt svc JSON line pushed into the guest poll queue (key events).
+    Service(String),
+}
+
+/// Map a winit logical key to the guest's lowercase key names.
+/// Guest shortcuts use: left, right, r, 0, 1, =, +, -.
+fn key_name(key: &Key) -> String {
+    match key {
+        Key::Character(s) => s.to_lowercase(),
+        Key::Named(n) => match n {
+            NamedKey::ArrowUp => "up".into(),
+            NamedKey::ArrowDown => "down".into(),
+            NamedKey::ArrowLeft => "left".into(),
+            NamedKey::ArrowRight => "right".into(),
+            NamedKey::Enter => "enter".into(),
+            NamedKey::Escape => "escape".into(),
+            NamedKey::Backspace => "backspace".into(),
+            NamedKey::Delete => "delete".into(),
+            NamedKey::Tab => "tab".into(),
+            NamedKey::Space => "space".into(),
+            NamedKey::Home => "home".into(),
+            NamedKey::End => "end".into(),
+            NamedKey::PageUp => "pageup".into(),
+            NamedKey::PageDown => "pagedown".into(),
+            _ => String::new(),
+        },
+        _ => String::new(),
+    }
+}
+
+/// Parse a guest command from a svc JSON line. The guest sends lines like:
+/// `{"t":"pv","cmd":"previous"}`, `{"t":"pv","cmd":"next"}`,
+/// `{"t":"pv","cmd":"refresh"}`, `{"t":"pv","cmd":"open","path":"..."}`.
+fn parse_command(val: &serde_json::Value) -> Option<Command> {
+    let cmd = val.get("cmd")?.as_str()?;
+    match cmd {
+        "previous" => Some(Command::Previous),
+        "next" => Some(Command::Next),
+        "refresh" => Some(Command::Refresh),
+        "open" => {
+            let path = val.get("path")?.as_str()?;
+            Some(Command::Open(std::path::PathBuf::from(path)))
+        }
+        _ => None,
+    }
 }
 
 fn epoch_ms() -> u64 {
@@ -134,6 +182,9 @@ impl Runtime {
         );
         surface.set_identity(HOST_ID, HOST_ABI);
         surface.set_tick_rate(60);
+        // Enable guest→native command channel: the guest calls svcOpen("picoview")
+        // to confirm the channel, then svcSend() to push command JSON lines.
+        surface.set_svc_allowlist(["picoview"]);
         surface.feed_pak(&pak);
         let guest = Guest::new()?;
         surface.mount(&guest)?;
@@ -147,12 +198,15 @@ impl Runtime {
             json!({"t":"hello","w":args.viewport.0,"h":args.viewport.1,"epoch":epoch_ms()})
                 .to_string(),
         );
-        let mut current = CurrentItem::new();
-        if let Some(path) = &args.image {
+        let mut current = if let Some(path) = &args.image {
+            // Create a CurrentItem with a BrowseSession for the directory
+            // containing the initial image. The browse session enumerates
+            // supported images and enables Previous/Next navigation.
+            let mut item = CurrentItem::with_browse(path);
             // V1's only open: the boot image is a new item (there is no prior
             // publication to preserve). Boot is a legal request phase —
             // strictly before any guest turn.
-            current.open(
+            item.open(
                 &surface,
                 RequestPhase::before_guest_frame(),
                 path,
@@ -160,11 +214,22 @@ impl Runtime {
             );
             log::info!(
                 "current item: generation={} handle={:?} path={}",
-                current.generation(),
-                current.live_handle(),
+                item.generation(),
+                item.live_handle(),
                 path.display()
             );
-        }
+            if let Some(browse) = item.browse() {
+                log::info!(
+                    "browse session: dir={} count={} index={:?}",
+                    browse.dir().display(),
+                    browse.count(),
+                    browse.current_index()
+                );
+            }
+            item
+        } else {
+            CurrentItem::new()
+        };
         tlog("runtime booted (pak fed, guest mounted, source eval'd, current item opened)");
         Ok(Self {
             surface,
@@ -180,6 +245,10 @@ impl Runtime {
     fn input(&mut self, input: Input) -> Result<bool> {
         match input {
             Input::Quit => return Ok(false),
+            Input::Service(line) => {
+                // Keyboard and other host→guest scalar events.
+                self.surface.svc_push(line);
+            }
             Input::Resize(w, h) => {
                 self.viewport = (w, h);
                 self.surface.with_ui(|ui| ui.set_viewport(w as f32, h as f32));
@@ -196,10 +265,18 @@ impl Runtime {
 
     fn tick(&mut self) -> Result<()> {
         self.offload.begin_frame();
-        // The guest emits no requests in V1; drain defensively so a stray
-        // svc line can never grow unbounded.
+        // Process guest commands: the guest sends command JSON lines via
+        // svcSend. Drain and process them before the guest frame. Each
+        // command gets its own RequestPhase token (consumed by open).
         for line in self.surface.svc_drain().into_iter().take(64) {
             log::debug!("guest svc: {line}");
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                if val.get("t").and_then(|v| v.as_str()) == Some("pv") {
+                    if let Some(cmd) = parse_command(&val) {
+                        self.current.handle_command(&self.surface, RequestPhase::before_guest_frame(), cmd);
+                    }
+                }
+            }
         }
         self.guest.frame(0)?;
         self.surface.tick();
@@ -350,6 +427,7 @@ struct Host {
     title: String,
     viewport: (u32, u32),
     failure: Option<String>,
+    modifiers: ModifiersState,
 }
 
 impl Host {
@@ -451,6 +529,34 @@ impl ApplicationHandler<Wake> for Host {
                 self.tx.try_send(Input::Quit).ok();
                 event_loop.exit();
             }
+            winit::event::WindowEvent::ModifiersChanged(state) => {
+                self.modifiers = state.state();
+            }
+            winit::event::WindowEvent::KeyboardInput { event, .. } => {
+                if event.state != ElementState::Pressed {
+                    return;
+                }
+                let name = key_name(&event.logical_key);
+                if name.is_empty() {
+                    return;
+                }
+                let cmd = if cfg!(target_os = "macos") {
+                    self.modifiers.super_key()
+                } else {
+                    self.modifiers.control_key()
+                };
+                let ctl = self.modifiers.control_key();
+                // Guest keyboard shortcuts (REAL-VIEWER-TRAIN-1):
+                // left/right navigation, r refresh, 0 Fit, 1 1:1, +/- zoom.
+                let line = json!({
+                    "t": "key",
+                    "k": name,
+                    "cmd": cmd,
+                    "ctl": ctl,
+                })
+                .to_string();
+                self.tx.try_send(Input::Service(line)).ok();
+            }
             winit::event::WindowEvent::RedrawRequested => {
                 tlog("RedrawRequested");
                 if let Err(error) = self.present() {
@@ -493,6 +599,7 @@ fn main() -> Result<()> {
         title: args.title.clone(),
         viewport: args.viewport,
         failure: None,
+        modifiers: ModifiersState::default(),
     };
     host.startup = Some(RuntimeStartup {
         args,
