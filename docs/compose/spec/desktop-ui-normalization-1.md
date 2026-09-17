@@ -3,7 +3,7 @@ feature: desktop-ui-normalization-1
 status: delivered
 updated: 2026-09-18
 branch: fix/ui-chrome-1
-commits: 880d58a00d90087558292f80f4366b7f92a23298..1e74701
+commits: 880d58a00d90087558292f80f4366b7f92a23298..e44ee21d74d3ddfd874a9cc87e002a9c233b684c
 ---
 
 # Desktop UI Normalization 1 (PR #62)
