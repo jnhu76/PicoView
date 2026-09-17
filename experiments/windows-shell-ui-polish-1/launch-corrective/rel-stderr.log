@@ -1,0 +1,9 @@
+[2026-09-17T08:52:56Z INFO  picoview] [     0.0ms] process start
+[2026-09-17T08:52:56Z INFO  picoview] [    28.7ms] window created (hidden until first frame)
+[2026-09-17T08:52:57Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-17T08:52:57Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-17T08:52:57Z INFO  picoview] [   572.1ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-17T08:52:57Z INFO  picoview] [   572.4ms] Resized 960x640
+[2026-09-17T08:52:57Z INFO  picoview] [   617.8ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-17T08:52:57Z INFO  picoview] [   638.2ms] render submit (tick 1)
+[2026-09-17T08:52:57Z INFO  picoview] [   638.7ms] frame ready from worker (tick 1), requesting redraw

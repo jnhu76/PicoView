@@ -330,15 +330,12 @@ impl CurrentItem {
                 false
             }
             Command::Open(path) => {
-                // If we have a browse session, try to locate the path within it.
-                if let Some(browse) = &mut self.browse {
-                    let path_clone = path.clone();
-                    // Rebuild browse session from the parent directory.
-                    *browse = BrowseSession::new(&path_clone);
-                    self.open(surface, _phase, &path_clone, OpenIntent::NewItem);
-                } else {
-                    self.open(surface, _phase, &path, OpenIntent::NewItem);
-                }
+                // One Product open path for CLI, Open With, Open File…,
+                // and navigation: always (re)anchor BrowseSession on the
+                // opened file's directory so Previous/Next work even when
+                // the process started with no image.
+                self.browse = Some(BrowseSession::new(&path));
+                self.open(surface, _phase, &path, OpenIntent::NewItem);
                 true
             }
         }
@@ -1410,6 +1407,37 @@ mod tests {
 
         let _ = std::fs::remove_file(&jpg_a);
         let _ = std::fs::remove_file(&bad);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn command_open_from_empty_start_anchors_browse_session() {
+        // Open File… / CLI path after a no-image boot must still produce a
+        // directory browse session so Previous/Next work (WINDOWS-SHELL-UI-POLISH-1).
+        let surface = UiSurface::new((96.0, 64.0));
+        let dir = std::env::temp_dir().join("picoview-shell-open-browse");
+        std::fs::create_dir_all(&dir).unwrap();
+        let jpg = dir.join("anchor.jpg");
+        let jpg2 = dir.join("neighbor.jpg");
+        std::fs::write(&jpg, wic_encode_jpeg(16, 16)).unwrap();
+        std::fs::write(&jpg2, wic_encode_jpeg(16, 16)).unwrap();
+
+        let mut item = CurrentItem::new();
+        assert!(item.browse().is_none());
+        item.handle_command(&surface, request_phase(), Command::Open(jpg.clone()));
+        assert!(item.live_handle().is_some(), "open publishes after empty start");
+        {
+            let browse = item.browse().expect("Open anchors BrowseSession");
+            assert!(browse.count() >= 2, "directory listing includes neighbors");
+        }
+        // Neighbor navigation is available after the Open File path.
+        let navigated = item.handle_command(&surface, request_phase(), Command::Next)
+            || item.handle_command(&surface, request_phase(), Command::Previous);
+        assert!(navigated, "browse session enables Previous/Next after Open");
+
+        let _ = std::fs::remove_file(&jpg);
+        let _ = std::fs::remove_file(&jpg2);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[cfg(windows)]

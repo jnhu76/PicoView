@@ -1,0 +1,158 @@
+[2026-09-17T08:51:14Z INFO  picoview] [     0.0ms] process start
+[2026-09-17T08:51:14Z INFO  picoview] [    43.8ms] window created (hidden until first frame)
+[2026-09-17T08:51:14Z WARN  wgpu_hal::vulkan::instance] InstanceFlags::VALIDATION requested, but unable to find layer: VK_LAYER_KHRONOS_validation
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_app_package_manifest_path: Failed to find mapping layers packages by family name
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Checking for Layer Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\ImplicitLayers
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_add_json_entry: Located json file "C:\WINDOWS\System32\DriverStore\FileRepository\u0417877.inf_amd64_8b2c2b61b3f8a9e5\B417004\amd-vulkan64.json" from PnP registry: E
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Found no registry files in HKEY_CURRENT_USER\SOFTWARE\Khronos\Vulkan\ImplicitLayers
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Found manifest file C:\WINDOWS\System32\DriverStore\FileRepository\u0417877.inf_amd64_8b2c2b61b3f8a9e5\B417004\amd-vulkan64.json (file version 1.0.0)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Checking for Layer Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\ExplicitLayers
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_device_registry_files: opening device PCI\VEN_1002&DEV_1638&SUBSYS_01231002&REV_C5\4&12c9051d&0&0041
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_device_registry_entry: Device ID(2) Does not contain a value for "VulkanExplicitLayers"
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_device_registry_files: Opening child device 5 - SWD\DRIVERENUM\AMDOCL&5&11CF1336&0
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_device_registry_entry: Device ID(5) Does not contain a value for "VulkanExplicitLayers"
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_device_registry_files: Opening child device 6 - SWD\DRIVERENUM\AMDWIN&5&11CF1336&0
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_device_registry_entry: Device ID(6) Does not contain a value for "VulkanExplicitLayers"
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_device_registry_files: Opening child device 7 - DISPLAY\IPA2700\5&11CF1336&0&UID260
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_device_registry_files: found no registry files
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Found no registry files in HKEY_CURRENT_USER\SOFTWARE\Khronos\Vulkan\ExplicitLayers
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z WARN  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_read_data_files_in_registry: Registry lookup failed to get layer manifest files.
+[2026-09-17T08:51:14Z WARN  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_get_app_package_manifest_path: Failed to find mapping layers packages by family name
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	windows_add_json_entry: Located json file "C:\WINDOWS\System32\DriverStore\FileRepository\u0417877.inf_amd64_8b2c2b61b3f8a9e5\B417004\amd-vulkan64.json" from PnP registry: E
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Found ICD manifest file C:\WINDOWS\System32\DriverStore\FileRepository\u0417877.inf_amd64_8b2c2b61b3f8a9e5\B417004\amd-vulkan64.json, version 1.0.0
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Insert instance layer "VK_LAYER_AMD_switchable_graphics" (C:\WINDOWS\System32\DriverStore\FileRepository\u0417877.inf_amd64_8b2c2b61b3f8a9e5\B417004\.\amdvlk64.dll)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	vkCreateInstance layer callstack setup to:
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	   <Application>
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	     ||
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	   <Loader>
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	     ||
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	   VK_LAYER_AMD_switchable_graphics
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	           Type: Implicit
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	               Disable Env Var:  DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	           Manifest: C:\WINDOWS\System32\DriverStore\FileRepository\u0417877.inf_amd64_8b2c2b61b3f8a9e5\B417004\amd-vulkan64.json
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	           Library:  C:\WINDOWS\System32\DriverStore\FileRepository\u0417877.inf_amd64_8b2c2b61b3f8a9e5\B417004\.\amdvlk64.dll
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	     ||
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	   <Drivers>
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:14Z INFO  wgpu_hal::vulkan::instance] Enabling debug utils
+[2026-09-17T08:51:15Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	Failed to find vkGetDeviceProcAddr in layer "C:\WINDOWS\System32\DriverStore\FileRepository\u0417877.inf_amd64_8b2c2b61b3f8a9e5\B417004\.\amdvlk64.dll"
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	vkCreateDevice layer callstack setup to:
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	   <Application>
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	     ||
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	   <Loader>
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	     ||
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	   <Device>
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] GENERAL [Loader Message (0x0)]
+    	       Using "AMD Radeon(TM) Graphics" with driver: "C:\WINDOWS\System32\DriverStore\FileRepository\u0417877.inf_amd64_8b2c2b61b3f8a9e5\B417004\.\amdvlk64.dll"
+[2026-09-17T08:51:15Z INFO  wgpu_hal::vulkan::instance] 	objects: (type: INSTANCE, hndl: 0x18609f39dc0, name: ?)
+[2026-09-17T08:51:15Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-17T08:51:15Z INFO  picoview] [   839.9ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-17T08:51:15Z INFO  picoview] [   840.1ms] Resized 960x640
+[2026-09-17T08:51:15Z ERROR picoview] pocket-mod: eval 'picoview' failed: Error: Maximum call stack size exceeded
+        at readOwnerIdentity (eval_script:472:37)
+        at childOwnerBucket (eval_script:576:30)
+        at claimChildOwner (eval_script:581:37)
+        at materializeComponentValue (eval_script:728:35)
+        at materializeValue (eval_script:1036:47)
+        at materializeNode (eval_script:1365:31)
+        at materializePlanValue (eval_script:1534:35)
+        at materializeValue (eval_script:1030:42)
+        at materializeNode (eval_script:1365:31)
+        at materializeNode (eval_script:1373:43)
+    
+Error: pocket-mod: eval 'picoview' failed: Error: Maximum call stack size exceeded
+    at readOwnerIdentity (eval_script:472:37)
+    at childOwnerBucket (eval_script:576:30)
+    at claimChildOwner (eval_script:581:37)
+    at materializeComponentValue (eval_script:728:35)
+    at materializeValue (eval_script:1036:47)
+    at materializeNode (eval_script:1365:31)
+    at materializePlanValue (eval_script:1534:35)
+    at materializeValue (eval_script:1030:42)
+    at materializeNode (eval_script:1365:31)
+    at materializeNode (eval_script:1373:43)
+
