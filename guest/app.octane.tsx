@@ -27,6 +27,7 @@ import { keyboardIntent } from "./keyboard.ts";
 import {
   imageViewport,
   pointInImageViewport,
+  SHELL_CHROME,
   wheelFocusPoint,
 } from "./shell_layout.ts";
 import {
@@ -369,7 +370,7 @@ export default function App() {
   return (
     <View class="w-full h-full flex-col bg-[#1e1e1e]">
       {/* Title — height frozen in SHELL_CHROME.titleH */}
-      <View class="flex-row items-center px-3 bg-[#252526]" style={{ height: 36 }}>
+      <View class="flex-row items-center px-3 bg-[#252526]" style={{ height: SHELL_CHROME.titleH }}>
         <Text class="text-sm font-bold text-[#f0f0f0]">PicoView</Text>
         <View class="flex-1 items-center justify-center overflow-hidden">
           <Text class="text-sm text-[#a0a0a0]">{headerCenter}</Text>
@@ -380,7 +381,7 @@ export default function App() {
       {/* Toolbar — icon-first actions only; state stays in the status bar.
           Previous/Next are viewport navigation on the image edges, not here.
           Flex flow only; group gaps are spacer Views, not absolute x hacks. */}
-      <View class="flex-row items-center px-2 gap-1 bg-[#252526]" style={{ height: 64 }}>
+      <View class="flex-row items-center px-2 gap-1 bg-[#252526]" style={{ height: SHELL_CHROME.toolbarH }}>
         <ToolButton
           icon={ICON_ASSETS.open}
           semantic={toolSemantic("open")}
@@ -577,7 +578,7 @@ export default function App() {
       </View>
 
       {/* Status — height frozen in SHELL_CHROME.statusH */}
-      <View class="flex-row items-center px-3 bg-[#252526] gap-3" style={{ height: 28 }}>
+      <View class="flex-row items-center px-3 bg-[#252526] gap-3" style={{ height: SHELL_CHROME.statusH }}>
         {dimText ? <Text class="text-xs text-[#a0a0a0]">{dimText}</Text> : null}
         {publication ? (
           <Text
@@ -602,9 +603,10 @@ export default function App() {
   );
 }
 
-/** Semantic group spacer inside the toolbar (Flex child, not absolute). */
+/** Semantic group spacer inside the toolbar (Flex child, not absolute).
+ *  With parent gap-1 (4px), w-2 yields ~12px total between groups. */
 function GroupGap() {
-  return <View class="w-4 shrink-0" />;
+  return <View class="w-2 shrink-0" />;
 }
 
 /** Icon-first toolbar button. Hit 36×36; glyph/text 16×16; no painted caption. */

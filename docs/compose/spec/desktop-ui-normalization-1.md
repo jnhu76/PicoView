@@ -1,14 +1,46 @@
 ---
 feature: desktop-ui-normalization-1
-status: designed
+status: delivered
 updated: 2026-09-18
 branch: fix/ui-chrome-1
-commits: 880d58a00d90087558292f80f4366b7f92a23298.. # filled at delivery
+commits: 880d58a00d90087558292f80f4366b7f92a23298..1e74701
 ---
 
 # Desktop UI Normalization 1 (PR #62)
 
 ## Report
+
+**What was built** — PR #62 chrome is now icon-first desktop viewer UI.
+Top toolbar is actions only: Open · Zoom−/Zoom+/Fit/1:1 · Rotate L/R ·
+Flip H/V · Reset View · Refresh. Previous/Next and the Proxy/zoom badge
+were removed from the toolbar; navigation stays on the image-edge
+chevrons + keyboard/BrowseSession. Semantic full names live in
+`TOOL_SEMANTIC` / tests (PocketJS has no tooltip primitive at `24bab5e`).
+Icons bake and display at 16×16 (`w-4 h-4`). Edge chevrons are translucent
+(`#00000033` rest / `#00000088` focus / `#000000aa` active), sides only,
+unavailable direction has no control node. Title uses real Inter Bold;
+status owns dimensions / Full|Proxy / zoom / dpi / index / name.
+`SHELL_CHROME` and PR #61 ViewTransform/`imageViewport` are unchanged.
+
+**Verification** — `bun test guest/` 162 pass / 0 fail; `pocket.ts compile
+--target windows-app` pass (14 SVGs baked 32×32 @2x from 16×16 design);
+`cargo build --release` OK (pre-existing dead_code/unused_mut warnings only).
+Windows smoke screenshots:
+`experiments/desktop-ui-normalization-1/screenshots/{A-image-ready,B-image-b,C-empty}.png`.
+Adversarial review: **no MAJOR**; MINOR polish applied (SHELL_CHROME binding,
+GroupGap ≈12px, iconLabel comment, SVG comment cleanup, reset glyph documented
+as return-to-baseline). Issue #63 rendering work untouched.
+
+**Journey log**
+- PocketJS `24bab5e` has no tooltip; `hover:` is a compile error — use
+  focus/active only; semantic names stay in constants/tests.
+- SVG baker: filled circle/rect/path, no arcs `A`, no stroke; `rx` ignored.
+- 16×16 design + `w-4 h-4` display is the anti-fuzz contract (not 16→20);
+  @2x bake density is physical quality, not display scale.
+- Edge rest must stay light enough that the photograph remains dominant;
+  opaque dark circles were rejected in review.
+- Reset must not look like refresh (circular) or fit (corners) — delivered
+  as return-to-baseline arrow + bar.
 
 ## [S1] Problem
 
@@ -83,10 +115,11 @@ Rules:
 6. No tooltip invention; report tooltip as follow-up (PocketJS has none today).
 7. One icon-button contract inside frozen `toolbarH=64`:
    hit target **36×36** (`w-9 h-9`), icon display **16×16** (`w-4 h-4`),
-   vertically centered. `1:1` may use a slightly wider content box.
+   vertically centered. Heights bind `SHELL_CHROME` literals. `1:1` may use
+   a slightly wider content box.
 8. In-group spacing small (`gap-1` / 4px); semantic group gaps larger
-   (`w-3` / 12px or `w-4` / 16px spacer). Avoid ToolSep after every control;
-   separators only if they mark a true group boundary.
+   (`GroupGap` `w-2` + surrounding `gap-1` ≈ 12px). Avoid ToolSep after
+   every control; separators only if they mark a true group boundary.
 9. Disabled: icon opacity 0.3, not focusable, no action wiring change.
 
 ### Icon system
@@ -101,7 +134,7 @@ Rules:
   - `fit` — fit-to-frame corners
   - `rotateLeft` / `rotateRight` — CCW / CW arrows
   - `flipHorizontal` / `flipVertical` — opposing shapes around vertical/horizontal axis
-  - `reset` — recenter/default-view (corner frame + center mark) — **not** circular reload
+  - `reset` — recenter/default-view as return-to-baseline arrow + bar (not circular reload, not fit corners)
   - `refresh` — reload-current-item (open circular arrow)
 - Reset vs refresh must be distinguishable.
 
@@ -190,8 +223,8 @@ header.
 
 ## Tasks
 
-- [ ] T1: Spec locked on worktree `fix/ui-chrome-1` — acceptance: this doc exists under `docs/compose/spec/desktop-ui-normalization-1.md` at base `880d58a` (covers: S2)
-- [ ] T2: Icon assets + semantic action map — acceptance: rotate/flip/reset/refresh/open/zoom/fit SVGs bake; 16×16 grid; reset≠refresh; `icons.ts` holds full semantic names (covers: S2)
-- [ ] T3: Toolbar + title/status + edge-nav rewrite in `app.octane.tsx` — acceptance: no toolbar Prev/Next, no proxy badge, no RotL text; Flex groups; icon-first; translucent edge chevrons only on sides; SHELL_CHROME unchanged (covers: S1,S2)
-- [ ] T4: Tests + compile + native build — acceptance: `bun test guest/` pass; pocket compile bakes icons; `cargo build --release` succeeds; shell_layout tests still freeze 36/64/28 (covers: S2; depends: T2,T3)
-- [ ] T5: Adversarial review + delivery report — acceptance: MAJOR findings fixed; report lists BASE/OLD_HEAD/NEW_HEAD, tests, screenshots if available, Issue #63 untouched (covers: S2; depends: T4)
+- [x] T1: Spec locked on worktree `fix/ui-chrome-1` — acceptance: this doc exists under `docs/compose/spec/desktop-ui-normalization-1.md` at base `880d58a` (covers: S2)
+- [x] T2: Icon assets + semantic action map — acceptance: rotate/flip/reset/refresh/open/zoom/fit SVGs bake; 16×16 grid; reset≠refresh; `icons.ts` holds full semantic names (covers: S2)
+- [x] T3: Toolbar + title/status + edge-nav rewrite in `app.octane.tsx` — acceptance: no toolbar Prev/Next, no proxy badge, no RotL text; Flex groups; icon-first; translucent edge chevrons only on sides; SHELL_CHROME unchanged (covers: S1,S2)
+- [x] T4: Tests + compile + native build — acceptance: `bun test guest/` pass; pocket compile bakes icons; `cargo build --release` succeeds; shell_layout tests still freeze 36/64/28 (covers: S2; depends: T2,T3)
+- [x] T5: Adversarial review + delivery report — acceptance: MAJOR findings fixed; report lists BASE/OLD_HEAD/NEW_HEAD, tests, screenshots if available, Issue #63 untouched (covers: S2; depends: T4)

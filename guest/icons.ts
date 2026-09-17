@@ -49,7 +49,7 @@ export function toolSemantic(name: ToolSemanticName): string {
   return TOOL_SEMANTIC[name];
 }
 
-/** Legacy short labels kept only for tests that assert product strings. */
+/** Alias of `toolSemantic` — full product semantic name (not a short label). */
 export function iconLabel(name: ToolSemanticName): string {
   return TOOL_SEMANTIC[name];
 }
