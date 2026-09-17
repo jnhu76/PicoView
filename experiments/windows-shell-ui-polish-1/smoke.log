@@ -1,0 +1,19 @@
+[2026-09-17T06:14:50Z INFO  picoview] [     0.0ms] process start
+[2026-09-17T06:14:50Z INFO  picoview] [    64.0ms] window created
+[2026-09-17T06:14:51Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-17T06:14:51Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-17T06:14:51Z INFO  picoview] [   690.2ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-17T06:14:51Z INFO  picoview] [   690.9ms] Resized 1904x984
+[2026-09-17T06:14:51Z INFO  picoview] [   691.2ms] Resized 960x640
+[2026-09-17T06:14:51Z INFO  picoview] [   691.4ms] Resized 960x640
+[2026-09-17T06:14:51Z INFO  picoview] [   693.5ms] RedrawRequested
+[2026-09-17T06:14:51Z INFO  picoview] current item: generation=1 handle=Some(9) path=C:\Users\fred1\source\PicoView\.worktrees\windows-shell-ui-polish-1\experiments\real-viewer-closeout-1\smoke-media\A.jpg
+[2026-09-17T06:14:51Z INFO  picoview] browse session: dir=C:\Users\fred1\source\PicoView\.worktrees\windows-shell-ui-polish-1\experiments\real-viewer-closeout-1\smoke-media count=4 index=Some(0)
+[2026-09-17T06:14:51Z INFO  picoview] [   760.2ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-17T06:14:51Z INFO  picoview] [   784.8ms] render submit (tick 1)
+[2026-09-17T06:14:51Z INFO  picoview] [   785.2ms] frame ready from worker (tick 1), requesting redraw
+[2026-09-17T06:14:51Z INFO  picoview] [   785.4ms] RedrawRequested
+[2026-09-17T06:14:51Z INFO  picoview] [   785.6ms] present begin (frame tick 1)
+[2026-09-17T06:14:51Z INFO  picoview] [   785.7ms] first-present recovery: reconfigure swapchain
+[2026-09-17T06:14:51Z INFO  picoview] [   801.7ms] swapchain present submitted
+[2026-09-17T06:14:51Z INFO  picoview] [   802.0ms] present end (frame tick 1, submitted true)

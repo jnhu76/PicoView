@@ -1,0 +1,72 @@
+[
+    {
+        "Check":  "A empty from C:\\",
+        "Ok":  true,
+        "Detail":  "pid=21632 exited=False"
+    },
+    {
+        "Check":  "C empty from %TEMP%",
+        "Ok":  true,
+        "Detail":  "pid=21188"
+    },
+    {
+        "Check":  "B image from C:\\",
+        "Ok":  true,
+        "Detail":  "pid=17828 path=C:\\Users\\fred1\\source\\PicoView\\.worktrees\\windows-shell-ui-polish-1\\test-media\\color-fixture.jpg"
+    },
+    {
+        "Check":  "D image from %TEMP%",
+        "Ok":  true,
+        "Detail":  "pid=29180"
+    },
+    {
+        "Check":  "E spaced path",
+        "Ok":  true,
+        "Detail":  "path=C:\\Users\\fred1\\source\\PicoView\\.worktrees\\windows-shell-ui-polish-1\\experiments\\windows-shell-ui-polish-1\\launch-corrective\\media with spaces\\space name.jpg"
+    },
+    {
+        "Check":  "F CJK path",
+        "Ok":  true,
+        "Detail":  "path=C:\\Users\\fred1\\source\\PicoView\\.worktrees\\windows-shell-ui-polish-1\\experiments\\windows-shell-ui-polish-1\\launch-corrective\\中文路径\\图片.jpg"
+    },
+    {
+        "Check":  "register exit 0",
+        "Ok":  true,
+        "Detail":  "code=0"
+    },
+    {
+        "Check":  "assoc command is exe \"%1\"",
+        "Ok":  true,
+        "Detail":  "cmd=\"C:\\Users\\fred1\\source\\PicoView\\.worktrees\\windows-shell-ui-polish-1\\native\\target\\release\\picoview.exe\" \"%1\""
+    },
+    {
+        "Check":  "OpenWith registered",
+        "Ok":  true,
+        "Detail":  "openWith=True default=\u0027\u0027"
+    },
+    {
+        "Check":  "default NOT stolen",
+        "Ok":  true,
+        "Detail":  "default=\u0027\u0027"
+    },
+    {
+        "Check":  "H Open With / assoc path",
+        "Ok":  true,
+        "Detail":  "cmd=\"C:\\Users\\fred1\\source\\PicoView\\.worktrees\\windows-shell-ui-polish-1\\native\\target\\release\\picoview.exe\" \"%1\""
+    },
+    {
+        "Check":  "unregister exit 0",
+        "Ok":  true,
+        "Detail":  "code=0"
+    },
+    {
+        "Check":  "ProgID removed",
+        "Ok":  true,
+        "Detail":  "progLeft=False"
+    },
+    {
+        "Check":  "GUI process has main window",
+        "Ok":  true,
+        "Detail":  "hwnd=7407510 pid=33228"
+    }
+]

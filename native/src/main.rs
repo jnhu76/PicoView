@@ -5,6 +5,11 @@
 //! guest and ticks at 60 Hz. PicoView adds the product seam on top: the
 //! Current Item authority (explicit path → WIC decode → native texture →
 //! bounded svc publication) lives in `current_item.rs`.
+
+// Product release is a GUI subsystem executable: double-click / Open With
+// must not spawn a black console. Debug builds keep a console for logging.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use anyhow::{anyhow, Context as _, Result};
 use pocket_mod::Guest;
 use pocket_ui_surface::offload::OffloadWorker;
@@ -21,6 +26,8 @@ use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
+mod associations;
+mod assets;
 mod browse_session;
 mod current_item;
 mod gpu;
@@ -42,12 +49,16 @@ pub(crate) fn tlog(msg: &str) {
 enum Wake {
     Output,
     Exit(Option<String>),
+    /// Runtime asked the window thread to show the native Open File dialog.
+    PickFile,
 }
 
 struct Args {
     image: Option<PathBuf>,
-    js: PathBuf,
-    pak: PathBuf,
+    /// Developer override for guest JS. `None` = embedded production assets.
+    js: Option<PathBuf>,
+    /// Developer override for guest PAK. `None` = embedded production assets.
+    pak: Option<PathBuf>,
     title: String,
     viewport: (u32, u32),
     density: u32,
@@ -55,16 +66,22 @@ struct Args {
 
 fn parse_args() -> Result<Args> {
     let mut image = None;
-    let mut js = PathBuf::from("dist/picoview.js");
-    let mut pak = PathBuf::from("dist/picoview.pak");
+    let mut js: Option<PathBuf> = None;
+    let mut pak: Option<PathBuf> = None;
     let mut title = "PicoView".to_string();
     let mut viewport = (960u32, 640u32);
     let mut density = 2u32;
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
-            "--js" => js = it.next().ok_or_else(|| anyhow!("--js needs a value"))?.into(),
-            "--pak" => pak = it.next().ok_or_else(|| anyhow!("--pak needs a value"))?.into(),
+            // Developer/debug override only. Normal product startup uses the
+            // compile-time embedded guest pair and never depends on CWD.
+            "--js" => {
+                js = Some(it.next().ok_or_else(|| anyhow!("--js needs a value"))?.into());
+            }
+            "--pak" => {
+                pak = Some(it.next().ok_or_else(|| anyhow!("--pak needs a value"))?.into());
+            }
             "--title" => title = it.next().ok_or_else(|| anyhow!("--title needs a value"))?,
             "--viewport" => {
                 let v = it.next().ok_or_else(|| anyhow!("--viewport needs a value"))?;
@@ -88,16 +105,37 @@ fn parse_args() -> Result<Args> {
     })
 }
 
+/// CLI product-shell actions that exit without launching the viewer window.
+enum ShellAction {
+    RegisterAssociations,
+    UnregisterAssociations,
+}
+
+fn parse_shell_action() -> Option<ShellAction> {
+    let mut it = std::env::args().skip(1);
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--register-associations" => return Some(ShellAction::RegisterAssociations),
+            "--unregister-associations" => return Some(ShellAction::UnregisterAssociations),
+            _ => {}
+        }
+    }
+    None
+}
+
 enum Input {
     Quit,
     /// Logical viewport + output scale (physical px per logical unit).
     Resize(u32, u32, f64),
     /// Prebuilt svc JSON line pushed into the guest poll queue.
     Service(String),
+    /// A path chosen by the native Open File dialog. Runtime maps this to
+    /// the same Product `Command::Open` path as CLI / Open With / guest open.
+    OpenPath(PathBuf),
 }
 
 /// Map a winit logical key to the guest's lowercase key names.
-/// Guest shortcuts use: left, right, r, 0, 1, =, +, -.
+/// Guest shortcuts use: left, right, r, f5, 0, 1, =, +, -, and o with ctrl.
 fn key_name(key: &Key) -> String {
     match key {
         Key::Character(s) => s.to_lowercase(),
@@ -126,6 +164,7 @@ fn key_name(key: &Key) -> String {
 /// Parse a guest command from a svc JSON line. The guest sends lines like:
 /// `{"t":"pv","cmd":"previous"}`, `{"t":"pv","cmd":"next"}`,
 /// `{"t":"pv","cmd":"refresh"}`, `{"t":"pv","cmd":"open","path":"..."}`.
+/// `pick-file` is handled in Runtime::tick as host plumbing (not a Command).
 fn parse_command(val: &serde_json::Value) -> Option<Command> {
     let cmd = val.get("cmd")?.as_str()?;
     match cmd {
@@ -167,19 +206,39 @@ struct Runtime {
     /// Physical pixels per UI logical unit.
     dpi_scale: f64,
     ticks: u64,
-    /// Native Current Item truth. V1 opens exactly once at boot; nothing reads
-    /// the field back yet, but it must outlive the process for the resource
-    /// identity to stay native-owned.
-    #[allow(dead_code)]
+    /// Native Current Item truth.
     current: CurrentItem,
+    /// Used to ask the window thread for UI-thread-only work (file dialog).
+    proxy: EventLoopProxy<Wake>,
 }
 
 impl Runtime {
-    fn boot(args: &Args, initial_scale: f64) -> Result<Self> {
-        let pak = std::fs::read(&args.pak)
-            .with_context(|| format!("missing pak {}", args.pak.display()))?;
-        let source = std::fs::read_to_string(&args.js)
-            .with_context(|| format!("missing js {}", args.js.display()))?;
+    fn boot(args: &Args, initial_scale: f64, proxy: EventLoopProxy<Wake>) -> Result<Self> {
+        // Production path: embedded artifacts, no CWD / dist discovery.
+        // Developer override: explicit --js and/or --pak paths only.
+        let (pak, source) = match (&args.js, &args.pak) {
+            (Some(js_path), Some(pak_path)) => {
+                let pak = std::fs::read(pak_path)
+                    .with_context(|| format!("missing pak {}", pak_path.display()))?;
+                let source = std::fs::read_to_string(js_path)
+                    .with_context(|| format!("missing js {}", js_path.display()))?;
+                (pak, source)
+            }
+            (Some(js_path), None) => {
+                let source = std::fs::read_to_string(js_path)
+                    .with_context(|| format!("missing js {}", js_path.display()))?;
+                (assets::EMBEDDED_PAK.to_vec(), source)
+            }
+            (None, Some(pak_path)) => {
+                let pak = std::fs::read(pak_path)
+                    .with_context(|| format!("missing pak {}", pak_path.display()))?;
+                (pak, assets::EMBEDDED_JS.to_string())
+            }
+            (None, None) => (
+                assets::EMBEDDED_PAK.to_vec(),
+                assets::EMBEDDED_JS.to_string(),
+            ),
+        };
         let surface = UiSurface::new_with_density(
             (args.viewport.0 as f32, args.viewport.1 as f32),
             args.density,
@@ -208,7 +267,7 @@ impl Runtime {
             json!({"t":"hello","w":args.viewport.0,"h":args.viewport.1,"scale":dpi_scale,"epoch":epoch_ms()})
                 .to_string(),
         );
-        let mut current = if let Some(path) = &args.image {
+        let current = if let Some(path) = &args.image {
             // Create a CurrentItem with a BrowseSession for the directory
             // containing the initial image. The browse session enumerates
             // supported images and enables Previous/Next navigation.
@@ -250,6 +309,7 @@ impl Runtime {
             dpi_scale,
             ticks: 0,
             current,
+            proxy,
         })
     }
 
@@ -259,6 +319,16 @@ impl Runtime {
             Input::Service(line) => {
                 // Keyboard and other host→guest scalar events.
                 self.surface.svc_push(line);
+            }
+            Input::OpenPath(path) => {
+                // Native file-dialog result. Same Product open path as CLI /
+                // Open With / guest cmdOpen — RequestPhase is legal here
+                // (input processing, before the tick's guest frame).
+                self.current.handle_command(
+                    &self.surface,
+                    RequestPhase::before_guest_frame(),
+                    Command::Open(path),
+                );
             }
             Input::Resize(w, h, scale) => {
                 self.viewport = (w, h);
@@ -285,7 +355,15 @@ impl Runtime {
             log::debug!("guest svc: {line}");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
                 if val.get("t").and_then(|v| v.as_str()) == Some("pv") {
-                    if let Some(cmd) = parse_command(&val) {
+                    let cmd_name = val.get("cmd").and_then(|v| v.as_str()).unwrap_or("");
+                    if cmd_name == "pick-file" {
+                        // Host plumbing only: ask the UI thread for a dialog.
+                        // The chosen path returns as Input::OpenPath and is
+                        // opened through the same CurrentItem pipeline.
+                        if let Err(e) = self.proxy.send_event(Wake::PickFile) {
+                            log::warn!("pick-file wake failed: {e}");
+                        }
+                    } else if let Some(cmd) = parse_command(&val) {
                         self.current.handle_command(&self.surface, RequestPhase::before_guest_frame(), cmd);
                     }
                 }
@@ -359,7 +437,7 @@ fn run_runtime(
     use std::sync::atomic::AtomicBool;
     let available = Arc::new(AtomicBool::new(true));
     let mut renderer = gpu::Renderer::new(gpu);
-    let mut runtime = Runtime::boot(&args, initial_scale)?;
+    let mut runtime = Runtime::boot(&args, initial_scale, proxy.clone())?;
     let mut hash = None;
     let mut deadline = Instant::now();
     // Fixed tick order (PICOVIEW-LAST-GOOD-PUBLICATION-1-CORRECTIVE-1):
@@ -448,6 +526,9 @@ struct Host {
     pointer: (f64, f64),
     /// Left button down.
     pointer_down: bool,
+    /// The native window stays hidden until the first valid frame is
+    /// presented, so the user never sees an uninitialized white client.
+    shown: bool,
 }
 
 impl Host {
@@ -463,9 +544,13 @@ impl Host {
         tlog(&format!(
             "present end (frame tick {tick}, submitted {presented})"
         ));
+        if presented && !self.shown {
+            self.shown = true;
+            window.set_visible(true);
+            tlog("window shown after first presented frame");
+        }
         Ok(())
     }
-
 }
 
 impl ApplicationHandler<Wake> for Host {
@@ -479,11 +564,14 @@ impl ApplicationHandler<Wake> for Host {
                     Window::default_attributes()
                         .with_title(&self.title)
                         .with_inner_size(LogicalSize::new(self.viewport.0, self.viewport.1))
-                        .with_resizable(true),
+                        .with_resizable(true)
+                        // Stay hidden until the first presented frame so the
+                        // product never flashes an uninitialized white client.
+                        .with_visible(false),
                 )
                 .expect("create window"),
         );
-        tlog("window created");
+        tlog("window created (hidden until first frame)");
         let presentation = match gpu::Presentation::new(window.clone()) {
             Ok(presentation) => presentation,
             Err(error) => {
@@ -533,14 +621,48 @@ impl ApplicationHandler<Wake> for Host {
                 }
                 event_loop.exit();
             }
+            Wake::PickFile => {
+                // Modal native dialog on the UI thread. Filter is the
+                // conservative product association set (not every WIC type).
+                let picked = rfd::FileDialog::new()
+                    .set_title("Open image")
+                    .add_filter("Images", &["jpg", "jpeg", "png", "bmp"])
+                    .pick_file();
+                if let Some(path) = picked {
+                    log::info!("open file dialog picked {}", path.display());
+                    self.tx.try_send(Input::OpenPath(path)).ok();
+                }
+                // Cancel is a no-op: no publication change, no error state.
+            }
             Wake::Output => {
                 while let Ok(output) = self.rx.try_recv() {
                     if let Some(target) = output.target {
                         tlog(&format!(
-                            "frame ready from worker (tick {}), requesting redraw",
+                            "frame ready from worker (tick {})",
                             output.tick
                         ));
                         self.frame = Some((output.tick, target));
+                        // Hidden winit windows do not receive RedrawRequested.
+                        // Present the first frame on this UI thread while the
+                        // window is still hidden, then show — the first
+                        // composition the user sees is already PicoView.
+                        if !self.shown {
+                            if let Err(error) = self.present() {
+                                log::error!("{error}");
+                                self.failure = Some(error.to_string());
+                                event_loop.exit();
+                                return;
+                            }
+                            if !self.shown {
+                                // present() declined (zero size / lost) —
+                                // show and rely on a normal redraw path.
+                                if let Some(window) = &self.window {
+                                    window.set_visible(true);
+                                    self.shown = true;
+                                    tlog("window shown before first present (fallback)");
+                                }
+                            }
+                        }
                         if let Some(window) = &self.window {
                             window.request_redraw();
                         }
@@ -651,8 +773,9 @@ impl ApplicationHandler<Wake> for Host {
                     self.modifiers.control_key()
                 };
                 let ctl = self.modifiers.control_key();
-                // Guest keyboard shortcuts (REAL-VIEWER-TRAIN-1):
-                // left/right navigation, r refresh, 0 Fit, 1 1:1, +/- zoom.
+                // Guest keyboard shortcuts (REAL-VIEWER-TRAIN-1 + shell):
+                // left/right navigation, r/F5 refresh, Ctrl+O open,
+                // 0 Fit, 1 1:1, +/- zoom.
                 let line = json!({
                     "t": "key",
                     "k": name,
@@ -692,6 +815,24 @@ impl ApplicationHandler<Wake> for Host {
 fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     tlog("process start");
+
+    // Application-side Windows product shell actions (no window).
+    if let Some(action) = parse_shell_action() {
+        let exe = std::env::current_exe().context("resolve current exe")?;
+        match action {
+            ShellAction::RegisterAssociations => {
+                associations::register_associations(&exe)?;
+                log::info!("registered file associations for {}", exe.display());
+                return Ok(());
+            }
+            ShellAction::UnregisterAssociations => {
+                associations::unregister_associations()?;
+                log::info!("unregistered file associations");
+                return Ok(());
+            }
+        }
+    }
+
     let args = parse_args()?;
     let event_loop = EventLoop::<Wake>::with_user_event().build()?;
     let (tx, inputs) = sync_channel(256);
@@ -709,6 +850,7 @@ fn main() -> Result<()> {
         modifiers: ModifiersState::default(),
         pointer: (0.0, 0.0),
         pointer_down: false,
+        shown: false,
     };
     host.startup = Some(RuntimeStartup {
         args,

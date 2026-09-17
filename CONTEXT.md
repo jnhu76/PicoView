@@ -52,9 +52,18 @@ and interaction polish. Corrective-2 (same branch) then closed the fresh-review
 MAJORs: real `hello.scale` from `window.scale_factor()`, guest pointer→press
 wiring so toolbar `onPress` works with a mouse, D4 `normalizeOrientation` onto
 8 canonical tuples, EXIF fullResolution O-space lock, and pointer-release
-strand mitigations. Do not merge this branch and PR #60 independently —
-integration order is documented in the spec. Evidence:
-`docs/compose/spec/view-geometry-1.md`.
+strand mitigations. PR61-CORRECTIVE-1 closed Fit-after-resize/DPI, persistent
+wheel anchor, and gesture ownership. Merged as PR #61
+(`161536f`). Evidence: `docs/compose/spec/view-geometry-1.md`.
+
+Campaign `PICOVIEW-PR60-POST-61-INTEGRATION-1` (2026-09-18, branch
+`feat/windows-shell-ui-polish-1`) rebased/integrated PR #60 onto post-#61
+main. PR #60 is now a pure additive Windows product-shell layer: Open File /
+Ctrl+O, icon chrome, side chevrons, empty/error/status UX, conservative
+HKCU OpenWith associations, embedded guest assets, GUI subsystem, and
+hidden-until-first-frame presentation. View geometry, DPI, pointer ownership,
+EXIF O, and view transforms remain PR #61 authority and are not reinterpreted
+here. Evidence: `docs/compose/spec/windows-shell-ui-polish-1.md`.
 
 The next work is the remaining PicoView-side corrections (R3): truthful
 full-resolution capability, generic color/alpha admission.

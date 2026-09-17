@@ -43,7 +43,12 @@ export function cmdRefresh(): boolean {
   return send({ cmd: "refresh" });
 }
 
-/** Open a specific file path. */
+/** Open a specific file path (native CurrentItem pipeline). */
 export function cmdOpen(path: string): boolean {
   return send({ cmd: "open", path });
+}
+
+/** Ask the host to show a native Open File dialog (Windows UI thread). */
+export function cmdPickFile(): boolean {
+  return send({ cmd: "pick-file" });
 }

@@ -16,7 +16,14 @@ import {
 } from "./observer.ts";
 import { textureKeyFor, type BoundPublication } from "./binding.ts";
 import { runGuestTurn } from "./turn.ts";
-import { cmdPrevious, cmdNext, cmdRefresh } from "./commands.ts";
+import {
+  cmdPrevious,
+  cmdNext,
+  cmdRefresh,
+  cmdPickFile,
+} from "./commands.ts";
+import { ICON_ASSETS, iconLabel } from "./icons.ts";
+import { keyboardIntent } from "./keyboard.ts";
 import {
   imageViewport,
   pointInImageViewport,
@@ -57,17 +64,22 @@ import {
   type HeldGesture,
 } from "./pointer_press.ts";
 
-// PicoView viewer shell (PICOVIEW-VIEW-GEOMETRY-CORRECTIVE-1).
+// PicoView product shell — view geometry from PR #61, chrome from PR #60.
 //
 // All Fit / zoom / pan / rotate / flip geometry goes through
-// guest/view_transform.ts. The image viewport comes from shell_layout.ts —
-// never magic -16/-80 deductions. DPI arrives as viewport.dpi from the host.
-// Pointer and wheel events are host-forwarded (desktop host parity).
+// guest/view_transform.ts. The image viewport comes from shell_layout.ts.
+// Icons / Open File / side chevrons are presentation-only chrome.
 
 type PointerDrag = {
   lastX: number;
   lastY: number;
 };
+
+function truncateName(name: string | undefined, max = 48): string {
+  if (!name) return "";
+  if (name.length <= max) return name;
+  return name.slice(0, max - 1) + "...";
+}
 
 export default function App() {
   const item = useRef<ObserverState>(initialObserverState());
@@ -84,7 +96,7 @@ export default function App() {
   const lastPointer = useRef({ x: 0, y: 0, known: false });
   const wheelAcc = useRef(0);
   // MAJOR-2: svc mouse is not onPress. Wire PocketJS hit→press so toolbar
-  // ToolButtons work with a real Windows mouse (keyboard stays on shortcuts).
+  // and side-chevron ToolButtons work with a real Windows mouse.
   const pointerPress = useRef(
     createPointerPress({
       hit: (x, y) => hitFocusable(x, y),
@@ -170,39 +182,54 @@ export default function App() {
     const can100 = pub?.fullResolution === true;
 
     // --- keyboard ---
+    const shownForKeyboard =
+      displayVerdict(st) === "image"
+        ? pub?.name
+        : displayVerdict(st) === "loading" || displayVerdict(st) === "error"
+          ? st.request?.name
+          : undefined;
+    const canRefreshForKeyboard =
+      !!pub || (shownForKeyboard != null && shownForKeyboard !== "");
     for (const e of outcome.keyEvents) {
       const k = typeof e.k === "string" ? e.k : "";
       const ctrl = !!(e.cmd || e.ctl);
-      switch (k) {
-        case "left":
-          if (st.browse.canPrevious) cmdPrevious();
+      const intent = keyboardIntent(k, {
+        ctrl,
+        canPrevious: st.browse.canPrevious,
+        canNext: st.browse.canNext,
+        canRefresh: canRefreshForKeyboard,
+        canImage,
+        can100,
+      });
+      switch (intent) {
+        case "previous":
+          cmdPrevious();
           break;
-        case "right":
-          if (st.browse.canNext) cmdNext();
+        case "next":
+          cmdNext();
           break;
-        case "r":
-          if (!ctrl && pub) cmdRefresh();
+        case "refresh":
+          cmdRefresh();
           break;
-        case "f5":
-          if (pub) cmdRefresh();
+        case "open":
+          cmdPickFile();
           break;
-        case "0":
+        case "fit":
           if (canImage) applyView(fitView(img, vp, viewRef.current));
           break;
-        case "1":
+        case "oneToOne":
           if (canImage && can100) applyView(actualSize(viewRef.current));
           break;
-        case "=":
-        case "+":
+        case "zoomIn":
           if (canImage) applyView(zoomIn(img, vp, viewRef.current));
           break;
-        case "-":
+        case "zoomOut":
           if (canImage) applyView(zoomOut(img, vp, viewRef.current));
           break;
       }
     }
 
-    // --- pointer drag pan + toolbar onPress (MAJOR-C ownership) ---
+    // --- pointer drag pan + toolbar/chevron onPress (MAJOR-C ownership) ---
     for (const e of outcome.mouseEvents) {
       const x = typeof e.x === "number" ? e.x : 0;
       const y = typeof e.y === "number" ? e.y : 0;
@@ -230,7 +257,7 @@ export default function App() {
       const owner = gesture.current.owner;
 
       // Canvas pan only when THIS down-edge chose canvas. Ownership never
-      // transfers toolbar→canvas / canvas→toolbar / none→canvas while held.
+      // transfers toolbar/chevron→canvas / canvas→toolbar while held.
       if (owner === "canvas" && canImage) {
         if (!prev.wasDown || prev.owner !== "canvas") {
           drag.current = { lastX: x, lastY: y };
@@ -325,6 +352,7 @@ export default function App() {
   const dimText = publication
     ? `${publication.sourceWidth} × ${publication.sourceHeight}`
     : "";
+  const canRefresh = !!publication || (shownName != null && shownName !== "");
 
   const apply = (fn: (s: ViewTransform) => ViewTransform) => {
     const next = fn(viewRef.current);
@@ -332,51 +360,94 @@ export default function App() {
     setViewState(next);
   };
 
+  const headerCenter = shownName
+    ? (posText
+        ? `${truncateName(shownName, 36)}  (${posText})`
+        : truncateName(shownName, 36))
+    : "";
+
   return (
     <View class="w-full h-full flex-col bg-[#1e1e1e]">
       {/* Title — height frozen in SHELL_CHROME.titleH */}
       <View class="flex-row items-center px-3 bg-[#252526]" style={{ height: 36 }}>
         <Text class="text-sm font-bold text-[#f0f0f0]">PicoView</Text>
         <View class="flex-1 items-center justify-center overflow-hidden">
-          <Text class="text-sm text-[#a0a0a0]">
-            {shownName ? (posText ? `${shownName} (${posText})` : shownName) : ""}
-          </Text>
+          <Text class="text-sm text-[#a0a0a0]">{headerCenter}</Text>
         </View>
         <View class="w-12" />
       </View>
 
-      {/* Toolbar — height frozen in SHELL_CHROME.toolbarH */}
-      <View class="flex-row items-center px-2 bg-[#252526]" style={{ height: 64 }}>
-        <ToolBtn label="Prev" disabled={!browse.canPrevious} onPress={() => cmdPrevious()} />
-        <ToolBtn label="Next" disabled={!browse.canNext} onPress={() => cmdNext()} />
-        <Sep />
-        <ToolBtn label="−" disabled={!canImage} onPress={() => apply(s => zoomOut(img, vp, s))} />
-        <Text class="text-xs text-[#f0f0f0] w-14 text-center">{zoomText}</Text>
-        <ToolBtn label="+" disabled={!canImage} onPress={() => apply(s => zoomIn(img, vp, s))} />
-        <Sep />
-        <ToolBtn label="Fit" disabled={!canImage} onPress={() => apply(s => fitView(img, vp, s))} />
-        <ToolBtn
-          label="1:1"
+      {/* Toolbar — icon over label; handlers map to #61 ViewTransform ops */}
+      <View class="flex-row items-stretch px-1 py-1 bg-[#252526]" style={{ height: 64 }}>
+        <ToolButton
+          icon={ICON_ASSETS.open}
+          label={iconLabel("open")}
+          onPress={() => cmdPickFile()}
+        />
+        <ToolSep />
+        <ToolButton
+          icon={ICON_ASSETS.previous}
+          label={iconLabel("previous")}
+          disabled={!browse.canPrevious}
+          onPress={() => cmdPrevious()}
+        />
+        <ToolButton
+          icon={ICON_ASSETS.next}
+          label={iconLabel("next")}
+          disabled={!browse.canNext}
+          onPress={() => cmdNext()}
+        />
+        <ToolSep />
+        <ToolButton
+          icon={ICON_ASSETS.zoomOut}
+          label={iconLabel("zoomOut")}
+          disabled={!canImage}
+          onPress={() => apply(s => zoomOut(img, vp, s))}
+        />
+        <View class="w-14 items-center justify-center">
+          <View class="px-2 py-1 rounded bg-[#1e1e1e]">
+            <Text class="text-xs text-[#f0f0f0]">{canImage ? zoomText : "-"}</Text>
+          </View>
+        </View>
+        <ToolButton
+          icon={ICON_ASSETS.zoomIn}
+          label={iconLabel("zoomIn")}
+          disabled={!canImage}
+          onPress={() => apply(s => zoomIn(img, vp, s))}
+        />
+        <ToolSep />
+        <ToolButton
+          icon={ICON_ASSETS.fit}
+          label={iconLabel("fit")}
+          disabled={!canImage}
+          onPress={() => apply(s => fitView(img, vp, s))}
+        />
+        <ToolButton
+          label={iconLabel("oneToOne")}
+          textIcon
           disabled={!canImage || !can100}
           onPress={() => apply(s => actualSize(s))}
         />
-        <Sep />
-        <ToolBtn
+        <ToolSep />
+        <ToolButton
           label="RotL"
+          textIcon
           disabled={!canImage}
           onPress={() =>
             apply(s => setUserOrientation(img, vp, s, rotateLeft(s.orientation)))
           }
         />
-        <ToolBtn
+        <ToolButton
           label="RotR"
+          textIcon
           disabled={!canImage}
           onPress={() =>
             apply(s => setUserOrientation(img, vp, s, rotateRight(s.orientation)))
           }
         />
-        <ToolBtn
+        <ToolButton
           label="FlipH"
+          textIcon
           disabled={!canImage}
           onPress={() =>
             apply(s =>
@@ -384,8 +455,9 @@ export default function App() {
             )
           }
         />
-        <ToolBtn
+        <ToolButton
           label="FlipV"
+          textIcon
           disabled={!canImage}
           onPress={() =>
             apply(s =>
@@ -393,15 +465,17 @@ export default function App() {
             )
           }
         />
-        <ToolBtn
+        <ToolButton
           label="Reset"
+          textIcon
           disabled={!canImage}
           onPress={() => apply(s => resetView(img, vp, s))}
         />
-        <Sep />
-        <ToolBtn
-          label="Refresh"
-          disabled={!publication}
+        <ToolSep />
+        <ToolButton
+          icon={ICON_ASSETS.refresh}
+          label={iconLabel("refresh")}
+          disabled={!canRefresh}
           onPress={() => cmdRefresh()}
         />
       </View>
@@ -424,26 +498,86 @@ export default function App() {
               originY: style.originY,
             }}
           />
-        ) : verdict === "image" ? (
+        ) : null}
+
+        {/* Side chevrons — ordinary focusables in the same gesture ownership */}
+        {canImage && (browse.canPrevious || browse.canNext) ? (
+          <View class="absolute inset-0 flex-row items-center justify-between px-2">
+            {browse.canPrevious ? (
+              <View
+                class="w-10 h-10 items-center justify-center rounded-full bg-[#252526] focus:bg-[#1e1e1e] active:bg-[#1e1e1e]"
+                onPress={() => cmdPrevious()}
+                focusable
+              >
+                <Image class="w-5 h-5" src={ICON_ASSETS.previous} />
+              </View>
+            ) : (
+              <View class="w-10 h-10" />
+            )}
+            <View class="flex-1" />
+            {browse.canNext ? (
+              <View
+                class="w-10 h-10 items-center justify-center rounded-full bg-[#252526] focus:bg-[#1e1e1e] active:bg-[#1e1e1e]"
+                onPress={() => cmdNext()}
+                focusable
+              >
+                <Image class="w-5 h-5" src={ICON_ASSETS.next} />
+              </View>
+            ) : (
+              <View class="w-10 h-10" />
+            )}
+          </View>
+        ) : null}
+
+        {verdict === "image" && !bound ? (
           <View class="flex-1 flex-col items-center justify-center">
             <Text class="text-sm text-[#a0a0a0]">Preparing image...</Text>
           </View>
         ) : verdict === "loading" ? (
           <View class="flex-1 flex-col items-center justify-center">
-            <Text class="text-sm text-[#a0a0a0]">
-              {`Opening ${request?.name ?? "image"}...`}
-            </Text>
+            <Text class="text-sm text-[#a0a0a0]">{`Opening ${truncateName(request?.name) || "image"}...`}</Text>
           </View>
         ) : verdict === "error" ? (
-          <View class="flex-1 flex-col items-center justify-center">
-            <Text class="text-sm text-[#f0f0f0]">Could not open this image</Text>
-            <Text class="text-xs text-[#a0a0a0]">
+          <View class="flex-1 flex-col items-center justify-center gap-3">
+            <Image class="w-10 h-10" src={ICON_ASSETS.warn} />
+            <Text class="text-base text-[#f0f0f0]">Could not open this image</Text>
+            <Text class="text-sm text-[#a0a0a0]">
               {request?.error ?? "The file may be corrupted or not supported."}
             </Text>
+            {browse.canPrevious || browse.canNext ? (
+              <View class="flex-row gap-2 mt-1">
+                {browse.canPrevious ? (
+                  <View
+                    class="px-4 py-2 rounded bg-[#252526]"
+                    onPress={() => cmdPrevious()}
+                    focusable
+                  >
+                    <Text class="text-sm text-[#f0f0f0]">Previous</Text>
+                  </View>
+                ) : null}
+                {browse.canNext ? (
+                  <View
+                    class="px-4 py-2 rounded bg-sky-600"
+                    onPress={() => cmdNext()}
+                    focusable
+                  >
+                    <Text class="text-sm text-[#f0f0f0]">Next</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         ) : (
-          <View class="flex-1 flex-col items-center justify-center">
-            <Text class="text-sm text-[#a0a0a0]">Open an image to get started</Text>
+          <View class="flex-1 flex-col items-center justify-center gap-3">
+            <Image class="w-12 h-12" src={ICON_ASSETS.empty} />
+            <Text class="text-base text-[#a0a0a0]">Open an image to get started</Text>
+            <View
+              class="px-4 py-2 rounded bg-sky-600"
+              onPress={() => cmdPickFile()}
+              focusable
+            >
+              <Text class="text-sm text-[#f0f0f0]">Open File...</Text>
+            </View>
           </View>
         )}
       </View>
@@ -466,38 +600,53 @@ export default function App() {
         {canImage ? <Text class="text-xs text-[#a0a0a0]">{zoomText}</Text> : null}
         <Text class="text-xs text-[#a0a0a0]">{`dpi ${dpi}`}</Text>
         {posText ? <Text class="text-xs text-[#a0a0a0]">{posText}</Text> : null}
+        {shownName ? (
+          <Text class="text-xs text-[#a0a0a0]">{truncateName(shownName, 28)}</Text>
+        ) : null}
       </View>
     </View>
   );
 }
 
-function ToolBtn({
+function ToolButton({
+  icon,
   label,
+  textIcon,
   disabled,
   onPress,
 }: {
+  icon?: string;
   label: string;
+  textIcon?: boolean;
   disabled?: boolean;
   onPress: () => void;
 }) {
   const off = disabled === true;
+  const shell = off
+    ? "w-16 h-14 flex-col items-center justify-center gap-0.5 rounded"
+    : "w-16 h-14 flex-col items-center justify-center gap-0.5 rounded focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
   return (
     <View
-      class={
-        off
-          ? "px-2 py-1 rounded"
-          : "px-2 py-1 rounded focus:bg-[#1e1e1e] active:bg-[#1e1e1e]"
-      }
+      class={shell}
       onPress={off ? undefined : onPress}
       focusable={!off}
     >
-      <Text class={off ? "text-xs text-zinc-600" : "text-xs text-[#f0f0f0]"}>
-        {label}
-      </Text>
+      {textIcon ? (
+        <Text class={off ? "text-sm text-zinc-600" : "text-sm text-[#f0f0f0]"}>{label}</Text>
+      ) : icon ? (
+        <Image
+          class="w-5 h-5"
+          src={icon}
+          style={{ opacity: off ? 0.3 : 1 }}
+        />
+      ) : null}
+      {!textIcon ? (
+        <Text class={off ? "text-xs text-zinc-600" : "text-xs text-[#a0a0a0]"}>{label}</Text>
+      ) : null}
     </View>
   );
 }
 
-function Sep() {
-  return <View class="w-px h-4 mx-1 bg-[#3a3a3a]" />;
+function ToolSep() {
+  return <View class="w-px my-3 bg-[#3a3a3a]" />;
 }

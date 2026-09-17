@@ -1,0 +1,19 @@
+[2026-09-17T06:26:39Z INFO  picoview] [     0.0ms] process start
+[2026-09-17T06:26:39Z INFO  picoview] [    63.7ms] window created
+[2026-09-17T06:26:40Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-17T06:26:40Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-17T06:26:40Z INFO  picoview] [   687.5ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-17T06:26:40Z INFO  picoview] [   687.8ms] Resized 1904x984
+[2026-09-17T06:26:40Z INFO  picoview] [   688.0ms] Resized 960x640
+[2026-09-17T06:26:40Z INFO  picoview] [   688.1ms] Resized 960x640
+[2026-09-17T06:26:40Z INFO  picoview] [   688.4ms] RedrawRequested
+[2026-09-17T06:26:40Z INFO  picoview] current item: generation=1 handle=Some(9) path=C:\Users\fred1\source\PicoView\.worktrees\windows-shell-ui-polish-1\experiments\windows-shell-ui-polish-1\media with spaces\space name.jpg
+[2026-09-17T06:26:40Z INFO  picoview] browse session: dir=C:\Users\fred1\source\PicoView\.worktrees\windows-shell-ui-polish-1\experiments\windows-shell-ui-polish-1\media with spaces count=1 index=Some(0)
+[2026-09-17T06:26:40Z INFO  picoview] [   791.1ms] runtime booted (pak fed, guest mounted, source eval'd, current item opened)
+[2026-09-17T06:26:40Z INFO  picoview] [   816.4ms] render submit (tick 1)
+[2026-09-17T06:26:40Z INFO  picoview] [   816.9ms] frame ready from worker (tick 1), requesting redraw
+[2026-09-17T06:26:40Z INFO  picoview] [   817.3ms] RedrawRequested
+[2026-09-17T06:26:40Z INFO  picoview] [   817.5ms] present begin (frame tick 1)
+[2026-09-17T06:26:40Z INFO  picoview] [   817.7ms] first-present recovery: reconfigure swapchain
+[2026-09-17T06:26:40Z INFO  picoview] [   832.9ms] swapchain present submitted
+[2026-09-17T06:26:40Z INFO  picoview] [   833.2ms] present end (frame tick 1, submitted true)
