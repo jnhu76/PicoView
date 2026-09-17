@@ -1,7 +1,7 @@
 ---
 feature: view-geometry-1
-status: in-progress
-updated: 2026-09-18
+status: ready-for-human-merge
+updated: 2026-09-17
 branch: corrective/view-geometry-1
 commits: bbda8db50a99d8c35380e8831670219b75f5e962..HEAD
 ---
@@ -51,13 +51,45 @@ Required integration order after human review:
 This branch still needs explicit `--js`/`--pak` (no embed). That is intentional
 until PR60 is rebased.
 
+### Windows smoke (PICOVIEW-VIEW-GEOMETRY-WINDOWS-SMOKE-1)
+
+Campaign SHA: `1180997` pushed to `origin/corrective/view-geometry-1`.
+
+Environment: Windows 11 26200, AMD Radeon, single 2560×1440, **system scale
+100%** (cannot hot-apply 150% in-session). Rust 1.98.1 / Bun 1.2.8. PocketJS
+pin unchanged.
+
+Baseline: guest **121 pass**, cargo **31 pass**, release build OK.
+
+Live product smoke (release exe, absolute `--js`/`--pak`, fixtures under
+`.smoke-fixtures/`, logs+PNGs under `.smoke-evidence/` — binaries not committed):
+
+| Gate | Result | Evidence class |
+| --- | --- | --- |
+| A startup DPI | PASS @100% live: hello carries measured `window.scale_factor()` **= 1** (this machine). **Code + unit prove the ≠1 path** (`100% at dpi 1.5 realizes scale 1/1.5`); live log alone cannot distinguish a 1.0 placeholder at 100% DPI. 150% live **untested**. | code + unit(1.5) + weak live |
+| B DPI transition | **UNTESTED** (single monitor; no hot scale) | untested |
+| C toolbar mouse | PASS: Next/Refresh svc commands; RotL/RotR/FlipH/Reset visual D4 correct | live |
+| D alt-tab cancel | PASS (code+unit+live): `cancel_result.txt` records D1/D2/D3 all True. **D2 is the cancel oracle** (refocus while held, UP on Next → delta 0). D1 releases off-control (weak probe). | unit + durable live result file |
+| E drag ownership | PASS: canvas drag pans; cancel clears drag; toolbar press does not start canvas drag | live + code |
+| F wheel anchor | PARTIAL: live wheel zooms; off-center anchor **unit-proven**; live pixel-feature hold soft | unit + soft live |
+| G rotate/flip | PASS: RotL true 90° CCW; FlipH mirrors; image never vanishes (TEX_TRI) | live |
+| H EXIF O | PASS: O=6/O=8 boot upright; dims `1200×800` + Full resolution; Reset → O not S (`exif6-reset/`, **same image, no browse**) | live |
+| I Fit/viewport | PASS: Fit uses image viewport; no toolbar magic bias | live + unit |
+| J proxy truth | PASS: `proxy/00-boot.png` amber `Proxy`; `1:1` disabled (do not use post-Next `tb-*`) | live |
+| K resource stability | **Code proof**: view ops only mutate `ViewTransform`; no `open`/`cmdRefresh`. Boot-only `current item:` log **cannot** prove non-redecode by absence. | code (strong) |
+| L refresh/corrupt | PASS: corrupt error UI; refresh does not crash | live |
+
+Honest residual: 150% live DPI; multi-monitor DPI transition; cancel `cancel:true` packet is not host-logged (mouse svc is not `tlog`ged); wheel pointer-anchor pixel identity on Windows.
+
+PR60 collision reconfirmed against `9d352e4`: rebase after VG merge; keep VG
+hello scale + pointer path; keep PR60 embed as additive.
+
 ### Remaining before merge
 
-- Interactive Windows smoke on a real 150% DPI machine (wheel anchor, drag,
-  rotate visual, toolbar click, EXIF upright, pointer release outside).
-- Independent fresh-context adversarial review of this Corrective-2 diff.
-- Human merge decision. Do not auto-merge. PocketJS pin unchanged
+- Human merge decision (do not auto-merge). PocketJS pin unchanged
   (`24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb`).
+- Optional follow-up on a 150% machine: startup Actual Size physical-pixel check.
+- Optional follow-up: upstream PocketJS `draw.rs` comment-only patch.
 
 ## [S1] Problem
 
@@ -140,4 +172,4 @@ textured images are corner-transformed, clipped, and emitted as `TEX_TRI`.
 - [x] T3: Host pointer/wheel/scale forwarding + guest drag/wheel (covers: S2)
 - [x] T4: EXIF 1–8 materialization + Rotate/Flip/Reset UI (covers: S2)
 - [x] T4b: Corrective-2 — hello DPI, toolbar onPress, D4 normalize, EXIF fullRes lock, pointer-release (covers: S2)
-- [ ] T5: Interactive Windows smoke + adversarial review + finalize report (covers: S2; depends: T1–T4b)
+- [x] T5: Interactive Windows smoke + adversarial review + finalize report (covers: S2; depends: T1–T4b)
