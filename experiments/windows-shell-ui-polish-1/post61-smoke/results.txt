@@ -1,0 +1,14 @@
+﻿[PASS] S1 image from %TEMP% no --js/--pak 鈥?pid=28340 alive=True
+[PASS] S1 empty from C:\ no --js/--pak 鈥?pid=11588 alive=True
+[PASS] S1 spaced path from %TEMP% 鈥?path=C:\Users\fred1\source\PicoView\.worktrees\windows-shell-ui-polish-1\experiments\windows-shell-ui-polish-1\post61-smoke\spaced name.jpg
+[PASS] S1 explicit --js/--pak override 鈥?pid=19560
+[PASS] S8 register exit 鈥?exit=0
+[PASS] S8 ProgID command quoted 鈥?cmd="C:\Users\fred1\source\PicoView\.worktrees\windows-shell-ui-polish-1\native\target\release\picoview.exe" "%1"
+[PASS] S8 OpenWithProgids jpg/jpeg/png/bmp 鈥?ok=True
+[PASS] S8 no extension default seized 鈥?seized=False
+[PASS] S8 gif/webp not associated 鈥?present=False
+[PASS] S8 no RegisteredApplications write 鈥?value=
+[PASS] S8 unregister exit 鈥?exit=0
+[PASS] S8 unregister removes ProgID/OpenWith 鈥?prog=False ow=False
+[PASS] S5 keyboard focus window 鈥?hwnd=7668882 focused=True
+[PASS] S5 geometry/nav keys no crash 鈥?alive=True after Fit/1:1/zoom/nav/refresh
