@@ -21,7 +21,7 @@ PicoView uses **domain authority**, not one total document ranking.
 
 If Product and Architecture authority genuinely conflict, implementation stops until authority is repaired explicitly.
 
-`POCKETJS.lock` is the source-identity authority for the PocketJS revision actually consumed.
+`POCKETJS.lock` is the source-identity / subtree-provenance authority for the PocketJS revision actually consumed. PicoView builds against the in-tree git-subtree snapshot at `third_party/pocketjs`; Cargo PocketJS crates are path dependencies, not remote git dependencies.
 
 ---
 
@@ -801,8 +801,9 @@ Codec-specific frame/disposal semantics remain in Image; committed generic resou
 
 These are migration targets, not accepted design. Resolved 2026-09-16
 (`PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`, PocketJS integration revision
-`24bab5e`): ordinary decodes now MOVE the decoder's own RGBA plane into
-`Ui::upload_owned_rgba8` — no PSM-tagged seam on the PicoView path, no
+`24bab5e`, later subtree-synced at R1 tip `3a10550`): ordinary decodes now
+MOVE the decoder's own RGBA plane into `Ui::upload_owned_rgba8` — no
+PSM-tagged seam on the PicoView path, no
 aligned CPU texture storage for image admission (`TexBacking::Owned`), and
 `pocket-ui-wgpu` borrows the Owned plane directly into `Queue::write_texture`
 (no second RGBA vector). The ordinary Desktop image path satisfies ADR-0002.
@@ -831,7 +832,9 @@ Still open:
 
 # 21. Cross-repo rule
 
-If PicoView needs a capability generic to runtime/graphics, implement it in `jnhu76/pocketjs` first, review it there, freeze the exact reviewed commit on `integration/picoview-desktop`, then advance `POCKETJS.lock` to that exact SHA. Neither `jnhu76/pocketjs` main nor `pocket-stack/pocketjs` main is an integration target for PicoView-specific dependency advancement.
+If PicoView needs a capability generic to runtime/graphics, implement it in `jnhu76/pocketjs` first, review it there, freeze the exact reviewed commit on `integration/picoview-desktop`, then sync that revision into `third_party/pocketjs` with `git subtree pull --prefix=third_party/pocketjs pocketjs integration/picoview-desktop --squash` and advance `POCKETJS.lock` to the exact imported SHA. Neither `jnhu76/pocketjs` main nor `pocket-stack/pocketjs` main is an integration target for PicoView-specific dependency advancement.
+
+PicoView consumes the committed subtree snapshot (path dependencies into `third_party/pocketjs`); it does not fetch PocketJS crates as Cargo git dependencies and does not use git submodules.
 
 Likely PocketJS work includes:
 

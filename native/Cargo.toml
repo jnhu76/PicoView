@@ -9,17 +9,17 @@ description = "PicoView native host: Current Item authority, WIC baseline decode
 name = "picoview"
 path = "src/main.rs"
 
-# PocketJS is consumed at the exact revision pinned by PicoView's POCKETJS.lock
-# (jnhu76/pocketjs:integration/picoview-desktop). No submodule, no vendoring,
-# no path/`..` dependency. Every PocketJS git dependency below must stay on
-# that same exact revision.
+# PocketJS is consumed from the in-tree git-subtree snapshot at
+# third_party/pocketjs (see POCKETJS.lock). Path dependencies only — no
+# PocketJS git/submodule sources. Future sync uses git subtree pull, not
+# manual copying.
 [dependencies]
-pocketjs-core = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb", features = ["std"] }
-pocket-mod = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb" }
-pocket-ui-surface = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb" }
-pocket-text = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb" }
-pocket-ui-wgpu = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb" }
-pocket3d = { git = "https://github.com/jnhu76/pocketjs.git", rev = "24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb", default-features = false }
+pocketjs-core = { path = "../third_party/pocketjs/engine/core", features = ["std"] }
+pocket-mod = { path = "../third_party/pocketjs/engine/crates/pocket-mod" }
+pocket-ui-surface = { path = "../third_party/pocketjs/engine/crates/pocket-ui-surface" }
+pocket-text = { path = "../third_party/pocketjs/engine/crates/pocket-text" }
+pocket-ui-wgpu = { path = "../third_party/pocketjs/engine/crates/pocket-ui-wgpu" }
+pocket3d = { path = "../third_party/pocketjs/engine/pocket3d/crates/pocket3d", default-features = false }
 wgpu = "25"
 winit = "0.30"
 anyhow = "1"

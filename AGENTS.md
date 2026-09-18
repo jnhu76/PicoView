@@ -153,15 +153,15 @@ Use the exact current Architecture/SPEC/accepted ADR text when adjudicating a ca
 
 ## Cross-repo rule
 
-PicoView consumes `jnhu76/pocketjs` at the exact revision pinned in `POCKETJS.lock`.
+PicoView consumes PocketJS from the in-tree git-subtree snapshot at `third_party/pocketjs`. `POCKETJS.lock` records the exact upstream `jnhu76/pocketjs` revision imported there (`revision` = subtree provenance authority). Cargo path dependencies resolve those crates from `third_party/pocketjs`; there is no PocketJS git dependency and no git submodule.
 
-If PicoView needs a **generic runtime/graphics capability**, implement it in PocketJS first, review it there, freeze the exact reviewed commit on `integration/picoview-desktop`, then deliberately advance `POCKETJS.lock` to that exact SHA. Neither `jnhu76/pocketjs` main nor `pocket-stack/pocketjs` main is an integration target for PicoView-specific dependency advancement.
+If PicoView needs a **generic runtime/graphics capability**, implement it in PocketJS first, review it there, freeze the exact reviewed commit on `integration/picoview-desktop`, then deliberately advance the subtree via `git subtree pull --prefix=third_party/pocketjs` and update `POCKETJS.lock`. Neither `jnhu76/pocketjs` main nor `pocket-stack/pocketjs` main is an integration target for PicoView-specific dependency advancement.
 
 The direct Desktop/wgpu image-admission capability required by ADR-0002 is a PocketJS-generic graphics correction to the shared native-desktop backend family. Do not implement a PicoView-only `PSM_8888` detour or a Windows-only renderer to avoid changing PocketJS.
 
 PicoView-specific Product/Image policy stays in PicoView.
 
-No submodule, vendored copy, or hidden local PocketJS patch may substitute for the upstream process.
+Do not manually copy PocketJS files into or out of `third_party/pocketjs`. Do not hide a local PocketJS fork that bypasses the upstream review + subtree sync process. The committed subtree snapshot is the reviewed integration source, not a private patch pile.
 
 ---
 
