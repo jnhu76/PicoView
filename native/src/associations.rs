@@ -27,12 +27,12 @@ const PROG_ID_DESC: &str = "PicoView Image";
 /// Register PicoView as an Open With / default-capable handler for the
 /// conservative product set under HKCU. Idempotent.
 pub fn register_associations(exe: &Path) -> anyhow::Result<()> {
-    use windows::core::{HSTRING, PCWSTR};
     use windows::Win32::Foundation::ERROR_SUCCESS;
     use windows::Win32::System::Registry::{
-        RegCloseKey, RegCreateKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
-        KEY_WRITE, REG_OPEN_CREATE_OPTIONS, REG_SZ,
+        HKEY, HKEY_CURRENT_USER, KEY_WRITE, REG_OPEN_CREATE_OPTIONS, REG_SZ, RegCloseKey,
+        RegCreateKeyExW, RegSetValueExW,
     };
+    use windows::core::{HSTRING, PCWSTR};
 
     let exe_str = exe
         .canonicalize()
@@ -48,8 +48,7 @@ pub fn register_associations(exe: &Path) -> anyhow::Result<()> {
             let hval = HSTRING::from(value);
             let bytes =
                 std::slice::from_raw_parts(hval.as_ptr() as *const u8, (hval.len() + 1) * 2);
-            let status =
-                RegSetValueExW(key, PCWSTR(hname.as_ptr()), Some(0), REG_SZ, Some(bytes));
+            let status = RegSetValueExW(key, PCWSTR(hname.as_ptr()), Some(0), REG_SZ, Some(bytes));
             if status != ERROR_SUCCESS {
                 anyhow::bail!("RegSetValueExW({name}) failed: {status:?}");
             }
@@ -124,16 +123,13 @@ pub fn register_associations(exe: &Path) -> anyhow::Result<()> {
 
 /// Remove the registration written by [`register_associations`]. Idempotent.
 pub fn unregister_associations() -> anyhow::Result<()> {
+    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteTreeW};
     use windows::core::{HSTRING, PCWSTR};
-    use windows::Win32::System::Registry::{RegDeleteTreeW, HKEY_CURRENT_USER};
 
     unsafe {
         for ext in ASSOCIATED_EXTENSIONS {
             delete_value_if_ours(&format!(r"Software\Classes\{ext}"));
-            delete_value(
-                &format!(r"Software\Classes\{ext}\OpenWithProgids"),
-                PROG_ID,
-            );
+            delete_value(&format!(r"Software\Classes\{ext}\OpenWithProgids"), PROG_ID);
         }
         let prog = HSTRING::from(format!(r"Software\Classes\{PROG_ID}"));
         let _ = RegDeleteTreeW(HKEY_CURRENT_USER, PCWSTR(prog.as_ptr()));
@@ -146,11 +142,11 @@ pub fn unregister_associations() -> anyhow::Result<()> {
 
 unsafe fn delete_value(path: &str, name: &str) {
     unsafe {
-        use windows::core::{HSTRING, PCWSTR};
         use windows::Win32::Foundation::ERROR_SUCCESS;
         use windows::Win32::System::Registry::{
-            RegCloseKey, RegDeleteValueW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, KEY_WRITE,
+            HKEY, HKEY_CURRENT_USER, KEY_WRITE, RegCloseKey, RegDeleteValueW, RegOpenKeyExW,
         };
+        use windows::core::{HSTRING, PCWSTR};
 
         let hpath = HSTRING::from(path);
         let hname = HSTRING::from(name);
@@ -171,12 +167,12 @@ unsafe fn delete_value(path: &str, name: &str) {
 
 unsafe fn delete_value_if_ours(path: &str) {
     unsafe {
-        use windows::core::{HSTRING, PCWSTR};
         use windows::Win32::Foundation::ERROR_SUCCESS;
         use windows::Win32::System::Registry::{
-            RegCloseKey, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY,
-            HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_SZ,
+            HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_SZ, RegCloseKey, RegOpenKeyExW,
+            RegQueryValueExW, RegSetValueExW,
         };
+        use windows::core::{HSTRING, PCWSTR};
 
         let hpath = HSTRING::from(path);
         let mut key = HKEY::default();
