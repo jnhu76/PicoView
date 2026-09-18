@@ -801,7 +801,8 @@ Codec-specific frame/disposal semantics remain in Image; committed generic resou
 
 These are migration targets, not accepted design. Resolved 2026-09-16
 (`PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`, PocketJS integration revision
-`24bab5e`, later subtree-synced at R1 tip `3a10550`): ordinary decodes now
+`24bab5e`, later subtree-synced at R1 tip `3a10550` / consumerization tip
+`2463873`): ordinary decodes now
 MOVE the decoder's own RGBA plane into `Ui::upload_owned_rgba8` — no
 PSM-tagged seam on the PicoView path, no
 aligned CPU texture storage for image admission (`TexBacking::Owned`), and
@@ -822,7 +823,7 @@ Still open:
 - current sampling preference is partly stored as texture state rather than purely generic draw policy;
 - current `NATIVE_TEX_MAX_DIM` embeds a wgpu-default-class limit in core and PicoView uses it as an admission/downsample trigger;
 - current giant-image path silently creates a reduced resource, so full-resolution capability needs truthful separation;
-- renderer/presentation authority is still partly implemented in PicoView host code (window/swapchain plumbing adapted from the portable desktop host; rendering itself is `pocket-ui-wgpu`);
+- host window/swapchain plumbing remains product-owned in `native/src/gpu.rs`; generic R1 geometry/signature/filter identity is consumed from shared `pocket-desktop-host` + `pocket-ui-wgpu` (no second local geometry implementation);
 - current Windows presentation path has no proved software renderer fallback;
 - current color/alpha boundary is effectively RGBA8/PSM-oriented rather than the generic admission contract;
 - current decode path always materializes CPU RGBA even though future accelerator-direct/import paths are allowed;

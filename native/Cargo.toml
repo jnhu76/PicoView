@@ -20,6 +20,8 @@ pocket-ui-surface = { path = "../third_party/pocketjs/engine/crates/pocket-ui-su
 pocket-text = { path = "../third_party/pocketjs/engine/crates/pocket-text" }
 pocket-ui-wgpu = { path = "../third_party/pocketjs/engine/crates/pocket-ui-wgpu" }
 pocket3d = { path = "../third_party/pocketjs/engine/pocket3d/crates/pocket3d", default-features = false }
+# Shared R1 presentation geometry (PocketJS hosts/desktop library export).
+pocket-desktop-host = { path = "../third_party/pocketjs/hosts/desktop" }
 wgpu = "25"
 winit = "0.30"
 anyhow = "1"

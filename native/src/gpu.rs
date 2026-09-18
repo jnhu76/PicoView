@@ -3,14 +3,17 @@
 //! (Adapted from the PocketJS portable desktop host for PicoView's
 //! single-package runtime — no AppSupervisor child surfaces.)
 //!
-//! Boundary note: all actual rendering is the shared `pocket-ui-wgpu` stack
-//! (`UiRenderer` records the UI, `Blit` presents the retained target) — this
-//! module is window/swapchain plumbing only, not a PicoView renderer. The
-//! adaptation exists because `hosts/desktop` at the locked PocketJS revision
-//! is a binary crate; consolidating onto a reusable shared desktop host
-//! belongs upstream (ADR-0002 §1), not here.
+//! Boundary note: PocketJS renders; PicoView host presents.
+//! - All actual rendering is the shared `pocket-ui-wgpu` stack
+//!   (`UiRenderer` records the UI, `BlitSet` presents the retained target).
+//! - Live presentation geometry and Exact/Transient identity come from the
+//!   shared `pocket-desktop-host` library (`PresentationGeometry`,
+//!   `RenderSignature`, `BlitFilter`). This module is window/swapchain
+//!   plumbing plus product-specific first-present recovery — not a PicoView
+//!   renderer and not a second R1 geometry implementation.
 use anyhow::Result;
-use pocket_ui_wgpu::{Blit, UiRenderer};
+use pocket_desktop_host::PresentationGeometry;
+use pocket_ui_wgpu::{BlitFilter, BlitSet, UiRenderer};
 use pocket3d::gpu::Gpu;
 use pocket_ui_surface::UiSurface;
 use std::sync::Arc;
@@ -85,14 +88,20 @@ impl Renderer {
     /// A target remains leased until presentation has submitted its sampling
     /// commands. Shared queue ordering then makes reuse safe without readback
     /// or waiting for GPU completion on either CPU thread. Callers gate on the
-    /// frame hash so static frames present the retained GPU image without
-    /// re-recording.
+    /// shared RenderSignature so static frames present the retained GPU image
+    /// without re-recording.
+    ///
+    /// R1 Corrective A: `geometry.physical()` is measured live client size —
+    /// never `logical × package_density`. `live_scale` is the effective f32
+    /// passed to `render_words_scaled` (presentation authority). Package
+    /// raster density remains cook authority for fonts/assets only.
     pub fn render(
         &mut self,
         surface: &UiSurface,
-        size: (u32, u32),
-        density: f32,
+        geometry: PresentationGeometry,
     ) -> Result<Option<Arc<Target>>> {
+        let size = geometry.physical();
+        let live_scale = geometry.effective_render_scale();
         let Some(frame) = self.acquire_target(size)? else {
             return Ok(None);
         };
@@ -111,7 +120,7 @@ impl Renderer {
                 &mut encoder,
                 &frame.view,
                 size,
-                density,
+                live_scale,
                 wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             )
         })?;
@@ -124,14 +133,16 @@ pub struct Presentation {
     pub gpu: Arc<Gpu>,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
-    blits: Vec<(std::sync::Weak<Target>, Blit)>,
+    /// Cached Exact+Transient blit pair per retained Target (R1 Corrective B).
+    blits: Vec<(std::sync::Weak<Target>, BlitSet)>,
     /// AMD Vulkan driver 25.8.1 (this machine) has a state-dependent defect
     /// where the first swapchain created on a freshly shown window reports
     /// presents as submitted while DWM never composites them — the window
     /// stays blank and nothing (present result, OUT_OF_DATE, SUBOPTIMAL)
     /// reports the failure. Recreating the swapchain recovers. One-shot
     /// reconfigure immediately before the first present; event-shaped, no
-    /// timers. See docs/PICOVIEW-V1-OPEN-ONE-IMAGE-1-EVIDENCE.md §7.
+    /// timers. Product/platform workaround — not a generic PocketJS rule.
+    /// See docs/PICOVIEW-V1-OPEN-ONE-IMAGE-1-EVIDENCE.md §7.
     reconfigure_before_first_present: bool,
 }
 impl Presentation {
@@ -153,6 +164,7 @@ impl Presentation {
         .into_iter()
         .find(|format| caps.formats.contains(format))
         .ok_or_else(|| anyhow::anyhow!("GPU surface has no portable 8-bit color format"))?;
+        // Initial swapchain uses the measured client size at window create.
         let size = window.inner_size();
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -185,6 +197,7 @@ impl Presentation {
         })
     }
     pub fn present(&mut self, window: &winit::window::Window, target: &Arc<Target>) -> Result<bool> {
+        // Presentation authority: measured live physical client size.
         let size = window.inner_size();
         if size.width == 0 || size.height == 0 {
             return Ok(false);
@@ -203,6 +216,19 @@ impl Presentation {
             self.config.height = size.height;
             self.surface.configure(&self.gpu.device, &self.config);
         }
+        let swapchain = (self.config.width, self.config.height);
+        // Shared R1 policy: Exact/Nearest when retained target equals live
+        // swapchain; Transient/Linear only as a size bridge. No easing.
+        let policy = BlitFilter::select(target.size, swapchain);
+        crate::tlog(&format!(
+            "R1 present: retained={}x{} swapchain={}x{} policy={:?} filter={:?}",
+            target.size.0,
+            target.size.1,
+            swapchain.0,
+            swapchain.1,
+            policy,
+            policy.wgpu_filter()
+        ));
         let output = match self.surface.get_current_texture() {
             Ok(output) => output,
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
@@ -220,6 +246,7 @@ impl Presentation {
         };
         // Weak identities retain bind groups without leasing a frame from the
         // worker's bounded pool. Rebuild only when the pool changes on resize.
+        // Filter policy is selected per present from live sizes — not frozen.
         self.blits.retain(|(frame, _)| frame.strong_count() > 0);
         let key = Arc::downgrade(target);
         let index = match self
@@ -229,14 +256,8 @@ impl Presentation {
         {
             Some(index) => index,
             None => {
-                let blit = Blit::new(
-                    &self.gpu,
-                    &target.view,
-                    self.config.format,
-                    wgpu::FilterMode::Nearest,
-                    false,
-                );
-                self.blits.push((key, blit));
+                let blits = BlitSet::new(&self.gpu, &target.view, self.config.format, false);
+                self.blits.push((key, blits));
                 self.blits.len() - 1
             }
         };
@@ -262,12 +283,48 @@ impl Presentation {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            self.blits[index].1.draw(&mut pass);
+            self.blits[index].1.draw(&mut pass, policy);
         }
         self.gpu.queue.submit([encoder.finish()]);
         window.pre_present_notify();
         output.present();
         crate::tlog("swapchain present submitted");
         Ok(true)
+    }
+}
+
+/// Shared-library consumption smoke: Fixed policy keeps product logical
+/// while physical stays measured. Proves PicoView does not carry a second
+/// R1 geometry implementation.
+#[cfg(test)]
+mod tests {
+    use pocket_desktop_host::{resolve_geometry, ViewportPolicy, DESKTOP_DYNAMIC_MIN};
+
+    #[test]
+    fn fixed_policy_keeps_product_logical_with_measured_physical() {
+        let geo = resolve_geometry(
+            ViewportPolicy::Fixed,
+            (960, 640),
+            (1200, 800),
+            1.25,
+        );
+        assert_eq!(geo.logical(), (960, 640));
+        assert_eq!(geo.physical(), (1200, 800));
+        assert!((geo.effective_render_scale() - 1.25).abs() < 1e-6);
+        // Product logical is NOT replaced by the PocketJS dynamic floor.
+        assert_ne!(geo.logical(), DESKTOP_DYNAMIC_MIN);
+        assert!(geo.is_exact_present((1200, 800)));
+        assert!(!geo.is_exact_present((1000, 700)));
+    }
+
+    #[test]
+    fn signature_includes_physical_and_effective_scale() {
+        use pocket_desktop_host::{PresentationGeometry, RenderSignature};
+        let geo = PresentationGeometry::from_live((960, 640), (1440, 960), 1.5);
+        let a = RenderSignature::from_geometry(1, 2, geo);
+        let b = RenderSignature::new(1, 2, (1440, 960), 1.5);
+        assert_eq!(a, b);
+        let resized = PresentationGeometry::from_live((960, 640), (1200, 800), 1.5);
+        assert_ne!(a, RenderSignature::from_geometry(1, 2, resized));
     }
 }
