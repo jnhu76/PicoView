@@ -3,7 +3,7 @@ feature: desktop-ui-normalization-1
 status: delivered
 updated: 2026-09-18
 branch: fix/ui-chrome-1
-commits: 880d58a00d90087558292f80f4366b7f92a23298..pending-conformance
+commits: 880d58a00d90087558292f80f4366b7f92a23298..bdbd413
 corrective: PICOVIEW-PR62-DESKTOP-CONFORMANCE-1
 ---
 
@@ -279,11 +279,11 @@ evidence — not claimed as #62 raster perfection.
 
 ## Delivery checklist
 
-After the conformance corrective commit on this branch:
+Conformance corrective `bdbd413` on this branch:
 
-- [ ] `bun test guest/` pass
-- [ ] `pocket.ts compile --target windows-app` pass
-- [ ] `cargo build --release` pass
-- [ ] PR body no longer claims “presentation only / no geometry change”
-- [ ] PR body states chrome ownership + product min 384×240
-- [ ] Feature-doc Reflect/out-of-scope/task text matches FlipH/FlipV model
+- [x] `bun test guest/` — **172 pass / 0 fail**
+- [x] `pocket.ts compile --target windows-app` pass (icons bake 64×64 @2x, `sampled linear`)
+- [x] `cargo build --release` OK (pre-existing dead_code/unused_mut warnings only)
+- [x] PR body no longer claims “presentation only / no geometry change”
+- [x] PR body states chrome ownership + product min 384×240
+- [x] Feature-doc Reflect/out-of-scope/task text matches FlipH/FlipV model
