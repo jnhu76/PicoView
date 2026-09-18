@@ -12,8 +12,10 @@ Current authority:
 - Execution contract: `docs/SPEC/PicoView-v1.1.md`
 - Current state: `CONTEXT.md`
 - Sequencing: `docs/ROADMAP.md`
+- PocketJS integration contract: `docs/integration/POCKETJS.md`
+- PocketJS provenance: `POCKETJS.lock` (in-tree snapshot at `third_party/pocketjs`)
 
-Superseded authority under `docs/history/` is history/evidence only.
+Superseded authority and campaign evidence under `docs/history/` are history/evidence only. They may name old SHAs, old module paths, or obsolete dependency models; they do not describe current code.
 
 ---
 
@@ -23,7 +25,7 @@ Superseded authority under `docs/history/` is history/evidence only.
 2. Read relevant ADRs and `docs/ARCHITECTURE.md` for boundaries/invariants.
 3. Read the current SPEC for executable contracts.
 4. Read `CONTEXT.md`, `docs/ROADMAP.md`, and the assigned issue for current sequencing.
-5. Read `POCKETJS.lock` and the exact locked PocketJS code when runtime/graphics behavior is involved.
+5. Read `POCKETJS.lock`, `docs/integration/POCKETJS.md`, and the exact locked PocketJS code under `third_party/pocketjs` when runtime/graphics behavior is involved.
 6. For Windows/Desktop graphics work, inspect the existing PocketJS **macOS/Linux `hosts/desktop` + `pocket-ui-wgpu` implementation first**. Windows joins that native-desktop family; PSP/Vita/3DS/ESP32 physical rules are comparative evidence, not Desktop requirements.
 7. Read `docs/BENCHMARK.md` before making physical performance/memory claims.
 
@@ -154,6 +156,8 @@ Use the exact current Architecture/SPEC/accepted ADR text when adjudicating a ca
 ## Cross-repo rule
 
 PicoView consumes PocketJS from the in-tree git-subtree snapshot at `third_party/pocketjs`. `POCKETJS.lock` records the exact upstream `jnhu76/pocketjs` revision imported there (`revision` = subtree provenance authority). Cargo path dependencies resolve those crates from `third_party/pocketjs`; there is no PocketJS git dependency and no git submodule.
+
+Human-facing ownership and update procedure: `docs/integration/POCKETJS.md`.
 
 If PicoView needs a **generic runtime/graphics capability**, implement it in PocketJS first, review it there, freeze the exact reviewed commit on `integration/picoview-desktop`, then deliberately advance the subtree via `git subtree pull --prefix=third_party/pocketjs` and update `POCKETJS.lock`. Neither `jnhu76/pocketjs` main nor `pocket-stack/pocketjs` main is an integration target for PicoView-specific dependency advancement.
 

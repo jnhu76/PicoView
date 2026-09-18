@@ -63,4 +63,4 @@ purpose = PicoView Windows Desktop runtime integration
 # - 6e631f463016a258e63fc9a5f922117b94d4f89f → df869a51225df5e310b84612c9195030c058b6d9
 #   (jnhu76/pocketjs#1, the V1 image-quality corrective): introduced
 #   Ui::register_native_texture / Ui::texture_live_bytes. Superseded by owned
-#   admission; see docs/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md.
+#   admission; see docs/history/corrective/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md.

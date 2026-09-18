@@ -1,10 +1,10 @@
 # PicoView Architecture — Viewer / Image / Rendering Semantics
 
 Status: **CURRENT ARCHITECTURE AUTHORITY**  
-Date: **2026-09-16**  
+Date: **2026-09-18**  
 Decision: `docs/ADR/ADR-0001-viewer-image-rendering-authority.md`
 
-This document defines PicoView's target architecture and program semantics. It is not a claim that current code already conforms.
+This document is the current architecture authority: semantic boundaries, coordinate semantics, ownership, lifetime, rendering contracts, and physical invariants. Implementation is expected to conform; open differentials are listed in §20 rather than implied by historical campaign wording.
 
 Superseded authority is archived under `docs/history/authority-reset-20260915/`.
 
@@ -22,6 +22,73 @@ PicoView uses **domain authority**, not one total document ranking.
 If Product and Architecture authority genuinely conflict, implementation stops until authority is repaired explicitly.
 
 `POCKETJS.lock` is the source-identity / subtree-provenance authority for the PocketJS revision actually consumed. PicoView builds against the in-tree git-subtree snapshot at `third_party/pocketjs`; Cargo PocketJS crates are path dependencies, not remote git dependencies.
+
+Human-facing integration rules: `docs/integration/POCKETJS.md`.
+
+---
+
+# 0b. Current source layout (post Stage B)
+
+Code reality after Stage B native structure cleanup (PR #66) and R1 presentation consume.
+
+## PocketJS dependency model
+
+```text
+jnhu76/pocketjs
+  integration/picoview-desktop   ← reviewed freeze branch
+        │
+        │  git subtree pull --prefix=third_party/pocketjs … --squash
+        ▼
+third_party/pocketjs             ← in-tree snapshot (path deps)
+        ▲
+        │
+POCKETJS.lock  revision = provenance authority
+```
+
+Not used on the normal path: git submodule; remote Cargo git dependency on PocketJS crates.
+
+## Native host modules
+
+| Module | Authority |
+| --- | --- |
+| `native/src/main.rs` | process composition (logger, shell-action early dispatch, CLI, event-loop assembly, run/error) |
+| `native/src/app.rs` | window / winit / native input |
+| `native/src/runtime.rs` | guest worker / scheduling |
+| `native/src/presentation.rs` | retained target / swapchain plumbing; PocketJS `pocket-ui-wgpu` renders |
+| `native/src/current_item/mod.rs` | Product CurrentItem orchestration |
+| `native/src/current_item/decode.rs` | decode / Image semantics (WIC, EXIF orientation → O, RGBA plane) |
+| `native/src/current_item/publication.rs` | publication / lifetime protocol (tokens, svc events, commit vs deferred release) |
+| `native/src/browse_session.rs` | directory listing / navigation state |
+| `native/src/associations.rs` | Windows file associations |
+| `native/src/assets.rs` | embedded guest assets |
+
+Removed as current paths: `gpu.rs`; monolithic `current_item.rs`. Historical evidence may still name those modules when describing older SHAs.
+
+## Presentation authority after R1
+
+- Generic geometry/signature/filter identity is consumed from shared PocketJS: `pocket-desktop-host` (`PresentationGeometry`, `ViewportPolicy`, `RenderSignature`, `resolve_geometry`) + `pocket-ui-wgpu` (`BlitSet`, `BlitFilter`, `UiRenderer`).
+- PicoView presentation policy is **Dynamic**: boot / Resized / ScaleFactorChanged resolve logical from **measured physical + live OS scale**.
+- Package density is **cook-only**, not presentation scale.
+- Sampling presentation uses Exact / Nearest and Transient / Linear rules from the shared R1 contract.
+- `Host.viewport` in guest config is only the initial/default requested logical size (normally 960×640), not frozen Product logical authority.
+- Product minimum usable logical client remains `384×240` (not PocketJS platform floor `240×180`).
+- Product owns host window/swapchain wiring; it does not own a second local geometry implementation.
+
+## CurrentItem pipeline (current code)
+
+```text
+filesystem path
+→ WIC decode
+→ EXIF orientation materialized into O
+→ owned RGBA8 admission (Ui::upload_owned_rgba8 moves the decoder plane)
+→ publication event
+→ guest observation boundary
+→ deferred superseded release
+```
+
+- Image bytes never cross QuickJS; guest payloads are bounded semantic JSON.
+- Ordinary full-resolution images are admitted at source resolution (within admission bounds); Fit is view/presentation, not a required CPU pre-shrink.
+- Publication commit and superseded resource release are separate transitions; release requires an observation boundary.
 
 ---
 
@@ -799,15 +866,9 @@ Codec-specific frame/disposal semantics remain in Image; committed generic resou
 
 # 20. Current known implementation differentials
 
-These are migration targets, not accepted design. Resolved 2026-09-16
-(`PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`, PocketJS integration revision
-`24bab5e`, later subtree-synced at R1 tip `3a10550` / consumerization tip
-`2463873`): ordinary decodes now
-MOVE the decoder's own RGBA plane into `Ui::upload_owned_rgba8` — no
-PSM-tagged seam on the PicoView path, no
-aligned CPU texture storage for image admission (`TexBacking::Owned`), and
-`pocket-ui-wgpu` borrows the Owned plane directly into `Queue::write_texture`
-(no second RGBA vector). The ordinary Desktop image path satisfies ADR-0002.
+These are migration targets, not accepted design.
+
+**Resolved (ordinary image path).** Direct Desktop image admission is in the current subtree snapshot (`POCKETJS.lock` revision `24638737473cc7cd85202ba15adba511b79d9980`): ordinary decodes MOVE the decoder's own RGBA plane into `Ui::upload_owned_rgba8` — no PSM-tagged seam on the PicoView path, no aligned CPU texture storage for image admission (`TexBacking::Owned`), and `pocket-ui-wgpu` borrows the Owned plane directly into `Queue::write_texture` (no second RGBA vector). The ordinary Desktop image path satisfies ADR-0002. Campaign closeouts for the earlier remote-pin era are archived under `docs/history/corrective/`.
 
 Resolved 2026-09-17 (`PICOVIEW-LAST-GOOD-PUBLICATION-1`): refresh/last-good
 publication ordering — the candidate is admitted before the previous
@@ -823,7 +884,7 @@ Still open:
 - current sampling preference is partly stored as texture state rather than purely generic draw policy;
 - current `NATIVE_TEX_MAX_DIM` embeds a wgpu-default-class limit in core and PicoView uses it as an admission/downsample trigger;
 - current giant-image path silently creates a reduced resource, so full-resolution capability needs truthful separation;
-- host window/swapchain plumbing remains product-owned in `native/src/presentation.rs` (formerly `gpu.rs`); generic R1 geometry/signature/filter identity is consumed from shared `pocket-desktop-host` + `pocket-ui-wgpu` (no second local geometry implementation). PicoView presentation policy is **Dynamic** (`viewport.dynamic` in `guest/pocket.json`): live logical is derived from measured physical + OS scale; `Host.viewport` is only the initial/default requested logical size. Product window/OS minimum remains 384×240 logical (not PocketJS platform floor 240×180);
+- host window/swapchain plumbing remains product-owned in `native/src/presentation.rs`; generic R1 geometry/signature/filter identity is consumed from shared `pocket-desktop-host` + `pocket-ui-wgpu` (no second local geometry implementation). PicoView presentation policy is **Dynamic** (`viewport.dynamic` in `guest/pocket.json`): live logical is derived from measured physical + OS scale; `Host.viewport` is only the initial/default requested logical size. Product window/OS minimum remains 384×240 logical (not PocketJS platform floor 240×180);
 - current Windows presentation path has no proved software renderer fallback;
 - current color/alpha boundary is effectively RGBA8/PSM-oriented rather than the generic admission contract;
 - current decode path always materializes CPU RGBA even though future accelerator-direct/import paths are allowed;
