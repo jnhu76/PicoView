@@ -1,11 +1,16 @@
-//! GPU resources stay outside the guest ABI. The runtime worker records and
-//! submits rendering; the window thread presents a retained GPU image.
+//! Native host presentation plumbing.
+//!
+//! PicoView does NOT own the renderer. PocketJS renders via the shared
+//! `pocket-ui-wgpu` stack (`UiRenderer` records the UI, `BlitSet` presents
+//! the retained target). This module owns only PicoView native host
+//! presentation: retained targets, the Renderer adapter that calls
+//! `pocket-ui-wgpu::UiRenderer`, swapchain configuration, and Exact/Transient
+//! present selection.
+//!
 //! (Adapted from the PocketJS portable desktop host for PicoView's
 //! single-package runtime — no AppSupervisor child surfaces.)
 //!
-//! Boundary note: PocketJS renders; PicoView host presents.
-//! - All actual rendering is the shared `pocket-ui-wgpu` stack
-//!   (`UiRenderer` records the UI, `BlitSet` presents the retained target).
+//! Boundary note: PocketJS renders; PicoView native host presents.
 //! - Live presentation geometry and Exact/Transient identity come from the
 //!   shared `pocket-desktop-host` library (`PresentationGeometry`,
 //!   `RenderSignature`, `BlitFilter`). This module is window/swapchain
@@ -13,9 +18,9 @@
 //!   renderer and not a second R1 geometry implementation.
 use anyhow::Result;
 use pocket_desktop_host::PresentationGeometry;
+use pocket_ui_surface::UiSurface;
 use pocket_ui_wgpu::{BlitFilter, BlitSet, UiRenderer};
 use pocket3d::gpu::Gpu;
-use pocket_ui_surface::UiSurface;
 use std::sync::Arc;
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -50,7 +55,11 @@ impl Target {
             view_formats: &[],
         });
         let view = texture.create_view(&Default::default());
-        Ok(Self { _texture: texture, view, size })
+        Ok(Self {
+            _texture: texture,
+            view,
+            size,
+        })
     }
 }
 
@@ -196,7 +205,11 @@ impl Presentation {
             reconfigure_before_first_present: true,
         })
     }
-    pub fn present(&mut self, window: &winit::window::Window, target: &Arc<Target>) -> Result<bool> {
+    pub fn present(
+        &mut self,
+        window: &winit::window::Window,
+        target: &Arc<Target>,
+    ) -> Result<bool> {
         // Presentation authority: measured live physical client size.
         let size = window.inner_size();
         if size.width == 0 || size.height == 0 {
@@ -298,8 +311,8 @@ impl Presentation {
 #[cfg(test)]
 mod tests {
     use pocket_desktop_host::{
-        resolve_geometry, PresentationGeometry, RenderSignature, ViewportPolicy,
-        DESKTOP_DYNAMIC_MIN,
+        DESKTOP_DYNAMIC_MIN, PresentationGeometry, RenderSignature, ViewportPolicy,
+        resolve_geometry,
     };
     use pocket_ui_wgpu::BlitFilter;
 
