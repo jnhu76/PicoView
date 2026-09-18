@@ -1,0 +1,57 @@
+[2026-09-18T12:45:35Z INFO  picoview] [     0.0ms] process start
+[2026-09-18T12:45:35Z INFO  picoview] [    24.7ms] window created (hidden until first frame)
+[2026-09-18T12:45:36Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-18T12:45:36Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-18T12:45:36Z INFO  picoview] [   640.1ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-18T12:45:36Z INFO  picoview] [   640.5ms] R1 boot geometry: policy=Dynamic initial_requested=960x640 measured_physical=960x640 os_scale=1 package_density=2 logical=960x640 render_scale=1
+[2026-09-18T12:45:36Z INFO  picoview] [   640.6ms] Resized 960x640
+[2026-09-18T12:45:36Z INFO  picoview] [   699.2ms] R1 runtime booted: policy=Dynamic initial_requested=960x640 logical=960x640 physical=960x640 live_scale=1 package_density=2
+[2026-09-18T12:45:36Z INFO  picoview] [   699.3ms] R1 presentation update: logical=960x640 physical=960x640 os_scale=1
+[2026-09-18T12:45:36Z INFO  picoview] [   710.2ms] R1 render request: logical=960x640 physical=960x640 live_scale=1
+[2026-09-18T12:45:36Z INFO  picoview] [   712.1ms] render submit (tick 1)
+[2026-09-18T12:45:36Z INFO  picoview] [   712.3ms] frame ready from worker (tick 1)
+[2026-09-18T12:45:36Z INFO  picoview] [   712.3ms] present begin (frame tick 1)
+[2026-09-18T12:45:36Z INFO  picoview] [   712.3ms] first-present recovery: reconfigure swapchain
+[2026-09-18T12:45:36Z INFO  picoview] [   723.6ms] R1 present: retained=960x640 swapchain=960x640 policy=Exact filter=Nearest
+[2026-09-18T12:45:36Z INFO  picoview] [   727.8ms] swapchain present submitted
+[2026-09-18T12:45:36Z INFO  picoview] [   727.8ms] present end (frame tick 1, submitted true)
+[2026-09-18T12:45:36Z INFO  picoview] [   746.2ms] window shown after first presented frame
+[2026-09-18T12:45:36Z INFO  picoview] [   746.3ms] Resized 960x640
+[2026-09-18T12:45:36Z INFO  picoview] [   746.4ms] RedrawRequested
+[2026-09-18T12:45:36Z INFO  picoview] [   746.4ms] present begin (frame tick 1)
+[2026-09-18T12:45:36Z INFO  picoview] [   746.4ms] R1 present: retained=960x640 swapchain=960x640 policy=Exact filter=Nearest
+[2026-09-18T12:45:36Z INFO  picoview] [   746.9ms] swapchain present submitted
+[2026-09-18T12:45:36Z INFO  picoview] [   746.9ms] present end (frame tick 1, submitted true)
+[2026-09-18T12:45:36Z INFO  picoview] [   749.6ms] R1 presentation update: logical=960x640 physical=960x640 os_scale=1
+[2026-09-18T12:45:37Z INFO  picoview] [  2168.5ms] Resized 1200x800
+[2026-09-18T12:45:37Z INFO  picoview] [  2168.7ms] RedrawRequested
+[2026-09-18T12:45:37Z INFO  picoview] [  2168.8ms] present begin (frame tick 1)
+[2026-09-18T12:45:37Z INFO  picoview] [  2168.8ms] surface reconfigure 960x640 -> 1200x800
+[2026-09-18T12:45:37Z INFO  picoview] [  2180.6ms] R1 present: retained=960x640 swapchain=1200x800 policy=Transient filter=Linear
+[2026-09-18T12:45:37Z INFO  picoview] [  2180.9ms] swapchain present submitted
+[2026-09-18T12:45:37Z INFO  picoview] [  2180.9ms] present end (frame tick 1, submitted true)
+[2026-09-18T12:45:37Z INFO  picoview] [  2183.1ms] R1 presentation update: logical=1200x800 physical=1200x800 os_scale=1
+[2026-09-18T12:45:37Z INFO  picoview] [  2195.4ms] R1 render request: logical=1200x800 physical=1200x800 live_scale=1
+[2026-09-18T12:45:37Z INFO  picoview] [  2197.6ms] render submit (tick 90)
+[2026-09-18T12:45:37Z INFO  picoview] [  2198.0ms] frame ready from worker (tick 90)
+[2026-09-18T12:45:37Z INFO  picoview] [  2198.3ms] RedrawRequested
+[2026-09-18T12:45:37Z INFO  picoview] [  2198.3ms] present begin (frame tick 90)
+[2026-09-18T12:45:37Z INFO  picoview] [  2198.4ms] R1 present: retained=1200x800 swapchain=1200x800 policy=Exact filter=Nearest
+[2026-09-18T12:45:37Z INFO  picoview] [  2199.5ms] swapchain present submitted
+[2026-09-18T12:45:37Z INFO  picoview] [  2199.5ms] present end (frame tick 90, submitted true)
+[2026-09-18T12:45:39Z INFO  picoview] [  3671.3ms] Resized 600x400
+[2026-09-18T12:45:39Z INFO  picoview] [  3671.6ms] RedrawRequested
+[2026-09-18T12:45:39Z INFO  picoview] [  3671.6ms] present begin (frame tick 90)
+[2026-09-18T12:45:39Z INFO  picoview] [  3671.7ms] surface reconfigure 1200x800 -> 600x400
+[2026-09-18T12:45:39Z INFO  picoview] [  3683.2ms] R1 presentation update: logical=600x400 physical=600x400 os_scale=1
+[2026-09-18T12:45:39Z INFO  picoview] [  3684.8ms] R1 present: retained=1200x800 swapchain=600x400 policy=Transient filter=Linear
+[2026-09-18T12:45:39Z INFO  picoview] [  3685.3ms] swapchain present submitted
+[2026-09-18T12:45:39Z INFO  picoview] [  3685.3ms] present end (frame tick 90, submitted true)
+[2026-09-18T12:45:39Z INFO  picoview] [  3697.3ms] R1 render request: logical=600x400 physical=600x400 live_scale=1
+[2026-09-18T12:45:39Z INFO  picoview] [  3698.2ms] render submit (tick 180)
+[2026-09-18T12:45:39Z INFO  picoview] [  3698.3ms] frame ready from worker (tick 180)
+[2026-09-18T12:45:39Z INFO  picoview] [  3698.3ms] RedrawRequested
+[2026-09-18T12:45:39Z INFO  picoview] [  3698.3ms] present begin (frame tick 180)
+[2026-09-18T12:45:39Z INFO  picoview] [  3698.3ms] R1 present: retained=600x400 swapchain=600x400 policy=Exact filter=Nearest
+[2026-09-18T12:45:39Z INFO  picoview] [  3699.5ms] swapchain present submitted
+[2026-09-18T12:45:39Z INFO  picoview] [  3699.5ms] present end (frame tick 180, submitted true)

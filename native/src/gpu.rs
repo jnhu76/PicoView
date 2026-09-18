@@ -293,38 +293,113 @@ impl Presentation {
     }
 }
 
-/// Shared-library consumption smoke: Fixed policy keeps product logical
-/// while physical stays measured. Proves PicoView does not carry a second
-/// R1 geometry implementation.
+/// Shared-library Dynamic R1 consumption (PICOVIEW-63-R1-CONSUME-SUBTREE-CORRECTIVE-1).
+/// PicoView is a Dynamic viewport product; logical follows live client size.
 #[cfg(test)]
 mod tests {
-    use pocket_desktop_host::{resolve_geometry, ViewportPolicy, DESKTOP_DYNAMIC_MIN};
+    use pocket_desktop_host::{
+        resolve_geometry, PresentationGeometry, RenderSignature, ViewportPolicy,
+        DESKTOP_DYNAMIC_MIN,
+    };
+    use pocket_ui_wgpu::BlitFilter;
 
+    /// A. Dynamic resize @100%: logical follows measured physical; signature changes.
     #[test]
-    fn fixed_policy_keeps_product_logical_with_measured_physical() {
-        let geo = resolve_geometry(
-            ViewportPolicy::Fixed,
-            (960, 640),
-            (1200, 800),
-            1.25,
-        );
-        assert_eq!(geo.logical(), (960, 640));
-        assert_eq!(geo.physical(), (1200, 800));
-        assert!((geo.effective_render_scale() - 1.25).abs() < 1e-6);
-        // Product logical is NOT replaced by the PocketJS dynamic floor.
-        assert_ne!(geo.logical(), DESKTOP_DYNAMIC_MIN);
-        assert!(geo.is_exact_present((1200, 800)));
-        assert!(!geo.is_exact_present((1000, 700)));
+    fn dynamic_resize_at_100_follows_measured_physical() {
+        let before = resolve_geometry(ViewportPolicy::Dynamic, (960, 640), (960, 640), 1.0);
+        assert_eq!(before.logical(), (960, 640));
+        assert_eq!(before.physical(), (960, 640));
+        let after = resolve_geometry(ViewportPolicy::Dynamic, (960, 640), (1200, 800), 1.0);
+        assert_eq!(after.logical(), (1200, 800));
+        assert_eq!(after.physical(), (1200, 800));
+        assert_eq!(after.effective_render_scale(), 1.0f32);
+        let sig_before = RenderSignature::from_geometry(1, 2, before);
+        let sig_after = RenderSignature::from_geometry(1, 2, after);
+        assert_ne!(sig_before, sig_after);
+        assert!(sig_after.needs_rerender(Some(sig_before)));
     }
 
+    /// B. Dynamic shrink @100%.
+    #[test]
+    fn dynamic_shrink_at_100_follows_measured_physical() {
+        let geo = resolve_geometry(ViewportPolicy::Dynamic, (960, 640), (600, 400), 1.0);
+        assert_eq!(geo.logical(), (600, 400));
+        assert_eq!(geo.physical(), (600, 400));
+        assert_eq!(geo.effective_render_scale(), 1.0f32);
+    }
+
+    /// C. DPI geometry: same logical 960×640 from scaled physical measurements.
+    #[test]
+    fn dynamic_dpi_geometry_derives_logical_from_measured_scale() {
+        let cases = [
+            ((1200u32, 800u32), 1.25f64),
+            ((1440, 960), 1.50),
+            ((1920, 1280), 2.00),
+        ];
+        for (physical, scale) in cases {
+            let geo = resolve_geometry(ViewportPolicy::Dynamic, (960, 640), physical, scale);
+            assert_eq!(
+                geo.logical(),
+                (960, 640),
+                "physical={physical:?} scale={scale}"
+            );
+            assert_eq!(geo.physical(), physical);
+            assert_eq!(geo.effective_render_scale(), scale as f32);
+        }
+    }
+
+    /// Host.viewport / CLI --viewport is initial/default requested logical
+    /// size only — Dynamic ignores it for live logical derivation.
+    #[test]
+    fn dynamic_ignores_initial_requested_for_live_logical() {
+        let geo = resolve_geometry(ViewportPolicy::Dynamic, (500, 300), (1200, 800), 1.0);
+        assert_eq!(geo.logical(), (1200, 800));
+        assert_ne!(geo.logical(), (500, 300));
+    }
+
+    /// Shared Dynamic floor remains platform capability (240×180); product
+    /// min 384×240 is enforced by PicoView window/product contract (main.rs).
+    #[test]
+    fn shared_dynamic_floor_stays_pocketjs_platform_min() {
+        assert_eq!(DESKTOP_DYNAMIC_MIN, (240, 180));
+        let geo = resolve_geometry(ViewportPolicy::Dynamic, (960, 640), (200, 100), 2.0);
+        assert_eq!(geo.logical(), DESKTOP_DYNAMIC_MIN);
+        // Measured physical authority is not clamped into logical range.
+        assert_eq!(geo.physical(), (200, 100));
+    }
+
+    /// E. Exact presentation remains when retained target == measured swapchain.
+    #[test]
+    fn exact_present_when_retained_matches_swapchain() {
+        let geo = resolve_geometry(ViewportPolicy::Dynamic, (960, 640), (1200, 800), 1.0);
+        assert!(geo.is_exact_present((1200, 800)));
+        assert_eq!(
+            BlitFilter::select(geo.physical(), (1200, 800)),
+            BlitFilter::Exact
+        );
+        assert_eq!(
+            BlitFilter::select(geo.physical(), (1200, 800)).wgpu_filter(),
+            wgpu::FilterMode::Nearest
+        );
+        assert!(!geo.is_exact_present((960, 640)));
+        assert_eq!(
+            BlitFilter::select(geo.physical(), (960, 640)),
+            BlitFilter::Transient
+        );
+        assert_eq!(
+            BlitFilter::select(geo.physical(), (960, 640)).wgpu_filter(),
+            wgpu::FilterMode::Linear
+        );
+    }
+
+    /// RenderSignature still carries physical + effective scale bits.
     #[test]
     fn signature_includes_physical_and_effective_scale() {
-        use pocket_desktop_host::{PresentationGeometry, RenderSignature};
         let geo = PresentationGeometry::from_live((960, 640), (1440, 960), 1.5);
         let a = RenderSignature::from_geometry(1, 2, geo);
         let b = RenderSignature::new(1, 2, (1440, 960), 1.5);
         assert_eq!(a, b);
-        let resized = PresentationGeometry::from_live((960, 640), (1200, 800), 1.5);
+        let resized = PresentationGeometry::from_live((1200, 800), (1200, 800), 1.0);
         assert_ne!(a, RenderSignature::from_geometry(1, 2, resized));
     }
 }
