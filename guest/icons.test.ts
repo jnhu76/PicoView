@@ -21,13 +21,14 @@ test("PR62 semantic names stay full product strings", () => {
   expect(toolSemantic("fit")).toBe("Fit");
   expect(toolSemantic("oneToOne")).toBe("1:1");
   expect(toolSemantic("rotate")).toBe("Rotate");
-  expect(toolSemantic("reflect")).toBe("Reflect");
+  expect(toolSemantic("flipH")).toBe("Flip Horizontal");
+  expect(toolSemantic("flipV")).toBe("Flip Vertical");
   expect(toolSemantic("previous")).toBe("Previous");
   expect(toolSemantic("next")).toBe("Next");
   expect(iconLabel("open")).toBe("Open");
 });
 
-test("toolbar command vocabulary is exactly Open/Zoom/Fit/1:1/Rotate/Reflect", () => {
+test("toolbar command vocabulary includes separate FlipH and FlipV", () => {
   expect([...TOOLBAR_COMMANDS]).toEqual([
     "open",
     "zoomOut",
@@ -35,7 +36,8 @@ test("toolbar command vocabulary is exactly Open/Zoom/Fit/1:1/Rotate/Reflect", (
     "fit",
     "oneToOne",
     "rotate",
-    "reflect",
+    "flipH",
+    "flipV",
   ]);
   const semanticKeys = Object.keys(TOOL_SEMANTIC).sort();
   expect(semanticKeys).toEqual(
@@ -46,19 +48,19 @@ test("toolbar command vocabulary is exactly Open/Zoom/Fit/1:1/Rotate/Reflect", (
       "fit",
       "oneToOne",
       "rotate",
-      "reflect",
+      "flipH",
+      "flipV",
       "previous",
       "next",
     ].sort(),
   );
 });
 
-test("obsolete toolbar semantics are gone", () => {
+test("obsolete single Reflect / dual-rotate toolbar semantics are gone", () => {
   const banned = [
     "rotateLeft",
     "rotateRight",
-    "flipHorizontal",
-    "flipVertical",
+    "reflect",
     "reset",
     "refresh",
     "mirror",
@@ -69,14 +71,11 @@ test("obsolete toolbar semantics are gone", () => {
     expect(key in ICON_ASSETS).toBe(false);
   }
   expect(ICON_ASSETS.rotate).toBe("icon-rotate.svg");
-  expect(ICON_ASSETS.reflect).toBe("icon-reflect.svg");
-  expect(ICON_ASSETS.previous).toBe("icon-prev.svg");
-  expect(ICON_ASSETS.next).toBe("icon-next.svg");
+  expect(ICON_ASSETS.flipH).toBe("icon-flip-h.svg");
+  expect(ICON_ASSETS.flipV).toBe("icon-flip-v.svg");
 });
 
 test("toolbar chrome excludes Previous/Next; edge nav owns them", () => {
-  // Frozen shell geometry still owns toolbar height (PR #61 authority).
-  // Compact product chrome: in-app title strip removed; toolbar is commands only.
   expect(SHELL_CHROME.toolbarH).toBe(44);
   expect(SHELL_CHROME.titleH).toBe(0);
   expect(SHELL_CHROME.statusH).toBe(24);

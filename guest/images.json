@@ -6,7 +6,8 @@
   "icon-zoom-in.svg": { "linear": true },
   "icon-fit.svg": { "linear": true },
   "icon-rotate.svg": { "linear": true },
-  "icon-reflect.svg": { "linear": true },
+  "icon-flip-h.svg": { "linear": true },
+  "icon-flip-v.svg": { "linear": true },
   "icon-empty.svg": { "linear": true },
   "icon-warn.svg": { "linear": true }
 }

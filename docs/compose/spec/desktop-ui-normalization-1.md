@@ -4,7 +4,7 @@ status: delivered
 updated: 2026-09-18
 branch: fix/ui-chrome-1
 commits: 880d58a00d90087558292f80f4366b7f92a23298..a882b89
-corrective: PICOVIEW-PR62-UI-ICON-CORRECTIVE-2
+corrective: PICOVIEW-PR62-UI-ICON-CORRECTIVE-3-flip-hv
 ---
 
 # Desktop UI Normalization 1 (PR #62)
@@ -12,39 +12,40 @@ corrective: PICOVIEW-PR62-UI-ICON-CORRECTIVE-2
 ## Report
 
 **What was built** — PR #62 chrome is icon-first desktop viewer UI after
-corrective-2. Top toolbar is **exactly** seven commands:
+corrective-3. Top toolbar is **exactly** these commands:
 
 ```text
-Open    Zoom Out  Zoom In  Fit  1:1    Rotate  Reflect
+Open    Zoom Out  Zoom In  Fit  1:1    Rotate  Flip Horizontal  Flip Vertical
 ```
 
 Removed from the toolbar: Previous, Next, Reset, Refresh, Rotate Left,
-Rotate Right, Flip Horizontal, Flip Vertical, passive Proxy/zoom badge.
+Rotate Right, passive Proxy/zoom badge, single Reflect.
 Previous/Next remain viewport-edge chevrons + keyboard/BrowseSession.
 Keyboard Refresh (R / F5) remains a recovery path — not a toolbar command.
 
 **Rotate** is one command: each press rotates **clockwise 90°**
 (`0 → 90 → 180 → 270 → 0`), implemented via PR #61 `rotateRight`.
-**Reflect** is one command: **horizontal reflection only**, product name
-`Reflect` (not Mirror), via PR #61 `flipHorizontal`.
+**FlipH / FlipV** are two separate toolbar commands (visible-frame):
+`flipHorizontal` / `flipVertical` (PR #61). Icons: vertical axis + L/R
+shapes vs horizontal axis + T/B shapes.
 
 **Icon size policy** — design grid **20×20** (`viewBox="0 0 20 20"`),
 display **20×20** (`w-5 h-5`). Texture root stays **32/64 pow2** solely
 because the pak baker rejects non-pow2 textures; that is **not** a display
 scale. No 16→20 stretch. Command fill **#E6E6E6**; chevrons **#F0F0F0**;
-Reflect axis **#F2F2F2**. `guest/images.json` sets `linear: true` for all
+flip axes **#F2F2F2**. `guest/images.json` sets `linear: true` for all
 chrome SVGs → bilinear cook path. ToolButton hit target **36×36** (`w-9 h-9`).
 `1:1` remains real Bold `text-sm` `#e6e6e6`.
 
 **Icon family** — Open (folder), Zoom Out/In (magnifier ±), Fit (thick
 corner brackets), Rotate (image plate + CW quarter-turn arm — not circular
-refresh), Reflect (mirrored triangles around a strong vertical axis — not
-L/R swap arrows). Edge chevrons: translucent rest `#00000044`, focus
+refresh), FlipH (vertical axis + L/R mirrored shapes), FlipV (horizontal
+axis + T/B mirrored shapes). Edge chevrons: translucent rest `#00000044`, focus
 `#00000099`, active `#000000bb`, glyph opacity **0.92** (legible, not a
 heavy black sticker).
 
-**Verification** — `bun test guest/` **167 pass / 0 fail**; `pocket.ts
-compile --target windows-app` pass (10 chrome SVGs baked **64×64 @2x**,
+**Verification** — `bun test guest/` **169 pass / 0 fail**; `pocket.ts
+compile --target windows-app` pass (11 chrome SVGs baked **64×64 @2x**,
 log `sampled linear (images.json)`); `cargo build --release` OK
 (pre-existing dead_code/unused_mut warnings only). Live Windows smoke
 screenshots (PrintWindow 960×640):
@@ -103,18 +104,20 @@ chrome:   68
 ### Toolbar product model (corrective-2)
 
 ```text
-Open    Zoom- Zoom+ Fit 1:1    Rotate  Reflect
+Open    Zoom- Zoom+ Fit 1:1    Rotate  FlipH  FlipV
 ```
 
 Rules:
 
 1. Toolbar = action commands only — no Previous/Next, no Reset/Refresh,
-   no RotL/RotR/FlipH/FlipV, no passive badges.
+   no RotL/RotR, no passive badges, no single Reflect.
 2. Rotate = single CW 90° command (uses PR #61 `rotateRight` each press).
-3. Reflect = single horizontal reflection command (`Reflect`, not Mirror).
+3. FlipH / FlipV = two separate reflection commands (`Flip Horizontal` /
+   `Flip Vertical`), PR #61 visible-frame math.
 4. `1:1` remains textual Bold command-like glyph.
 5. Semantic names in `TOOL_SEMANTIC` / `TOOLBAR_COMMANDS` / tests:
-   `Open`, `Zoom Out`, `Zoom In`, `Fit`, `1:1`, `Rotate`, `Reflect`
+   `Open`, `Zoom Out`, `Zoom In`, `Fit`, `1:1`, `Rotate`,
+   `Flip Horizontal`, `Flip Vertical`
    (+ edge-only `Previous` / `Next`).
 6. No tooltip invention (PocketJS has none at `24bab5e`).
 7. Icon-button contract: hit **36×36** (`w-9 h-9`), glyph **20×20** (`w-5 h-5`),
@@ -132,9 +135,10 @@ Rules:
   - `zoomOut` / `zoomIn` — magnifier ±
   - `fit` — thick fit-to-frame corner brackets
   - `rotate` — image plate + CW quarter-turn arm (not refresh loop)
-  - `reflect` — mirrored triangles + strong vertical axis (not L/R arrows)
+  - `flipH` — mirrored triangles + strong vertical axis
+  - `flipV` — mirrored triangles + strong horizontal axis
 - `images.json` → bilinear for every chrome icon.
-- Obsolete files deleted: `icon-rotate-left/right`, `icon-flip-h/v`,
+- Obsolete files deleted: `icon-rotate-left/right`, `icon-reflect`,
   `icon-reset`, `icon-refresh`.
 
 ### Edge navigation (left/right only)

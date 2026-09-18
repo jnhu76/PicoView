@@ -39,6 +39,7 @@ import {
   actualSize,
   fitView,
   flipHorizontal,
+  flipVertical,
   initialViewTransform,
   panBy,
   pocketImageStyle,
@@ -364,9 +365,10 @@ export default function App() {
           Filename / index stay in the status bar. */}
 
       {/* Toolbar — exact command bar:
-          Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · Reflect
+          Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · FlipH · FlipV
           Previous/Next stay on viewport edges + keyboard (not toolbar).
-          Rotate = single CW 90°; Reflect = horizontal only (PR #61 math).
+          Rotate = single CW 90°; FlipH/FlipV are separate visible-frame
+          reflections (PR #61 math).
           Flex flow only; group gaps are spacer Views, not absolute x hacks. */}
       <View class="flex-row items-center px-2 gap-1 bg-[#252526]" style={{ height: SHELL_CHROME.toolbarH }}>
         <ToolButton
@@ -409,12 +411,22 @@ export default function App() {
           }
         />
         <ToolButton
-          icon={ICON_ASSETS.reflect}
-          semantic={toolSemantic("reflect")}
+          icon={ICON_ASSETS.flipH}
+          semantic={toolSemantic("flipH")}
           disabled={!canImage}
           onPress={() =>
             apply(s =>
               setUserOrientation(img, vp, s, flipHorizontal(s.orientation)),
+            )
+          }
+        />
+        <ToolButton
+          icon={ICON_ASSETS.flipV}
+          semantic={toolSemantic("flipV")}
+          disabled={!canImage}
+          onPress={() =>
+            apply(s =>
+              setUserOrientation(img, vp, s, flipVertical(s.orientation)),
             )
           }
         />

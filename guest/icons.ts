@@ -1,4 +1,4 @@
-// Icon assets + toolbar action semantics (PR #62 corrective-2).
+// Icon assets + toolbar action semantics (PR #62 corrective-3).
 // SVGs live next to the guest entry and are baked at compile time.
 // PocketJS baker @ 24bab5e: filled circle/rect/path only — no stroke, no arcs A.
 //
@@ -15,7 +15,8 @@ export const ICON_ASSETS = {
   zoomIn: "icon-zoom-in.svg",
   fit: "icon-fit.svg",
   rotate: "icon-rotate.svg",
-  reflect: "icon-reflect.svg",
+  flipH: "icon-flip-h.svg",
+  flipV: "icon-flip-v.svg",
   empty: "icon-empty.svg",
   warn: "icon-warn.svg",
 } as const;
@@ -27,10 +28,11 @@ export type IconName = keyof typeof ICON_ASSETS;
  * PocketJS has no tooltip primitive at 24bab5e — these names are the
  * accessibility/metadata + test authority, not painted chrome labels.
  *
- * Toolbar command bar (exact product model):
- *   Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · Reflect
+ * Toolbar command bar:
+ *   Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · Flip Horizontal · Flip Vertical
  * Previous/Next stay viewport-edge + keyboard only.
- * Rotate = one CW 90° command; Reflect = horizontal reflection only.
+ * Rotate = one CW 90° command; FlipH/FlipV are separate visible-frame
+ * reflections (PR #61 geometry).
  */
 export const TOOL_SEMANTIC = {
   open: "Open",
@@ -39,7 +41,8 @@ export const TOOL_SEMANTIC = {
   fit: "Fit",
   oneToOne: "1:1",
   rotate: "Rotate",
-  reflect: "Reflect",
+  flipH: "Flip Horizontal",
+  flipV: "Flip Vertical",
   previous: "Previous",
   next: "Next",
 } as const;
@@ -52,7 +55,8 @@ export const TOOLBAR_COMMANDS = [
   "fit",
   "oneToOne",
   "rotate",
-  "reflect",
+  "flipH",
+  "flipV",
 ] as const satisfies readonly (keyof typeof TOOL_SEMANTIC)[];
 
 export type ToolSemanticName = keyof typeof TOOL_SEMANTIC;
