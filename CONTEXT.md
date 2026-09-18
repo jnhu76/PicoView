@@ -2,7 +2,21 @@
 
 ## Current phase
 
-PicoView is in **CODE-REALITY CONFORMANCE**.
+MVP feature set complete; post-closeout train `PICOVIEW-MVP-POST-CLOSEOUT-TRAIN-1`
+in progress. Phase 0 merged PicoView PR #64 (PocketJS git-subtree under
+`third_party/pocketjs`, path deps, `POCKETJS.lock` provenance). Stage A
+`PICOVIEW-63-R1-CONSUME-SUBTREE-1` consumes shared PocketJS R1 presentation
+geometry from the subtree (`pocket-desktop-host` library + `pocket-ui-wgpu`
+`BlitSet`/`BlitFilter`). PicoView presentation policy is **Dynamic**
+(`guest/pocket.json` `viewport.dynamic`): boot/Resized/ScaleFactorChanged
+resolve logical from measured physical + live OS scale. `Host.viewport` is
+only the initial/default requested logical size (normally 960×640), not
+frozen Product logical authority. Product still owns host window/swapchain
+wiring, CurrentItem, file dialogs, Windows associations, embedded guest, and
+product min client 384×240 logical (not PocketJS platform floor 240×180).
+Stage A corrective `PICOVIEW-63-R1-CONSUME-SUBTREE-CORRECTIVE-1` replaced an
+incorrect Fixed-policy consume. Stages B (native structure) and C (docs
+authority) wait on Stage A review. UI visual corrective is after this train.
 
 The viewer authority reset closed (PR #51, `528d3d8`). Campaign
 `PICOVIEW-DESKTOP-WGPU-CONFORMANCE-CLEANUP-1` (2026-09-16) then executed the
@@ -23,11 +37,10 @@ Campaign `PICOVIEW-POCKETJS-SUBTREE-INTEGRATION-1` (2026-09-18) closed the
 MVP dependency-layout gap: PicoView PR #62 merged onto main, PocketJS
 `integration/picoview-desktop` fast-forwarded to reviewed R1 tip `3a10550`,
 and that exact upstream tree was imported as a git subtree under
-`third_party/pocketjs` (`--squash`). `POCKETJS.lock` is now the subtree
-provenance authority; Cargo PocketJS crates are path dependencies into
-`third_party/pocketjs` (no PocketJS git rev, no submodule). PicoView still
-owns its desktop-host adapter; R1 presentation-geometry consumption remains a
-separate PicoView PR (worktree `picoview-63-render-pipeline-gate-1`).
+`third_party/pocketjs` (`--squash`). PR #64 then merged the subtree + path-dep
+switch onto main (`c3aed3d`). `POCKETJS.lock` is the subtree provenance
+authority; Cargo PocketJS crates are path dependencies into
+`third_party/pocketjs` (no PocketJS git rev, no submodule).
 
 Campaign `PICOVIEW-LAST-GOOD-PUBLICATION-1` (2026-09-17) fixed the
 publication ordering: candidates are admitted before the previous

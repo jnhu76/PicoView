@@ -11,6 +11,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 use anyhow::{anyhow, Context as _, Result};
+use pocket_desktop_host::{resolve_geometry, PresentationGeometry, RenderSignature, ViewportPolicy};
 use pocket_mod::Guest;
 use pocket_ui_surface::offload::OffloadWorker;
 use pocket_ui_surface::UiSurface;
@@ -38,12 +39,13 @@ const HOST_ABI: u32 = 4;
 
 /// PicoView product minimum logical client size.
 ///
-/// PocketJS `windows-app` capability floor is 240×180 logical. That is a
-/// platform capability, not a PicoView product usability promise. The fixed
-/// 8-command toolbar needs ≈356 logical px width (8×36 + group gaps +
+/// PocketJS `windows-app` capability floor is 240×180 logical
+/// (`DESKTOP_DYNAMIC_MIN`). That is a platform capability floor used by the
+/// shared Dynamic resolver, not a PicoView product usability promise. The
+/// fixed 8-command toolbar needs ≈356 logical px width (8×36 + group gaps +
 /// padding); product closes the contract at 384×240. Keep in sync with
 /// `guest/shell_layout.ts` `PRODUCT_MIN_CLIENT` and `guest/pocket.json`
-/// `viewport.min`.
+/// `viewport.min`. Do **not** replace these with PocketJS 240×180.
 const PRODUCT_MIN_CLIENT_W: f64 = 384.0;
 const PRODUCT_MIN_CLIENT_H: f64 = 240.0;
 
@@ -136,8 +138,15 @@ fn parse_shell_action() -> Option<ShellAction> {
 
 enum Input {
     Quit,
-    /// Logical viewport + output scale (physical px per logical unit).
-    Resize(u32, u32, f64),
+    /// Live presentation facts from the window thread (shared R1 geometry).
+    /// Physical client size is measured (`Window::inner_size` / `Resized`);
+    /// never reconstructed as logical × scale / package density.
+    /// PicoView presentation policy is **Dynamic**: runtime derives logical
+    /// as `measured_physical / os_scale` via shared `resolve_geometry`.
+    Presentation {
+        measured_physical: (u32, u32),
+        os_scale: f64,
+    },
     /// Prebuilt svc JSON line pushed into the guest poll queue.
     Service(String),
     /// A path chosen by the native Open File dialog. Runtime maps this to
@@ -212,10 +221,14 @@ struct Runtime {
     surface: UiSurface,
     guest: Guest,
     offload: OffloadWorker,
-    viewport: (u32, u32),
-    density: u32,
-    /// Physical pixels per UI logical unit.
-    dpi_scale: f64,
+    /// Host.viewport / CLI `--viewport`: **initial/default requested logical
+    /// size** (`guest/pocket.json` `viewport.dynamic.default`, normally
+    /// 960×640). Not frozen Product logical authority. Dynamic policy derives
+    /// live logical from measured physical + OS scale.
+    initial_requested_logical: (u32, u32),
+    /// Shared R1 presentation snapshot (Dynamic logical + measured physical
+    /// + live OS scale).
+    geometry: PresentationGeometry,
     ticks: u64,
     /// Native Current Item truth.
     current: CurrentItem,
@@ -224,7 +237,11 @@ struct Runtime {
 }
 
 impl Runtime {
-    fn boot(args: &Args, initial_scale: f64, proxy: EventLoopProxy<Wake>) -> Result<Self> {
+    fn boot(
+        args: &Args,
+        initial_geometry: PresentationGeometry,
+        proxy: EventLoopProxy<Wake>,
+    ) -> Result<Self> {
         // Production path: embedded artifacts, no CWD / dist discovery.
         // Developer override: explicit --js and/or --pak paths only.
         let (pak, source) = match (&args.js, &args.pak) {
@@ -250,8 +267,12 @@ impl Runtime {
                 assets::EMBEDDED_JS.to_string(),
             ),
         };
+        let initial_requested_logical = args.viewport;
+        let (logical_w, logical_h) = initial_geometry.logical();
+        // Package density remains cook authority for the UiSurface rasterizer.
+        // Live presentation scale is geometry.effective_render_scale().
         let surface = UiSurface::new_with_density(
-            (args.viewport.0 as f32, args.viewport.1 as f32),
+            (logical_w as f32, logical_h as f32),
             args.density,
         );
         surface.set_identity(HOST_ID, HOST_ABI);
@@ -268,15 +289,20 @@ impl Runtime {
         if !guest.has_frame() {
             return Err(anyhow!("bundle installed no frame handler"));
         }
-        // MAJOR-1 (Corrective-2): hello must carry the REAL window scale at
-        // boot. A 1.0 placeholder makes Actual Size display 150% DPI as 100%
-        // for the whole session when the user never resizes or crosses
-        // monitors. Host measures `window.scale_factor()` after create and
-        // hands it here before any guest frame.
-        let dpi_scale = if initial_scale > 0.0 { initial_scale } else { 1.0 };
+        // Boot hello carries MEASURED live geometry + live OS scale — not a
+        // 1.0 placeholder and not physical rebuilt as logical × density.
+        let live_scale = initial_geometry.effective_render_scale() as f64;
         surface.svc_push(
-            json!({"t":"hello","w":args.viewport.0,"h":args.viewport.1,"scale":dpi_scale,"epoch":epoch_ms()})
-                .to_string(),
+            json!({
+                "t":"hello",
+                "w":logical_w,
+                "h":logical_h,
+                "scale":live_scale,
+                "physical_w":initial_geometry.physical_w,
+                "physical_h":initial_geometry.physical_h,
+                "epoch":epoch_ms()
+            })
+            .to_string(),
         );
         let current = if let Some(path) = &args.image {
             // Create a CurrentItem with a BrowseSession for the directory
@@ -310,14 +336,23 @@ impl Runtime {
         } else {
             CurrentItem::new()
         };
-        tlog("runtime booted (pak fed, guest mounted, source eval'd, current item opened)");
+        tlog(&format!(
+            "R1 runtime booted: policy=Dynamic initial_requested={}x{} logical={}x{} physical={}x{} live_scale={} package_density={}",
+            initial_requested_logical.0,
+            initial_requested_logical.1,
+            logical_w,
+            logical_h,
+            initial_geometry.physical_w,
+            initial_geometry.physical_h,
+            live_scale,
+            args.density
+        ));
         Ok(Self {
             surface,
             guest,
             offload,
-            viewport: args.viewport,
-            density: args.density,
-            dpi_scale,
+            initial_requested_logical,
+            geometry: initial_geometry,
             ticks: 0,
             current,
             proxy,
@@ -341,17 +376,44 @@ impl Runtime {
                     Command::Open(path),
                 );
             }
-            Input::Resize(w, h, scale) => {
-                self.viewport = (w, h);
-                self.dpi_scale = if scale > 0.0 { scale } else { 1.0 };
+            Input::Presentation {
+                measured_physical,
+                os_scale,
+            } => {
+                // Dynamic policy: logical follows the live client
+                // (measured physical ÷ OS scale). Host.viewport is only the
+                // initial/default requested size — not frozen layout authority.
+                self.geometry = resolve_geometry(
+                    ViewportPolicy::Dynamic,
+                    self.initial_requested_logical,
+                    measured_physical,
+                    os_scale,
+                );
+                let (w, h) = self.geometry.logical();
                 self.surface.with_ui(|ui| ui.set_viewport(w as f32, h as f32));
                 self.guest.eval(
                     "resize",
                     &format!("globalThis.__pocketResizeViewport?.({w},{h})"),
                 )?;
                 self.surface.svc_push(
-                    json!({"t":"resize","w":w,"h":h,"scale":self.dpi_scale}).to_string(),
+                    json!({
+                        "t":"resize",
+                        "w":w,
+                        "h":h,
+                        "scale":self.geometry.effective_render_scale(),
+                        "physical_w":self.geometry.physical_w,
+                        "physical_h":self.geometry.physical_h,
+                    })
+                    .to_string(),
                 );
+                tlog(&format!(
+                    "R1 presentation update: logical={}x{} physical={}x{} os_scale={}",
+                    w,
+                    h,
+                    self.geometry.physical_w,
+                    self.geometry.physical_h,
+                    os_scale
+                ));
             }
         }
         Ok(true)
@@ -400,9 +462,11 @@ impl Runtime {
         Ok(())
     }
 
-    fn hash(&mut self) -> u64 {
-        self.surface
-            .with_ui(|ui| fnv1a64(&ui.draw().words) ^ ui.raster_revision().rotate_left(7))
+    fn signature(&mut self) -> RenderSignature {
+        let (draw_hash, raster_revision) = self
+            .surface
+            .with_ui(|ui| (fnv1a64(&ui.draw().words), ui.raster_revision()));
+        RenderSignature::from_geometry(draw_hash, raster_revision, self.geometry)
     }
 }
 
@@ -443,13 +507,16 @@ fn run_runtime(
     outputs: SyncSender<Output>,
     proxy: EventLoopProxy<Wake>,
     gpu: Arc<pocket3d::gpu::Gpu>,
-    initial_scale: f64,
+    initial_geometry: PresentationGeometry,
 ) -> Result<()> {
     use std::sync::atomic::AtomicBool;
     let available = Arc::new(AtomicBool::new(true));
     let mut renderer = gpu::Renderer::new(gpu);
-    let mut runtime = Runtime::boot(&args, initial_scale, proxy.clone())?;
-    let mut hash = None;
+    let mut runtime = Runtime::boot(&args, initial_geometry, proxy.clone())?;
+    // Shared R1 demand identity. Committed only after a target is produced
+    // and handed to the presenter — never on pool miss / render None /
+    // channel backpressure — so retries are not suppressed.
+    let mut signature: Option<RenderSignature> = None;
     let mut deadline = Instant::now();
     // Fixed tick order (PICOVIEW-LAST-GOOD-PUBLICATION-1-CORRECTIVE-1):
     //   1. input/request processing      — the only legal Product open phase
@@ -461,7 +528,9 @@ fn run_runtime(
     //                                     queued, surface.tick rebuilds the
     //                                     draw list, then the release boundary
     //                                     frees superseded publications;
-    //   3. hash + renderer.render        — read/consume that draw list.
+    //   3. signature + renderer.render   — read/consume that draw list using
+    //                                     shared PresentationGeometry physical
+    //                                     size + live scale.
     // Current Item textures are freed ONLY inside step 2, so no draw list
     // step 3 consumes can reference a freed handle. A commit inside the
     // guest turn or between it and the boundary requires fabricating a
@@ -475,15 +544,20 @@ fn run_runtime(
             }
         }
         runtime.tick()?;
-        let next = runtime.hash();
-        if hash != Some(next)
+        let next = runtime.signature();
+        if signature != Some(next)
             && let Some(permit) = OutputPermit::acquire(&available)
         {
-            let target = renderer.render(
-                &runtime.surface,
-                (runtime.viewport.0 * runtime.density, runtime.viewport.1 * runtime.density),
-                runtime.density as f32,
-            )?;
+            let geo = runtime.geometry;
+            tlog(&format!(
+                "R1 render request: logical={}x{} physical={}x{} live_scale={}",
+                geo.logical_w,
+                geo.logical_h,
+                geo.physical_w,
+                geo.physical_h,
+                geo.effective_render_scale()
+            ));
+            let target = renderer.render(&runtime.surface, geo)?;
             tlog(&format!("render submit (tick {})", runtime.ticks));
             let rendered = target.is_some();
             let output = Output {
@@ -494,11 +568,12 @@ fn run_runtime(
             match outputs.try_send(output) {
                 Ok(()) => {
                     if rendered {
-                        hash = Some(next);
+                        signature = Some(next);
                     }
                     let _ = proxy.send_event(Wake::Output);
                 }
                 Err(std::sync::mpsc::TrySendError::Full(output)) => {
+                    // Backpressure: do not commit signature; retry later.
                     drop(output);
                 }
                 Err(_) => return Ok(()),
@@ -518,8 +593,9 @@ struct RuntimeStartup {
     inputs: Receiver<Input>,
     outputs: SyncSender<Output>,
     proxy: EventLoopProxy<Wake>,
-    /// Measured after the window exists; 1.0 until `resumed` fills it.
-    initial_scale: f64,
+    /// Filled by `resumed` with Dynamic measured geometry. Placeholder is
+    /// not product logical authority.
+    initial_geometry: PresentationGeometry,
 }
 
 struct Host {
@@ -604,25 +680,46 @@ impl ApplicationHandler<Wake> for Host {
         let gpu = presentation.gpu.clone();
         self.surface = Some(presentation);
         let mut startup = self.startup.take().expect("runtime startup");
-        // Real OS scale for hello / 100% math — not a 1.0 placeholder.
-        let measured = window.scale_factor();
-        startup.initial_scale = if measured > 0.0 { measured } else { 1.0 };
+        // A3 initial boot authority: measured physical client + live OS scale.
+        // PicoView presentation policy is Dynamic (guest/pocket.json
+        // viewport.dynamic). Host.viewport is initial/default requested
+        // logical size only — not frozen Product logical authority.
+        // Never construct retained physical as logical × package density,
+        // and never reconstruct measured physical from logical × scale.
+        let physical = window.inner_size();
+        let os_scale = window.scale_factor();
+        let initial_requested_logical = self.viewport;
+        let initial_geometry = resolve_geometry(
+            ViewportPolicy::Dynamic,
+            initial_requested_logical,
+            (physical.width, physical.height),
+            os_scale,
+        );
         tlog(&format!(
-            "window scale_factor = {} (hello dpi)",
-            startup.initial_scale
+            "R1 boot geometry: policy=Dynamic initial_requested={}x{} measured_physical={}x{} os_scale={} package_density={} logical={}x{} render_scale={}",
+            initial_requested_logical.0,
+            initial_requested_logical.1,
+            physical.width,
+            physical.height,
+            os_scale,
+            startup.args.density,
+            initial_geometry.logical_w,
+            initial_geometry.logical_h,
+            initial_geometry.effective_render_scale()
         ));
+        startup.initial_geometry = initial_geometry;
         let RuntimeStartup {
             args,
             inputs,
             outputs,
             proxy,
-            initial_scale,
+            initial_geometry,
         } = startup;
         if let Err(error) = std::thread::Builder::new()
             .name("picoview-runtime".into())
             .spawn(move || {
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_runtime(args, inputs, outputs, proxy.clone(), gpu, initial_scale)
+                    run_runtime(args, inputs, outputs, proxy.clone(), gpu, initial_geometry)
                 }))
                 .unwrap_or_else(|_| Err(anyhow!("Runtime worker panicked")));
                 let _ = proxy.send_event(Wake::Exit(result.err().map(|e| format!("{e:#}"))));
@@ -770,17 +867,17 @@ impl ApplicationHandler<Wake> for Host {
             winit::event::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 tlog(&format!("ScaleFactorChanged {scale_factor}"));
                 let Some(window) = &self.window else { return };
-                let size = window.inner_size();
-                let logical = (
-                    (size.width as f64 / scale_factor)
-                        .round()
-                        .clamp(PRODUCT_MIN_CLIENT_W, 4096.0) as u32,
-                    (size.height as f64 / scale_factor)
-                        .round()
-                        .clamp(PRODUCT_MIN_CLIENT_H, 4096.0) as u32,
-                );
+                // R1 is not resize coalescing: preserve latest measured
+                // physical + live OS scale. Dynamic policy derives logical
+                // from current inner_size + new live scale. Temporary
+                // source/swapchain mismatch is allowed; permanent settled
+                // mismatch is not.
+                let measured = window.inner_size();
                 self.tx
-                    .try_send(Input::Resize(logical.0, logical.1, scale_factor))
+                    .try_send(Input::Presentation {
+                        measured_physical: (measured.width, measured.height),
+                        os_scale: scale_factor,
+                    })
                     .ok();
                 window.request_redraw();
             }
@@ -820,19 +917,15 @@ impl ApplicationHandler<Wake> for Host {
             }
             winit::event::WindowEvent::Resized(size) => {
                 tlog(&format!("Resized {}x{}", size.width, size.height));
-                // Per-Monitor DPI V2: the runtime viewport is logical pixels;
-                // physical client size is the presentation surface's business.
-                let scale = self.window.as_ref().unwrap().scale_factor();
-                let logical = (
-                    (size.width as f64 / scale)
-                        .round()
-                        .clamp(PRODUCT_MIN_CLIENT_W, 4096.0) as u32,
-                    (size.height as f64 / scale)
-                        .round()
-                        .clamp(PRODUCT_MIN_CLIENT_H, 4096.0) as u32,
-                );
+                // Measured physical client size is presentation authority.
+                // Dynamic policy: runtime derives logical from measured size
+                // + current OS scale via shared R1 geometry.
+                let os_scale = self.window.as_ref().unwrap().scale_factor();
                 self.tx
-                    .try_send(Input::Resize(logical.0, logical.1, scale))
+                    .try_send(Input::Presentation {
+                        measured_physical: (size.width, size.height),
+                        os_scale,
+                    })
                     .ok();
                 self.window.as_ref().unwrap().request_redraw();
             }
@@ -886,11 +979,44 @@ fn main() -> Result<()> {
         inputs,
         outputs,
         proxy: event_loop.create_proxy(),
-        initial_scale: 1.0,
+        // Placeholder until `resumed` measures the live window. Initial
+        // requested logical is known; physical/scale are not — do not invent
+        // them. Resumed overwrites with Dynamic measured geometry before the
+        // runtime worker boots.
+        initial_geometry: PresentationGeometry::from_live(host.viewport, (1, 1), 1.0),
     });
     event_loop.run_app(&mut host)?;
     if let Some(error) = host.failure {
         return Err(anyhow!(error));
     }
     Ok(())
+}
+
+/// Product-contract regressions for Dynamic R1 consumption (CORRECTIVE-1).
+#[cfg(test)]
+mod tests {
+    use super::{PRODUCT_MIN_CLIENT_H, PRODUCT_MIN_CLIENT_W};
+    use pocket_desktop_host::{resolve_geometry, ViewportPolicy, DESKTOP_DYNAMIC_MIN};
+
+    /// D. Product minimum remains 384×240 through PicoView window/product
+    /// contract. PocketJS Dynamic floor 240×180 is platform capability only
+    /// and must not replace product min.
+    #[test]
+    fn product_minimum_remains_384x240_through_product_contract() {
+        assert_eq!(PRODUCT_MIN_CLIENT_W, 384.0);
+        assert_eq!(PRODUCT_MIN_CLIENT_H, 240.0);
+        assert_ne!(
+            (PRODUCT_MIN_CLIENT_W as u32, PRODUCT_MIN_CLIENT_H as u32),
+            DESKTOP_DYNAMIC_MIN
+        );
+        assert_eq!(DESKTOP_DYNAMIC_MIN, (240, 180));
+        // guest/pocket.json viewport.dynamic.min and shell_layout
+        // PRODUCT_MIN_CLIENT stay 384×240; OS window min uses the same
+        // product constants. Shared Dynamic resolver may clamp to the
+        // platform floor; product window min keeps the normal product
+        // window out of that region.
+        let tiny = resolve_geometry(ViewportPolicy::Dynamic, (960, 640), (200, 100), 2.0);
+        assert_eq!(tiny.logical(), DESKTOP_DYNAMIC_MIN);
+        assert_eq!(tiny.logical(), (240, 180));
+    }
 }

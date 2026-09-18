@@ -1,0 +1,37 @@
+PICOVIEW-63-R1 smoke
+exe=C:\Users\fred1\source\PicoView\.worktrees\63-r1-consume-subtree-1\native\target\release\picoview.exe
+image=C:\Users\fred1\source\PicoView\.worktrees\63-r1-consume-subtree-1\docs\v1-open-one-image-1\present-real-jpeg.png
+viewport=960x640
+AppliedDPI=96
+Screen[Bounds={X=0,Y=0,Width=2560,Height=1440} WorkingArea={X=0,Y=0,Width=2560,Height=1392} Primary=True DeviceName=\\.\DISPLAY2 note: primary_bounds=2560x1440 working=2560x1392
+exit=0
+---stdout---
+
+---stderr---
+[2026-09-18T11:33:22Z INFO  picoview] [     0.0ms] process start
+[2026-09-18T11:33:22Z INFO  picoview] [    47.8ms] window created (hidden until first frame)
+[2026-09-18T11:33:23Z INFO  pocket3d::gpu] adapter: "AMD Radeon(TM) Graphics" (IntegratedGpu, requested LowPower)
+[2026-09-18T11:33:23Z INFO  picoview::gpu] PicoView GPU: Vulkan / AMD Radeon(TM) Graphics / Bgra8Unorm
+[2026-09-18T11:33:23Z INFO  picoview] [   894.8ms] surface created+configured 960x640 (AdapterInfo { name: "AMD Radeon(TM) Graphics", vendor: 4098, device: 5688, device_type: IntegratedGpu, driver: "AMD proprietary driver", driver_info: "25.8.1 (AMD proprietary shader compiler)", backend: Vulkan }, present Fifo, latency 1)
+[2026-09-18T11:33:23Z INFO  picoview] [   894.8ms] R1 boot geometry: policy=Fixed product_logical=960x640 measured_physical=960x640 os_scale=1 package_density=2 render_scale=1
+[2026-09-18T11:33:23Z INFO  picoview] [   894.9ms] Resized 960x640
+[2026-09-18T11:33:23Z INFO  picoview] current item: generation=1 handle=Some(11) path=C:\Users\fred1\source\PicoView\.worktrees\63-r1-consume-subtree-1\docs\v1-open-one-image-1\present-real-jpeg.png
+[2026-09-18T11:33:23Z INFO  picoview] browse session: dir=C:\Users\fred1\source\PicoView\.worktrees\63-r1-consume-subtree-1\docs\v1-open-one-image-1 count=4 index=Some(3)
+[2026-09-18T11:33:23Z INFO  picoview] [   986.8ms] R1 runtime booted: policy=Fixed logical=960x640 physical=960x640 live_scale=1 package_density=2
+[2026-09-18T11:33:23Z INFO  picoview] [   986.9ms] R1 presentation update: logical=960x640 physical=960x640 os_scale=1
+[2026-09-18T11:33:23Z INFO  picoview] [  1001.9ms] R1 render request: logical=960x640 physical=960x640 live_scale=1
+[2026-09-18T11:33:23Z INFO  picoview] [  1005.6ms] render submit (tick 1)
+[2026-09-18T11:33:23Z INFO  picoview] [  1005.8ms] frame ready from worker (tick 1)
+[2026-09-18T11:33:23Z INFO  picoview] [  1005.8ms] present begin (frame tick 1)
+[2026-09-18T11:33:23Z INFO  picoview] [  1005.8ms] first-present recovery: reconfigure swapchain
+[2026-09-18T11:33:23Z INFO  picoview] [  1017.5ms] R1 present: retained=960x640 swapchain=960x640 policy=Exact filter=Nearest
+[2026-09-18T11:33:23Z INFO  picoview] [  1026.9ms] swapchain present submitted
+[2026-09-18T11:33:23Z INFO  picoview] [  1027.0ms] present end (frame tick 1, submitted true)
+[2026-09-18T11:33:23Z INFO  picoview] [  1061.2ms] window shown after first presented frame
+[2026-09-18T11:33:23Z INFO  picoview] [  1061.5ms] Resized 960x640
+[2026-09-18T11:33:23Z INFO  picoview] [  1062.0ms] RedrawRequested
+[2026-09-18T11:33:23Z INFO  picoview] [  1062.0ms] present begin (frame tick 1)
+[2026-09-18T11:33:23Z INFO  picoview] [  1062.0ms] R1 present: retained=960x640 swapchain=960x640 policy=Exact filter=Nearest
+[2026-09-18T11:33:23Z INFO  picoview] [  1062.8ms] swapchain present submitted
+[2026-09-18T11:33:23Z INFO  picoview] [  1062.8ms] present end (frame tick 1, submitted true)
+[2026-09-18T11:33:23Z INFO  picoview] [  1072.6ms] R1 presentation update: logical=960x640 physical=960x640 os_scale=1

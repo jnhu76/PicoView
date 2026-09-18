@@ -5,7 +5,7 @@ PicoView builds against the in-tree path `third_party/pocketjs`; it does not
 download PocketJS at build time.
 
 repository = git@github.com:jnhu76/pocketjs.git
-revision = 3a10550bdea3265ba1202fa322ed57a7adfbce84
+revision = 24638737473cc7cd85202ba15adba511b79d9980
 branch_hint = integration/picoview-desktop
 source_path = third_party/pocketjs
 integration_method = git-subtree-squash
@@ -20,7 +20,10 @@ purpose = PicoView Windows Desktop runtime integration
 # - a direct pocket-ui-wgpu upload path that borrows those RGBA8 bytes for
 #   Queue::write_texture with no intermediate canonical CPU plane;
 # - R1 desktop presentation geometry (live viewport bounds, exact/transient
-#   blit, RenderSignature) on the reviewed integration tip.
+#   blit, RenderSignature) on the reviewed integration tip;
+# - `pocket-desktop-host` library export of generic R1 presentation geometry
+#   (PresentationGeometry / ViewportPolicy / RenderSignature / resolve_geometry)
+#   so PicoView consumes the shared rules instead of a local duplicate.
 
 # Consumption rules
 #
@@ -49,6 +52,10 @@ purpose = PicoView Windows Desktop runtime integration
 #    third_party/pocketjs. Open a focused PicoView PR.
 
 # HISTORY
+# - 3a10550bdea3265ba1202fa322ed57a7adfbce84
+#   (R1 desktop presentation geometry in hosts/desktop + BlitSet export).
+#   Advanced to 2463873 by PICOVIEW-63-R1-CONSUME-SUBTREE-1 for the shared
+#   geometry library API (PocketJS PR #3 / integration/picoview-desktop).
 # - 24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb
 #   (owned RGBA8 admission; former remote Cargo rev pin). Advanced to R1
 #   integration tip 3a10550 with the git-subtree import in
