@@ -92,6 +92,27 @@ Refresh revalidates the current source and attempts to publish a replacement.
 
 When refreshing an already-visible item, PicoView retains the last-good image until a replacement is ready or product policy explicitly requires otherwise. Navigating to a corrupt new item may publish an error item instead. These are intentionally different product cases.
 
+### 2.11 Product shell chrome and minimum client
+
+PicoView is a Windows desktop photo viewer with icon-first chrome: a command toolbar, an image viewport, and a status readout. Zoom percentage lives in the **status bar** (Fit / Zoom In / Zoom Out move that number). Toolbar `1:1` means Actual Size / 100%, not an aspect ratio.
+
+Current product command bar:
+
+```text
+Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · Flip Horizontal · Flip Vertical
+```
+
+Previous / Next are viewport-edge and keyboard navigation, not toolbar commands. Refresh (R / F5) remains a recovery path, not chrome vocabulary.
+
+**Product chrome allocation is Product authority.** Shell row heights define the image-viewport extent that Fit / center / pan consume as input geometry. Changing those heights is a Product chrome decision. It does **not** transfer ownership of ViewTransform equations, Fit algorithm, pan clamp, or orientation math (those remain Architecture / PR #61 authority). Formulas may be unchanged while the viewport boundary changes.
+
+**Minimum usable logical client size: `384 × 240`.**
+
+- The 8-command fixed toolbar needs ≈356 logical width (8×36 hit targets + group gaps + padding). Product closes that contract at **384** with margin.
+- Height keeps toolbar+status chrome plus a non-zero image viewport.
+- PocketJS `windows-app` capability floor is `240×180`. That is a **platform capability**, not a PicoView usability promise. PicoView does not claim a fully usable command bar at 240 logical width.
+- Native host must enforce the product min (`with_min_inner_size` + resize clamp) so UI-required width and host-allowed width cannot silently disagree.
+
 ---
 
 ## 3. Source fidelity

@@ -36,6 +36,17 @@ use current_item::{Command, CurrentItem, ObservationBoundary, OpenIntent, Reques
 const HOST_ID: &str = "windows-app";
 const HOST_ABI: u32 = 4;
 
+/// PicoView product minimum logical client size.
+///
+/// PocketJS `windows-app` capability floor is 240×180 logical. That is a
+/// platform capability, not a PicoView product usability promise. The fixed
+/// 8-command toolbar needs ≈356 logical px width (8×36 + group gaps +
+/// padding); product closes the contract at 384×240. Keep in sync with
+/// `guest/shell_layout.ts` `PRODUCT_MIN_CLIENT` and `guest/pocket.json`
+/// `viewport.min`.
+const PRODUCT_MIN_CLIENT_W: f64 = 384.0;
+const PRODUCT_MIN_CLIENT_H: f64 = 240.0;
+
 /// Monotonic milliseconds since process start, for first-frame lifecycle
 /// evidence. Both the window thread and the runtime worker log against this
 /// base so event order is reconstructible from the log alone.
@@ -567,6 +578,13 @@ impl ApplicationHandler<Wake> for Host {
                         // avoids a light OS title bar sitting on a dark viewer.
                         .with_theme(Some(Theme::Dark))
                         .with_inner_size(LogicalSize::new(self.viewport.0, self.viewport.1))
+                        // Product min client — closes the toolbar width
+                        // contract. Do not silently allow host/pocketjs 240px
+                        // capability floor to undercut product chrome.
+                        .with_min_inner_size(LogicalSize::new(
+                            PRODUCT_MIN_CLIENT_W,
+                            PRODUCT_MIN_CLIENT_H,
+                        ))
                         .with_resizable(true)
                         // Stay hidden until the first presented frame so the
                         // product never flashes an uninitialized white client.
@@ -754,8 +772,12 @@ impl ApplicationHandler<Wake> for Host {
                 let Some(window) = &self.window else { return };
                 let size = window.inner_size();
                 let logical = (
-                    (size.width as f64 / scale_factor).round().clamp(240.0, 4096.0) as u32,
-                    (size.height as f64 / scale_factor).round().clamp(180.0, 4096.0) as u32,
+                    (size.width as f64 / scale_factor)
+                        .round()
+                        .clamp(PRODUCT_MIN_CLIENT_W, 4096.0) as u32,
+                    (size.height as f64 / scale_factor)
+                        .round()
+                        .clamp(PRODUCT_MIN_CLIENT_H, 4096.0) as u32,
                 );
                 self.tx
                     .try_send(Input::Resize(logical.0, logical.1, scale_factor))
@@ -802,8 +824,12 @@ impl ApplicationHandler<Wake> for Host {
                 // physical client size is the presentation surface's business.
                 let scale = self.window.as_ref().unwrap().scale_factor();
                 let logical = (
-                    (size.width as f64 / scale).round().clamp(240.0, 4096.0) as u32,
-                    (size.height as f64 / scale).round().clamp(180.0, 4096.0) as u32,
+                    (size.width as f64 / scale)
+                        .round()
+                        .clamp(PRODUCT_MIN_CLIENT_W, 4096.0) as u32,
+                    (size.height as f64 / scale)
+                        .round()
+                        .clamp(PRODUCT_MIN_CLIENT_H, 4096.0) as u32,
                 );
                 self.tx
                     .try_send(Input::Resize(logical.0, logical.1, scale))

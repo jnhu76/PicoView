@@ -25,8 +25,11 @@ export type IconName = keyof typeof ICON_ASSETS;
 
 /**
  * Product semantic names for toolbar/edge actions.
- * PocketJS has no tooltip primitive at 24bab5e — these names are the
- * accessibility/metadata + test authority, not painted chrome labels.
+ * PocketJS has no tooltip primitive at 24bab5e. These strings are the
+ * **semantic/test authority** — not painted chrome labels, and not live
+ * accessibility metadata. ToolButton does not forward `semantic` to any
+ * PocketJS node/native a11y API; PocketJS 24bab5e has no such capability.
+ * Do not describe this map as accessibility metadata until that exists.
  *
  * Toolbar command bar:
  *   Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · Flip Horizontal · Flip Vertical

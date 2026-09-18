@@ -129,6 +129,10 @@ Product owns:
 
 Product owns **view intent**: it decides the requested view state and derived product geometry. It does not own physical sampler/shader/matrix implementation.
 
+Product also owns **shell chrome allocation**: which chrome rows exist (in-app title policy, toolbar, status) and their logical heights. Those heights define the image-viewport extent that Fit / center / pan consume as **input geometry**. Changing shell chrome heights is a Product chrome decision (PR #62), not a change to ViewTransform equations. PR #61 still owns Fit/pan/orientation math; PR #62 owns shell chrome allocation and therefore the resulting viewport boundary. Formula unchanged ≠ viewport boundary unchanged — the authority split must state both facts.
+
+Product also owns the **minimum usable logical client size** for its chrome (current: `384×240` in `guest/shell_layout.ts` `PRODUCT_MIN_CLIENT`, mirrored in `guest/pocket.json` and the native host). PocketJS platform capability floors (e.g. windows-app `240×180`) do not redefine product usability.
+
 ## 3.2 Image semantics — PicoView native
 
 > **What does this encoded source mean as an image?**

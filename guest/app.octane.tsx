@@ -590,7 +590,8 @@ function ToolButton({
   icon?: string;
   /** Compact visual symbol only (currently "1:1"). */
   textIcon?: string;
-  /** Semantic name — kept in code/tests; PocketJS has no tooltip primitive. */
+  /** Semantic/test authority string — not painted, not accessibility metadata
+   *  at PocketJS 24bab5e (no tooltip/a11y node capability; host ignores it). */
   semantic: string;
   disabled?: boolean;
   onPress: () => void;
