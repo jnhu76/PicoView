@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import {
+  PRODUCT_MIN_CLIENT,
   SHELL_CHROME,
   chromeHeight,
   imageViewport,
@@ -11,7 +12,25 @@ test("chrome height is sum of frozen parts", () => {
   expect(chromeHeight()).toBe(
     SHELL_CHROME.titleH + SHELL_CHROME.toolbarH + SHELL_CHROME.statusH,
   );
-  expect(chromeHeight()).toBe(128);
+  expect(chromeHeight()).toBe(68);
+});
+
+test("product min client closes the fixed toolbar width contract", () => {
+  // 8×36 + 2 GroupGap×8 + 9 gap-1×4 + px-2×2 = 288+16+36+16 = 356.
+  const toolbarMinW = 8 * 36 + 2 * 8 + 9 * 4 + 2 * 8;
+  expect(toolbarMinW).toBe(356);
+  expect(PRODUCT_MIN_CLIENT.width).toBeGreaterThanOrEqual(toolbarMinW);
+  expect(PRODUCT_MIN_CLIENT.height).toBeGreaterThan(chromeHeight());
+  // PocketJS windows-app capability floor is 240×180 — product may exceed it.
+  expect(PRODUCT_MIN_CLIENT.width).toBeGreaterThan(240);
+  expect(PRODUCT_MIN_CLIENT.height).toBeGreaterThan(180);
+});
+
+test("image viewport at product min still has non-negative height", () => {
+  const v = imageViewport(PRODUCT_MIN_CLIENT.width, PRODUCT_MIN_CLIENT.height);
+  expect(v.width).toBe(384);
+  expect(v.height).toBe(PRODUCT_MIN_CLIENT.height - chromeHeight());
+  expect(v.height).toBeGreaterThan(0);
 });
 
 test("image viewport consumes full window minus chrome", () => {

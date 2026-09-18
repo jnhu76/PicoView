@@ -1,0 +1,13 @@
+{
+  "icon-open.svg": { "linear": true },
+  "icon-prev.svg": { "linear": true },
+  "icon-next.svg": { "linear": true },
+  "icon-zoom-out.svg": { "linear": true },
+  "icon-zoom-in.svg": { "linear": true },
+  "icon-fit.svg": { "linear": true },
+  "icon-rotate.svg": { "linear": true },
+  "icon-flip-h.svg": { "linear": true },
+  "icon-flip-v.svg": { "linear": true },
+  "icon-empty.svg": { "linear": true },
+  "icon-warn.svg": { "linear": true }
+}

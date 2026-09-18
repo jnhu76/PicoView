@@ -65,6 +65,25 @@ hidden-until-first-frame presentation. View geometry, DPI, pointer ownership,
 EXIF O, and view transforms remain PR #61 authority and are not reinterpreted
 here. Evidence: `docs/compose/spec/windows-shell-ui-polish-1.md`.
 
+Campaign `PICOVIEW-DESKTOP-UI-NORMALIZATION-1` (PR #62, branch
+`fix/ui-chrome-1`) normalizes desktop viewer chrome to an icon-first
+photo-viewer command bar:
+`Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · FlipH · FlipV`.
+Previous/Next stay viewport-edge + keyboard. Shell chrome is compact
+(`SHELL_CHROME` titleH=0 / toolbarH=44 / statusH=24; chromeHeight=68).
+Zoom % is a status-bar readout that tracks Fit/Zoom; `1:1` = Actual Size 100%.
+
+**Authority note (desktop conformance corrective):** PR #62 is **not**
+presentation-only. It owns Product shell chrome allocation and therefore the
+image-viewport boundary that Fit/center/pan consume as input geometry.
+PR #61 still owns ViewTransform equations, Fit algorithm, pan clamp, and
+orientation math — formulas unchanged, viewport boundary changed. Product
+minimum usable logical client is **384×240** (`PRODUCT_MIN_CLIENT`); PocketJS
+windows-app 240×180 is platform capability, not product usability. Host enforces
+the product min via winit `with_min_inner_size` + resize clamp.
+`TOOL_SEMANTIC` is semantic/test authority, not accessibility metadata.
+Evidence: `docs/compose/spec/desktop-ui-normalization-1.md`.
+
 The next work is the remaining PicoView-side corrections (R3): truthful
 full-resolution capability, generic color/alpha admission.
 

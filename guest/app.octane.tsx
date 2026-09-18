@@ -22,11 +22,12 @@ import {
   cmdRefresh,
   cmdPickFile,
 } from "./commands.ts";
-import { ICON_ASSETS, iconLabel } from "./icons.ts";
+import { ICON_ASSETS, toolSemantic } from "./icons.ts";
 import { keyboardIntent } from "./keyboard.ts";
 import {
   imageViewport,
   pointInImageViewport,
+  SHELL_CHROME,
   wheelFocusPoint,
 } from "./shell_layout.ts";
 import {
@@ -44,8 +45,6 @@ import {
   pocketImageStyle,
   reconcileViewEnvironment,
   resetForNewPublication,
-  resetView,
-  rotateLeft,
   rotateRight,
   setUserOrientation,
   zoomAt,
@@ -360,94 +359,60 @@ export default function App() {
     setViewState(next);
   };
 
-  const headerCenter = shownName
-    ? (posText
-        ? `${truncateName(shownName, 36)}  (${posText})`
-        : truncateName(shownName, 36))
-    : "";
-
   return (
     <View class="w-full h-full flex-col bg-[#1e1e1e]">
-      {/* Title — height frozen in SHELL_CHROME.titleH */}
-      <View class="flex-row items-center px-3 bg-[#252526]" style={{ height: 36 }}>
-        <Text class="text-sm font-bold text-[#f0f0f0]">PicoView</Text>
-        <View class="flex-1 items-center justify-center overflow-hidden">
-          <Text class="text-sm text-[#a0a0a0]">{headerCenter}</Text>
-        </View>
-        <View class="w-12" />
-      </View>
+      {/* No in-app title strip — native window caption owns "PicoView".
+          Filename / index stay in the status bar. */}
 
-      {/* Toolbar — icon over label; handlers map to #61 ViewTransform ops */}
-      <View class="flex-row items-stretch px-1 py-1 bg-[#252526]" style={{ height: 64 }}>
+      {/* Toolbar — exact command bar:
+          Open · Zoom Out · Zoom In · Fit · 1:1 · Rotate · FlipH · FlipV
+          Previous/Next stay on viewport edges + keyboard (not toolbar).
+          Rotate = single CW 90°; FlipH/FlipV are separate visible-frame
+          reflections (PR #61 math).
+          Flex flow only; group gaps are spacer Views, not absolute x hacks. */}
+      <View class="flex-row items-center px-2 gap-1 bg-[#252526]" style={{ height: SHELL_CHROME.toolbarH }}>
         <ToolButton
           icon={ICON_ASSETS.open}
-          label={iconLabel("open")}
+          semantic={toolSemantic("open")}
           onPress={() => cmdPickFile()}
         />
-        <ToolSep />
-        <ToolButton
-          icon={ICON_ASSETS.previous}
-          label={iconLabel("previous")}
-          disabled={!browse.canPrevious}
-          onPress={() => cmdPrevious()}
-        />
-        <ToolButton
-          icon={ICON_ASSETS.next}
-          label={iconLabel("next")}
-          disabled={!browse.canNext}
-          onPress={() => cmdNext()}
-        />
-        <ToolSep />
+        <GroupGap />
         <ToolButton
           icon={ICON_ASSETS.zoomOut}
-          label={iconLabel("zoomOut")}
+          semantic={toolSemantic("zoomOut")}
           disabled={!canImage}
           onPress={() => apply(s => zoomOut(img, vp, s))}
         />
-        <View class="w-14 items-center justify-center">
-          <View class="px-2 py-1 rounded bg-[#1e1e1e]">
-            <Text class="text-xs text-[#f0f0f0]">{canImage ? zoomText : "-"}</Text>
-          </View>
-        </View>
         <ToolButton
           icon={ICON_ASSETS.zoomIn}
-          label={iconLabel("zoomIn")}
+          semantic={toolSemantic("zoomIn")}
           disabled={!canImage}
           onPress={() => apply(s => zoomIn(img, vp, s))}
         />
-        <ToolSep />
         <ToolButton
           icon={ICON_ASSETS.fit}
-          label={iconLabel("fit")}
+          semantic={toolSemantic("fit")}
           disabled={!canImage}
           onPress={() => apply(s => fitView(img, vp, s))}
         />
         <ToolButton
-          label={iconLabel("oneToOne")}
-          textIcon
+          textIcon="1:1"
+          semantic={toolSemantic("oneToOne")}
           disabled={!canImage || !can100}
           onPress={() => apply(s => actualSize(s))}
         />
-        <ToolSep />
+        <GroupGap />
         <ToolButton
-          label="RotL"
-          textIcon
-          disabled={!canImage}
-          onPress={() =>
-            apply(s => setUserOrientation(img, vp, s, rotateLeft(s.orientation)))
-          }
-        />
-        <ToolButton
-          label="RotR"
-          textIcon
+          icon={ICON_ASSETS.rotate}
+          semantic={toolSemantic("rotate")}
           disabled={!canImage}
           onPress={() =>
             apply(s => setUserOrientation(img, vp, s, rotateRight(s.orientation)))
           }
         />
         <ToolButton
-          label="FlipH"
-          textIcon
+          icon={ICON_ASSETS.flipH}
+          semantic={toolSemantic("flipH")}
           disabled={!canImage}
           onPress={() =>
             apply(s =>
@@ -456,27 +421,14 @@ export default function App() {
           }
         />
         <ToolButton
-          label="FlipV"
-          textIcon
+          icon={ICON_ASSETS.flipV}
+          semantic={toolSemantic("flipV")}
           disabled={!canImage}
           onPress={() =>
             apply(s =>
               setUserOrientation(img, vp, s, flipVertical(s.orientation)),
             )
           }
-        />
-        <ToolButton
-          label="Reset"
-          textIcon
-          disabled={!canImage}
-          onPress={() => apply(s => resetView(img, vp, s))}
-        />
-        <ToolSep />
-        <ToolButton
-          icon={ICON_ASSETS.refresh}
-          label={iconLabel("refresh")}
-          disabled={!canRefresh}
-          onPress={() => cmdRefresh()}
         />
       </View>
 
@@ -500,16 +452,21 @@ export default function App() {
           />
         ) : null}
 
-        {/* Side chevrons — ordinary focusables in the same gesture ownership */}
+        {/* Edge navigation only — translucent rest, clearer focus/active.
+            Not a toolbar command pair. Geometry never moves between states. */}
         {canImage && (browse.canPrevious || browse.canNext) ? (
-          <View class="absolute inset-0 flex-row items-center justify-between px-2">
+          <View class="absolute inset-0 flex-row items-center justify-between px-3">
             {browse.canPrevious ? (
               <View
-                class="w-10 h-10 items-center justify-center rounded-full bg-[#252526] focus:bg-[#1e1e1e] active:bg-[#1e1e1e]"
+                class="w-10 h-10 items-center justify-center rounded-full bg-[#00000044] focus:bg-[#00000099] active:bg-[#000000bb]"
                 onPress={() => cmdPrevious()}
                 focusable
               >
-                <Image class="w-5 h-5" src={ICON_ASSETS.previous} />
+                <Image
+                  class="w-5 h-5"
+                  src={ICON_ASSETS.previous}
+                  style={{ opacity: 0.92 }}
+                />
               </View>
             ) : (
               <View class="w-10 h-10" />
@@ -517,11 +474,15 @@ export default function App() {
             <View class="flex-1" />
             {browse.canNext ? (
               <View
-                class="w-10 h-10 items-center justify-center rounded-full bg-[#252526] focus:bg-[#1e1e1e] active:bg-[#1e1e1e]"
+                class="w-10 h-10 items-center justify-center rounded-full bg-[#00000044] focus:bg-[#00000099] active:bg-[#000000bb]"
                 onPress={() => cmdNext()}
                 focusable
               >
-                <Image class="w-5 h-5" src={ICON_ASSETS.next} />
+                <Image
+                  class="w-5 h-5"
+                  src={ICON_ASSETS.next}
+                  style={{ opacity: 0.92 }}
+                />
               </View>
             ) : (
               <View class="w-10 h-10" />
@@ -529,6 +490,8 @@ export default function App() {
           </View>
         ) : null}
 
+        {/* Overlay only for non-image states. When an image is bound, never
+            stack empty/loading/error on top of the publication. */}
         {verdict === "image" && !bound ? (
           <View class="flex-1 flex-col items-center justify-center">
             <Text class="text-sm text-[#a0a0a0]">Preparing image...</Text>
@@ -567,7 +530,7 @@ export default function App() {
               </View>
             ) : null}
           </View>
-        ) : (
+        ) : verdict === "empty" ? (
           <View class="flex-1 flex-col items-center justify-center gap-3">
             <Image class="w-12 h-12" src={ICON_ASSETS.empty} />
             <Text class="text-base text-[#a0a0a0]">Open an image to get started</Text>
@@ -579,11 +542,11 @@ export default function App() {
               <Text class="text-sm text-[#f0f0f0]">Open File...</Text>
             </View>
           </View>
-        )}
+        ) : null}
       </View>
 
       {/* Status — height frozen in SHELL_CHROME.statusH */}
-      <View class="flex-row items-center px-3 bg-[#252526] gap-3" style={{ height: 28 }}>
+      <View class="flex-row items-center px-3 bg-[#252526] gap-3" style={{ height: SHELL_CHROME.statusH }}>
         {dimText ? <Text class="text-xs text-[#a0a0a0]">{dimText}</Text> : null}
         {publication ? (
           <Text
@@ -597,7 +560,9 @@ export default function App() {
           </Text>
         ) : null}
         <View class="flex-1" />
-        {canImage ? <Text class="text-xs text-[#a0a0a0]">{zoomText}</Text> : null}
+        {/* Live product zoom (source-relative %). Fit shows "Fit · N%";
+            Zoom In/Out moves this number. 1:1 toolbar command = 100%. */}
+        {canImage ? <Text class="text-xs font-bold text-[#e6e6e6]">{zoomText}</Text> : null}
         <Text class="text-xs text-[#a0a0a0]">{`dpi ${dpi}`}</Text>
         {posText ? <Text class="text-xs text-[#a0a0a0]">{posText}</Text> : null}
         {shownName ? (
@@ -608,23 +573,33 @@ export default function App() {
   );
 }
 
+/** Semantic group spacer inside the toolbar (Flex child, not absolute).
+ *  With parent gap-1 (4px), w-2 yields ~12px total between groups. */
+function GroupGap() {
+  return <View class="w-2 shrink-0" />;
+}
+
+/** Icon-first toolbar button. Hit 36×36; glyph 20×20 (authored size). */
 function ToolButton({
   icon,
-  label,
   textIcon,
+  semantic,
   disabled,
   onPress,
 }: {
   icon?: string;
-  label: string;
-  textIcon?: boolean;
+  /** Compact visual symbol only (currently "1:1"). */
+  textIcon?: string;
+  /** Semantic/test authority string — not painted, not accessibility metadata
+   *  at PocketJS 24bab5e (no tooltip/a11y node capability; host ignores it). */
+  semantic: string;
   disabled?: boolean;
   onPress: () => void;
 }) {
   const off = disabled === true;
   const shell = off
-    ? "w-16 h-14 flex-col items-center justify-center gap-0.5 rounded"
-    : "w-16 h-14 flex-col items-center justify-center gap-0.5 rounded focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
+    ? "w-9 h-9 items-center justify-center rounded overflow-hidden shrink-0"
+    : "w-9 h-9 items-center justify-center rounded overflow-hidden shrink-0 focus:bg-[#1e1e1e] active:bg-[#1e1e1e]";
   return (
     <View
       class={shell}
@@ -632,21 +607,22 @@ function ToolButton({
       focusable={!off}
     >
       {textIcon ? (
-        <Text class={off ? "text-sm text-zinc-600" : "text-sm text-[#f0f0f0]"}>{label}</Text>
+        <Text
+          class={
+            off
+              ? "text-sm font-bold text-zinc-600"
+              : "text-sm font-bold text-[#e6e6e6]"
+          }
+        >
+          {textIcon}
+        </Text>
       ) : icon ? (
         <Image
           class="w-5 h-5"
           src={icon}
-          style={{ opacity: off ? 0.3 : 1 }}
+          style={{ opacity: off ? 0.38 : 1 }}
         />
-      ) : null}
-      {!textIcon ? (
-        <Text class={off ? "text-xs text-zinc-600" : "text-xs text-[#a0a0a0]"}>{label}</Text>
       ) : null}
     </View>
   );
-}
-
-function ToolSep() {
-  return <View class="w-px my-3 bg-[#3a3a3a]" />;
 }
