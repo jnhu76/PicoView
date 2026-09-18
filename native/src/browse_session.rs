@@ -48,10 +48,7 @@ impl BrowseSession {
     /// The initial item is `path` if it passes the image-extension filter;
     /// otherwise the session starts empty.
     pub fn new(path: &Path) -> Self {
-        let dir = path
-            .parent()
-            .unwrap_or(Path::new("."))
-            .to_path_buf();
+        let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
         let mut session = Self {
             dir,
             candidates: Vec::new(),
@@ -181,17 +178,11 @@ fn read_dir_sorted(dir: &Path) -> Vec<Candidate> {
                 if !path.is_file() {
                     return None;
                 }
-                let ext = path
-                    .extension()?
-                    .to_str()?
-                    .to_ascii_lowercase();
+                let ext = path.extension()?.to_str()?.to_ascii_lowercase();
                 if !IMAGE_EXTENSIONS.contains(&ext.as_str()) {
                     return None;
                 }
-                let name = path
-                    .file_stem()?
-                    .to_str()?
-                    .to_string();
+                let name = path.file_stem()?.to_str()?.to_string();
                 Some(Candidate { path, name })
             })
             .collect(),
@@ -234,7 +225,10 @@ mod tests {
 
     #[test]
     fn enumerates_image_files_in_deterministic_order() {
-        let dir = make_dir("order", &["Zebra.jpg", "apple.PNG", "Banana.jpeg", "mango.txt"]);
+        let dir = make_dir(
+            "order",
+            &["Zebra.jpg", "apple.PNG", "Banana.jpeg", "mango.txt"],
+        );
         let session = BrowseSession::new(&dir.join("apple.PNG"));
         assert_eq!(session.count(), 3); // .txt excluded
         assert_eq!(session.current_index(), Some(0)); // apple.PNG is first case-insensitively
@@ -339,7 +333,10 @@ mod tests {
         };
         // Primary key (lowercase) is equal for all three.
         assert_eq!(compare_candidates(&apple, &apple_cap), Ordering::Greater);
-        assert_eq!(compare_candidates(&apple_cap, &apple_all), Ordering::Greater);
+        assert_eq!(
+            compare_candidates(&apple_cap, &apple_all),
+            Ordering::Greater
+        );
         assert_eq!(compare_candidates(&apple_all, &apple), Ordering::Less);
         // Full path is the ultimate tie-break when file names are identical.
         let left = Candidate {
@@ -365,10 +362,7 @@ mod tests {
         assert_eq!(session.count(), 3);
         // Must still be b.jpg — not the new occupant at the old index.
         assert_eq!(session.current_name(), Some("b"));
-        assert_eq!(
-            session.current_path(),
-            Some(dir.join("b.jpg").as_path())
-        );
+        assert_eq!(session.current_path(), Some(dir.join("b.jpg").as_path()));
         let _ = fs::remove_dir_all(&dir);
     }
 

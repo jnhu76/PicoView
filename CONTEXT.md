@@ -15,8 +15,10 @@ frozen Product logical authority. Product still owns host window/swapchain
 wiring, CurrentItem, file dialogs, Windows associations, embedded guest, and
 product min client 384×240 logical (not PocketJS platform floor 240×180).
 Stage A corrective `PICOVIEW-63-R1-CONSUME-SUBTREE-CORRECTIVE-1` replaced an
-incorrect Fixed-policy consume. Stages B (native structure) and C (docs
-authority) wait on Stage A review. UI visual corrective is after this train.
+incorrect Fixed-policy consume. Stage B (native structure cleanup
+`PICOVIEW-NATIVE-STRUCTURE-CLEANUP-1`) is under review as a pure structural
+refactor; Stage C (docs authority) waits on Stage B merge. UI visual
+corrective is after this train.
 
 The viewer authority reset closed (PR #51, `528d3d8`). Campaign
 `PICOVIEW-DESKTOP-WGPU-CONFORMANCE-CLEANUP-1` (2026-09-16) then executed the
