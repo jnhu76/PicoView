@@ -19,6 +19,16 @@ reviewed HEAD of `jnhu76/pocketjs:integration/picoview-desktop`
 now publishes ordinary decodes by MOVING the WIC RGBA plane into
 `Ui::upload_owned_rgba8` — no PSM tag, no borrow seam, no second CPU plane.
 
+Campaign `PICOVIEW-POCKETJS-SUBTREE-INTEGRATION-1` (2026-09-18) closed the
+MVP dependency-layout gap: PicoView PR #62 merged onto main, PocketJS
+`integration/picoview-desktop` fast-forwarded to reviewed R1 tip `3a10550`,
+and that exact upstream tree was imported as a git subtree under
+`third_party/pocketjs` (`--squash`). `POCKETJS.lock` is now the subtree
+provenance authority; Cargo PocketJS crates are path dependencies into
+`third_party/pocketjs` (no PocketJS git rev, no submodule). PicoView still
+owns its desktop-host adapter; R1 presentation-geometry consumption remains a
+separate PicoView PR (worktree `picoview-63-render-pipeline-gate-1`).
+
 Campaign `PICOVIEW-LAST-GOOD-PUBLICATION-1` (2026-09-17) fixed the
 publication ordering: candidates are admitted before the previous
 publication is released, refresh failures preserve the last-good
@@ -96,7 +106,7 @@ full-resolution capability, generic color/alpha admission.
 - Execution: `docs/SPEC/PicoView-v1.1.md`
 - Agent policy: `AGENTS.md`
 - Sequencing: `docs/ROADMAP.md`
-- PocketJS source identity: `POCKETJS.lock`
+- PocketJS source identity / subtree provenance: `POCKETJS.lock` (in-tree snapshot at `third_party/pocketjs`)
 
 Operational documents do not redefine Product or Architecture semantics.
 

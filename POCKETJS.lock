@@ -1,46 +1,59 @@
-# PicoView → PocketJS dependency pin
-#
-# `revision` is the dependency authority. `branch_hint` is informational only
-# and may drift; the revision never does. Verify before bumping:
-#
-#   git ls-remote https://github.com/jnhu76/pocketjs.git refs/heads/integration/picoview-desktop
+# PicoView → PocketJS provenance lock
 
-repository = https://github.com/jnhu76/pocketjs.git
-revision = 24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb
+`revision` records the exact upstream PocketJS snapshot imported into PicoView.
+PicoView builds against the in-tree path `third_party/pocketjs`; it does not
+download PocketJS at build time.
+
+repository = git@github.com:jnhu76/pocketjs.git
+revision = 3a10550bdea3265ba1202fa322ed57a7adfbce84
 branch_hint = integration/picoview-desktop
+source_path = third_party/pocketjs
+integration_method = git-subtree-squash
 purpose = PicoView Windows Desktop runtime integration
 
-# This revision is the reviewed HEAD of jnhu76/pocketjs:integration/picoview-desktop,
-# the append-only consumer branch PicoView depends on. It provides:
+# What this revision provides
 #
 # - Windows Desktop parity in the shared hosts/desktop + pocket-ui-wgpu family;
 # - owned RGBA8 logical-resource admission (Ui::upload_owned_rgba8): a host
 #   decoder's Vec moves into the existing PocketJS texture record — one
 #   logical handle namespace, unchanged generation/revision/free semantics;
 # - a direct pocket-ui-wgpu upload path that borrows those RGBA8 bytes for
-#   Queue::write_texture with no intermediate canonical CPU plane.
+#   Queue::write_texture with no intermediate canonical CPU plane;
+# - R1 desktop presentation geometry (live viewport bounds, exact/transient
+#   blit, RenderSignature) on the reviewed integration tip.
+
+# Consumption rules
 #
-# These capabilities live on the integration branch; PocketJS main does not
-# contain them yet.
+# - PicoView Cargo dependencies resolve PocketJS crates as path dependencies
+#   into `third_party/pocketjs`. No PocketJS git dependency, no submodule.
+# - A plain `git clone` of PicoView contains this PocketJS snapshot; no
+#   submodule init and no jnhu76/pocketjs fetch is required to build.
+# - Do not manually copy files between the PicoView and PocketJS repositories.
+# - PocketJS runtime-generic capability work is still implemented and reviewed
+#   in jnhu76/pocketjs first, then frozen on integration/picoview-desktop.
+#   Neither jnhu76/pocketjs main nor pocket-stack/pocketjs main is an
+#   integration target for PicoView-specific dependency advancement.
+# - Historical campaign baselines remain research/history only and must never
+#   replace this subtree snapshot without a deliberate sync.
+
+# How to update this subtree
+#
+# 1. git fetch pocketjs
+# 2. Verify the reviewed integration SHA:
+#      git rev-parse pocketjs/integration/picoview-desktop
+#    Confirm it matches the reviewed PocketJS campaign tip (human review).
+# 3. Update the subtree:
+#      git subtree pull --prefix=third_party/pocketjs pocketjs integration/picoview-desktop --squash
+# 4. Advance `revision` in this file to that exact SHA.
+# 5. Rebuild/test PicoView and, when relevant, PocketJS tests under
+#    third_party/pocketjs. Open a focused PicoView PR.
 
 # HISTORY
+# - 24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb
+#   (owned RGBA8 admission; former remote Cargo rev pin). Advanced to R1
+#   integration tip 3a10550 with the git-subtree import in
+#   PICOVIEW-POCKETJS-SUBTREE-INTEGRATION-1.
 # - 6e631f463016a258e63fc9a5f922117b94d4f89f → df869a51225df5e310b84612c9195030c058b6d9
 #   (jnhu76/pocketjs#1, the V1 image-quality corrective): introduced
-#   Ui::register_native_texture / Ui::texture_live_bytes — the host-side
-#   large-image seam PicoView consumed through PR #49..#55. Superseded by the
-#   owned-admission revision above; see
-#   docs/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md.
-
-# Policy
-# - PicoView consumes PocketJS at exactly this revision.
-# - No git submodule, no vendoring, no copying PocketJS source into PicoView.
-# - Runtime-generic capability work is implemented and reviewed in
-#   jnhu76/pocketjs first, then frozen on integration/picoview-desktop at an
-#   exact reviewed commit before this lock is advanced deliberately.
-# - Neither jnhu76/pocketjs main nor pocket-stack/pocketjs main is an
-#   integration target for PicoView-specific dependency advancement.
-# - Future upstream synchronization flows through sync/* children of
-#   integration/picoview-desktop, never reverse into any main.
-# - Historical campaign baselines (e.g. pocket-stack/pocketjs a5a8535…,
-#   the archive/picoview-20260914/* museum refs) are research/history only
-#   and must never be used as an active dependency.
+#   Ui::register_native_texture / Ui::texture_live_bytes. Superseded by owned
+#   admission; see docs/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md.
