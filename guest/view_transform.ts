@@ -535,19 +535,25 @@ export function setUserOrientation(
   return clampPan(img, viewport, next);
 }
 
-/** Display label. Proxy images never claim source-relative 100%. */
+/**
+ * Display label for the status-bar zoom readout.
+ * Product zoom is source-relative: 1.0 = Actual Size / 100% (NOT aspect ratio).
+ * Fit still carries a real productZoom, so the % moves with Fit and with
+ * Zoom In/Out. Proxy images never claim source-relative 100%.
+ */
 export function zoomLabel(
   state: ViewTransform,
   opts: { fullResolution: boolean; hasImage: boolean },
 ): string {
   if (!opts.hasImage) return "-";
-  if (state.mode === "fit") return "Fit";
+  const pct = formatZoom(state.productZoom);
   if (!opts.fullResolution) {
-    const z = state.productZoom;
-    if (Math.abs(z - 1) < 1e-6) return "Proxy";
-    return `Proxy ×${formatZoom(z)}`;
+    if (state.mode === "fit") return `Fit · Proxy`;
+    if (Math.abs(state.productZoom - 1) < 1e-6) return "Proxy";
+    return `Proxy ×${pct}`;
   }
-  return formatZoom(state.productZoom);
+  if (state.mode === "fit") return `Fit · ${pct}`;
+  return pct;
 }
 
 function formatZoom(z: number): string {

@@ -560,7 +560,9 @@ export default function App() {
           </Text>
         ) : null}
         <View class="flex-1" />
-        {canImage ? <Text class="text-xs text-[#a0a0a0]">{zoomText}</Text> : null}
+        {/* Live product zoom (source-relative %). Fit shows "Fit · N%";
+            Zoom In/Out moves this number. 1:1 toolbar command = 100%. */}
+        {canImage ? <Text class="text-xs font-bold text-[#e6e6e6]">{zoomText}</Text> : null}
         <Text class="text-xs text-[#a0a0a0]">{`dpi ${dpi}`}</Text>
         {posText ? <Text class="text-xs text-[#a0a0a0]">{posText}</Text> : null}
         {shownName ? (

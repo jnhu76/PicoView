@@ -284,9 +284,33 @@ test("proxy labels never claim 100%", () => {
   expect(zoomLabel(s, { fullResolution: true, hasImage: true })).toBe("100%");
 });
 
-test("fit label", () => {
+test("fit label includes live product zoom percent", () => {
   const s = fitView(landscape, vp, initialViewTransform(1));
-  expect(zoomLabel(s, { fullResolution: true, hasImage: true })).toBe("Fit");
+  const pct = Math.round(s.productZoom * 100);
+  expect(zoomLabel(s, { fullResolution: true, hasImage: true })).toBe(
+    `Fit · ${pct}%`,
+  );
+});
+
+test("zoom in/out moves the status zoom number", () => {
+  const fmt = (z: number) => {
+    const pct = z * 100;
+    return Math.abs(pct - Math.round(pct)) < 0.05
+      ? `${Math.round(pct)}%`
+      : `${pct.toFixed(1)}%`;
+  };
+  const fit = fitView(landscape, vp, initialViewTransform(1));
+  const zin = zoomIn(landscape, vp, fit);
+  const zout = zoomOut(landscape, vp, zin);
+  const full = { fullResolution: true, hasImage: true };
+  expect(zoomLabel(fit, full)).toBe(`Fit · ${fmt(fit.productZoom)}`);
+  expect(zoomLabel(zin, full)).toBe(fmt(zin.productZoom));
+  expect(zoomLabel(zout, full)).toBe(fmt(zout.productZoom));
+  expect(zin.productZoom).not.toBe(fit.productZoom);
+  // 1:1 command is Actual Size = productZoom 1.0 = 100% (not an aspect ratio).
+  const a = actualSize(zin);
+  expect(a.productZoom).toBe(1);
+  expect(zoomLabel(a, full)).toBe("100%");
 });
 
 // --- zoom steps --------------------------------------------------------------
