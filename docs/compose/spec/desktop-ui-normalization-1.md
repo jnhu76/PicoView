@@ -3,7 +3,7 @@ feature: desktop-ui-normalization-1
 status: delivered
 updated: 2026-09-18
 branch: fix/ui-chrome-1
-commits: 880d58a00d90087558292f80f4366b7f92a23298..bdbd413
+commits: 880d58a00d90087558292f80f4366b7f92a23298..fabe62e
 corrective: PICOVIEW-PR62-DESKTOP-CONFORMANCE-1
 ---
 
