@@ -28,7 +28,7 @@ use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::ElementState;
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
-use winit::keyboard::{Key, ModifiersState};
+use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Theme, Window, WindowId};
 
 /// PicoView product minimum logical client size.
@@ -125,10 +125,30 @@ impl Host {
 
 /// Map a winit logical key to the guest's lowercase key names.
 /// Guest shortcuts use: left, right, r, f5, 0, 1, =, +, -, and o with ctrl.
-/// Translation lives with the window/event authority; the mapping table is
-/// shared from `runtime` so guest key vocabulary has one owner.
+/// Native winit input → guest scalar representation is app/window authority.
 fn key_name(key: &Key) -> String {
-    runtime::key_name(key)
+    match key {
+        Key::Character(s) => s.to_lowercase(),
+        Key::Named(n) => match n {
+            NamedKey::ArrowUp => "up".into(),
+            NamedKey::ArrowDown => "down".into(),
+            NamedKey::ArrowLeft => "left".into(),
+            NamedKey::ArrowRight => "right".into(),
+            NamedKey::Enter => "enter".into(),
+            NamedKey::Escape => "escape".into(),
+            NamedKey::Backspace => "backspace".into(),
+            NamedKey::Delete => "delete".into(),
+            NamedKey::Tab => "tab".into(),
+            NamedKey::Space => "space".into(),
+            NamedKey::Home => "home".into(),
+            NamedKey::End => "end".into(),
+            NamedKey::PageUp => "pageup".into(),
+            NamedKey::PageDown => "pagedown".into(),
+            NamedKey::F5 => "f5".into(),
+            _ => String::new(),
+        },
+        _ => String::new(),
+    }
 }
 
 impl ApplicationHandler<Wake> for Host {

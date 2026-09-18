@@ -21,7 +21,6 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::time::{Duration, Instant};
 use winit::event_loop::EventLoopProxy;
-use winit::keyboard::{Key, NamedKey};
 
 const HOST_ID: &str = "windows-app";
 const HOST_ABI: u32 = 4;
@@ -119,33 +118,6 @@ pub(crate) enum Input {
     OpenPath(PathBuf),
 }
 
-/// Map a winit logical key to the guest's lowercase key names.
-/// Guest shortcuts use: left, right, r, f5, 0, 1, =, +, -, and o with ctrl.
-pub(crate) fn key_name(key: &Key) -> String {
-    match key {
-        Key::Character(s) => s.to_lowercase(),
-        Key::Named(n) => match n {
-            NamedKey::ArrowUp => "up".into(),
-            NamedKey::ArrowDown => "down".into(),
-            NamedKey::ArrowLeft => "left".into(),
-            NamedKey::ArrowRight => "right".into(),
-            NamedKey::Enter => "enter".into(),
-            NamedKey::Escape => "escape".into(),
-            NamedKey::Backspace => "backspace".into(),
-            NamedKey::Delete => "delete".into(),
-            NamedKey::Tab => "tab".into(),
-            NamedKey::Space => "space".into(),
-            NamedKey::Home => "home".into(),
-            NamedKey::End => "end".into(),
-            NamedKey::PageUp => "pageup".into(),
-            NamedKey::PageDown => "pagedown".into(),
-            NamedKey::F5 => "f5".into(),
-            _ => String::new(),
-        },
-        _ => String::new(),
-    }
-}
-
 /// Parse a guest command from a svc JSON line. The guest sends lines like:
 /// `{"t":"pv","cmd":"previous"}`, `{"t":"pv","cmd":"next"}`,
 /// `{"t":"pv","cmd":"refresh"}`, `{"t":"pv","cmd":"open","path":"..."}`.
@@ -182,9 +154,9 @@ fn fnv1a64(words: &[u32]) -> u64 {
     hash
 }
 
-pub(crate) struct Runtime {
-    pub surface: UiSurface,
-    pub guest: Guest,
+struct Runtime {
+    surface: UiSurface,
+    guest: Guest,
     offload: OffloadWorker,
     /// Host.viewport / CLI `--viewport`: **initial/default requested logical
     /// size** (`guest/pocket.json` `viewport.dynamic.default`, normally
@@ -193,8 +165,8 @@ pub(crate) struct Runtime {
     initial_requested_logical: (u32, u32),
     /// Shared R1 presentation snapshot (Dynamic logical + measured physical
     /// + live OS scale).
-    pub geometry: PresentationGeometry,
-    pub ticks: u64,
+    geometry: PresentationGeometry,
+    ticks: u64,
     /// Native Current Item truth.
     current: CurrentItem,
     /// Used to ask the window thread for UI-thread-only work (file dialog).

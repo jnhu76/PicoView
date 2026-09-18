@@ -371,7 +371,7 @@ mod tests {
     }
 
     /// Shared Dynamic floor remains platform capability (240×180); product
-    /// min 384×240 is enforced by PicoView window/product contract (main.rs).
+    /// min 384×240 is enforced by PicoView window/product contract (app.rs).
     #[test]
     fn shared_dynamic_floor_stays_pocketjs_platform_min() {
         assert_eq!(DESKTOP_DYNAMIC_MIN, (240, 180));
