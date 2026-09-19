@@ -18,7 +18,7 @@ const ALL_CHROME_SVGS = [
   "zoom-out-line.svg",
   "zoom-in-line.svg",
   "aspect-ratio-line.svg",
-  "clockwise-line.svg",
+  "refresh-line.svg",
   "flip-horizontal-line.svg",
   "flip-vertical-line.svg",
   "image-line.svg",
@@ -42,6 +42,7 @@ const LEGACY_HAND_AUTHORED = [
   "icon-reflect.svg",
   "icon-reset.svg",
   "icon-refresh.svg",
+  "clockwise-line.svg",
 ];
 
 function exists(name: string): boolean {
@@ -118,14 +119,16 @@ test("each Remix SVG bakes via PocketJS bakeSvg to a pow2 texture", () => {
   }
 });
 
-test("Rotate maps to clockwise-line; Zoom In/Out map to zoom-*-line", () => {
-  expect(ICON_ASSETS.rotate).toBe("clockwise-line.svg");
+test("Rotate maps to circular refresh-line; Zoom In/Out map to zoom-*-line", () => {
+  expect(ICON_ASSETS.rotate).toBe("refresh-line.svg");
   expect(ICON_ASSETS.zoomIn).toBe("zoom-in-line.svg");
   expect(ICON_ASSETS.zoomOut).toBe("zoom-out-line.svg");
-  // clockwise-line must not be a hand-drawn "image+quarter-turn" mock
-  const rotate = readSvg("clockwise-line.svg");
-  expect(rotate).not.toContain('rect x="2" y="7"');
+  // Circular Remix glyph — not the old hand-drawn square+quarter-turn mock,
+  // and not clockwise-line's rectangular body.
+  const rotate = readSvg("refresh-line.svg");
   expect(rotate).toContain('viewBox="0 0 24 24"');
+  expect(rotate).not.toContain('rect x="2" y="7"');
+  expect(rotate).not.toContain("clockwise-line");
 });
 
 test("flipH and flipV remain distinct official Remix assets", () => {

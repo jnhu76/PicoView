@@ -18,7 +18,10 @@ export const ICON_ASSETS = {
   zoomOut: "zoom-out-line.svg",
   zoomIn: "zoom-in-line.svg",
   fit: "aspect-ratio-line.svg",
-  rotate: "clockwise-line.svg",
+  // Product Rotate CW. Visual glyph is Remix circular refresh-line (user
+  // acceptance: "rotate as a circle"), not clockwise-line's square+arrow.
+  // Command semantics remain one CW 90° — this is not a Refresh command.
+  rotate: "refresh-line.svg",
   flipH: "flip-horizontal-line.svg",
   flipV: "flip-vertical-line.svg",
   empty: "image-line.svg",

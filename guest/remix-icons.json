@@ -31,8 +31,9 @@
       "upstream": "icons/Media/aspect-ratio-line.svg"
     },
     "rotate": {
-      "file": "clockwise-line.svg",
-      "upstream": "icons/Design/clockwise-line.svg"
+      "file": "refresh-line.svg",
+      "upstream": "icons/System/refresh-line.svg",
+      "note": "Circular line glyph for Product Rotate CW visual acceptance; not the Refresh command."
     },
     "flipH": {
       "file": "flip-horizontal-line.svg",

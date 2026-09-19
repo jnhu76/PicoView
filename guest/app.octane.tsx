@@ -676,7 +676,7 @@ function ToolButton({
         <Image
           class="w-6 h-6"
           src={icon}
-          style={{ opacity: off ? 0.34 : 0.82 }}
+          style={{ opacity: off ? 0.36 : 0.9 }}
         />
       ) : null}
     </View>

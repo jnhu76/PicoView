@@ -23,7 +23,7 @@ test("Remix semantic mapping uses official line-family filenames", () => {
   expect(ICON_ASSETS.zoomOut).toBe("zoom-out-line.svg");
   expect(ICON_ASSETS.zoomIn).toBe("zoom-in-line.svg");
   expect(ICON_ASSETS.fit).toBe("aspect-ratio-line.svg");
-  expect(ICON_ASSETS.rotate).toBe("clockwise-line.svg");
+  expect(ICON_ASSETS.rotate).toBe("refresh-line.svg");
   expect(ICON_ASSETS.flipH).toBe("flip-horizontal-line.svg");
   expect(ICON_ASSETS.flipV).toBe("flip-vertical-line.svg");
   expect(ICON_ASSETS.empty).toBe("image-line.svg");
