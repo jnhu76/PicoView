@@ -216,24 +216,41 @@ baseline, verified from binaries rather than asserted:
   re-deriving it would require the removed junction topology).
 - `dist/picoview.pak` is **byte-identical** to the pre-corrective build
   (`sha256=32a23b25…`, unchanged).
-- Both EXEs embed the same guest artifacts: embedded JS `sha256=a3f007a7…`,
-  embedded PAK `sha256=32a23b25…`. The EXE files themselves differ only by
-  embedded build-directory path strings (each contains its own worktree path),
-  which is why the two worktrees' EXE/ZIP hashes differ.
+- Both EXEs embed byte-identical guest artifacts: embedded JS `sha256=a3f007a7…`,
+  embedded PAK `sha256=32a23b25…`. The EXE files themselves are **not**
+  bit-reproducible: a forced full rebuild of the same source in the same
+  directory re-links to a file differing in exactly 20 bytes — the PE
+  debug-directory PDB signature (RSDS GUID + timestamp) — and the two worktrees'
+  EXEs additionally differ in build-directory path strings (13,199,360 B in the
+  primary worktree vs 13,198,336 B in the oracle). This is a pre-existing
+  property of the native link; nothing in this corrective touches the resource or
+  link inputs, and the corrected layer's own output — the guest JS/PAK — is
+  byte-identical across worktrees and rebuilds.
 
-Artifact hashes (this machine, this run):
+Artifact hashes (this machine, this run). The two columns differ because the
+native EXE is not bit-reproducible across build environments (see above); the
+guest artifacts behind both are identical.
 
 | Artifact | Primary worktree | Clean oracle worktree |
 | --- | --- | --- |
 | portable ZIP | 4,809,821 B `sha256=34d9e68e77b40838085d365d2bbd15d94a947db715607c46c415175fe8547c4a` | 4,809,040 B `sha256=a3ada3b4fbdf3a0d0b2c5178f6c7cd5e322ddb66992eabfbb1b10efa8d388853` |
 | installer | 5,688,747 B `sha256=18b4301b32920b6b7026c1bf6e46435bae8b55ca2143c812320d0a77a24f720b` | 5,688,914 B `sha256=bab54328089dfb26346155267ecd4bd30e9abe923ae099c1c33f991b3d5d7cdd` |
 
+A final full release re-run at the commit that carries this document reproduced
+the guest hashes and produced the portable ZIP at 4,809,820 B
+`sha256=d06f68b1d068b817aced123477488433b90e712a1defe68eb006af80a440c472` and the
+installer at 5,689,667 B
+`sha256=0e7153d494614cc39ce314de4be299cfa1726c935e3c9196abf2a9153098968c`; the
+EXE-derived numbers move with each native link, as above.
+
 Smoke (both produced artifacts):
 
 - Portable ZIP contains exactly `PicoView\picoview.exe` and launches standalone:
   started with an image argument, process alive after 6 s, main window title
-  `PicoView`, terminated cleanly — for both the primary-worktree and the oracle
-  artifact. Registration is flag-gated in the product (`--register-associations`
+  `PicoView`, terminated cleanly — for the primary-worktree artifact, the oracle
+  artifact (`sha256=1a0dfd8d…`), and the artifact of a final full release re-run
+  at the commit that carries this document (`sha256=c37ff3f7…`). Registration is
+  flag-gated in the product (`--register-associations`
   / `--unregister-associations`, `native/src/main.rs`), so a plain launch cannot
   register; `HKCU\Software\Classes\PicoView.Image` was already populated on this
   machine from the earlier campaign, so this run does not re-prove
