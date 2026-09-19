@@ -1,6 +1,10 @@
-//! Live capability + admission acceptance for C:\img corpus.
-//! Uses the real created device via pocket3d Gpu::new_headless() and the
-//! real PocketJS Core admission after installing device capability.
+//! Live capability + PocketJS Core admission acceptance for the campaign
+//! corpus sizes. Uses the real created device via pocket3d Gpu::new_headless()
+//! and installs that device fact into Ui Core admission.
+//!
+//! Product admission policy (`ImageAdmissionPolicy`) truth is owned by
+//! CurrentItem unit/integration tests and production app logs — this example
+//! does **not** mirror Product policy constants.
 
 use pocket_ui_surface::UiSurface;
 
@@ -16,12 +20,18 @@ fn main() {
 
     let surface = UiSurface::new((96.0, 64.0));
     surface.with_ui(|ui| {
-        println!("Ui.image_max_texture_dim_before={}", ui.image_max_texture_dim());
+        println!(
+            "Ui.image_max_texture_dim_before={}",
+            ui.image_max_texture_dim()
+        );
         ui.set_image_max_texture_dim(device_dim);
-        println!("Ui.image_max_texture_dim_after={}", ui.image_max_texture_dim());
+        println!(
+            "Ui.image_max_texture_dim_after={}",
+            ui.image_max_texture_dim()
+        );
     });
 
-    // Direct Core admission of the exact 8256×5504 source plane (no proxy).
+    // Core admission of the exact 8256×5504 corpus plane (no proxy).
     let (w, h) = (8256u32, 5504u32);
     let plane = vec![0xABu8; (w as usize) * (h as usize) * 4];
     let handle = surface.with_ui(|ui| ui.upload_owned_rgba8(plane, w, h, true));
@@ -29,34 +39,31 @@ fn main() {
     if handle >= 0 {
         surface.with_ui(|ui| {
             let view = ui.texture(handle).expect("live texture");
-            println!("resource={}x{} linear={}", view.w, view.h, view.linear);
+            println!(
+                "resource={}x{} linear={}",
+                view.w, view.h, view.linear
+            );
+            // Geometry truth only — Product fullResolution is CurrentItem's fact.
+            println!(
+                "resource_matches_source={}",
+                (view.w, view.h) == (w, h)
+            );
         });
-        let full = handle >= 0;
-        println!("fullResolution_from_geometry={}", full);
     } else {
-        println!("fullResolution_from_geometry=false (admission rejected)");
+        println!("resource_matches_source=false (admission rejected)");
     }
 
-    // Control PNG size still admits under the same capability.
+    // Control PNG size admits under the same device capability.
     let (cw, ch) = (1254u32, 1254u32);
     let cplane = vec![1u8; (cw as usize) * (ch as usize) * 4];
     let chandle = surface.with_ui(|ui| ui.upload_owned_rgba8(cplane, cw, ch, true));
     println!("upload_owned_rgba8(1254x1254) handle={chandle}");
+    if chandle >= 0 {
+        surface.with_ui(|ui| {
+            let view = ui.texture(chandle).expect("control texture");
+            println!("control_resource={}x{}", view.w, view.h);
+        });
+    }
 
-    // Product policy path via CurrentItem is covered by unit tests; here we
-    // also print policy derivation for the live device.
-    let policy = picoview_policy_from_dim(device_dim);
-    println!(
-        "picoview_policy max_resource_dim={} max_resource_pixels={}",
-        policy.0, policy.1
-    );
-    let admits = policy.0 >= w && policy.1 >= (w as u64 * h as u64);
-    println!("policy_admits_8256x5504_exact={admits}");
-}
-
-/// Mirror of ImageAdmissionPolicy::from_usable_image_capability for the
-/// acceptance binary (avoids making decode module public API noise in the
-/// example). Values must stay in sync with decode.rs.
-fn picoview_policy_from_dim(device_dim: u32) -> (u32, u64) {
-    (device_dim.max(1), 80_000_000)
+    println!("probe complete");
 }

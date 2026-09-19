@@ -1,9 +1,15 @@
-//! Phase 1 capability probe (campaign evidence tool).
-//! Uses the same PocketJS Gpu bootstrap path as hosts/desktop
-//! (`pocket3d::gpu::Gpu` + `wgpu::Limits::default()` request).
-//! Reports adapter / requested-device / actual-device limits only.
+//! Current GPU image-capability probe (campaign evidence tool).
+//!
+//! Reports adapter / requested-policy / created-device limits on the SAME
+//! PocketJS Gpu bootstrap path Desktop hosts use
+//! (`pocket3d::gpu::Gpu` + `desktop_image_required_limits`).
+//!
+//! Historical pre-fix evidence (device stuck at 8192 under
+//! `wgpu::Limits::default()`) lives in
+//! `docs/history/corrective/PICOVIEW-ACTUAL-SIZE-CAPABILITY-1-BASELINE.md`.
+//! This probe describes CURRENT behavior only.
 
-use pocket3d::gpu::Gpu;
+use pocket3d::gpu::{Gpu, desktop_image_required_limits};
 
 fn dump_limits(label: &str, limits: &wgpu::Limits) {
     println!("{label}.max_texture_dimension_2d = {}", limits.max_texture_dimension_2d);
@@ -18,17 +24,22 @@ fn dump_limits(label: &str, limits: &wgpu::Limits) {
 }
 
 fn main() {
-    println!("=== PICOVIEW-ACTUAL-SIZE-CAPABILITY-1 Phase 1 probe ===");
-    println!("wgpu version requested by PicoView: 25");
-    println!("NATIVE_TEX_MAX_DIM (pocketjs_core) = 8192");
-    println!("MAX_DECODE_PIXELS (PicoView decode.rs) = 80000000");
-
-    let default_limits = wgpu::Limits::default();
-    println!("\n--- wgpu::Limits::default() (what request_device currently uses) ---");
-    dump_limits("default", &default_limits);
+    println!("=== PicoView GPU image-capability probe (CURRENT behavior) ===");
+    println!("wgpu version: 25");
+    println!(
+        "pocketjs_core::NATIVE_TEX_MAX_DIM (portable default ceiling) = {}",
+        pocketjs_core::NATIVE_TEX_MAX_DIM
+    );
+    println!(
+        "MAX_DECODE_PIXELS (PicoView CPU decode guard) = {}",
+        80_000_000u64
+    );
+    println!(
+        "Desktop request policy: pocket3d::gpu::desktop_image_required_limits \
+         (raises ONLY max_texture_dimension_2d to adapter.limits(); other defaults unchanged)"
+    );
 
     println!("\n--- Creating device via pocket3d::gpu::Gpu::new_headless() ---");
-    println!("(hosts/desktop uses from_instance_for_surface_with_power_preference + same Limits::default)");
     let gpu = match Gpu::new_headless() {
         Ok(g) => g,
         Err(e) => {
@@ -46,16 +57,22 @@ fn main() {
     println!("\n--- adapter.limits() ---");
     dump_limits("adapter", &gpu.adapter.limits());
 
+    let requested = desktop_image_required_limits(&gpu.adapter.limits());
+    println!("\n--- requested limits via desktop_image_required_limits(adapter) ---");
+    dump_limits("requested", &requested);
+
     println!("\n--- device.limits() (execution authority) ---");
     dump_limits("device", &gpu.device.limits());
 
     let device_dim = gpu.device.limits().max_texture_dimension_2d;
+    println!("\nusable image capability (device.max_texture_dimension_2d) = {device_dim}");
+
     println!("\n--- Texture creation probes on ACTUAL device (dim={device_dim}) ---");
     for (w, h) in [
-        (8192u32, 8192u32),
+        (pocketjs_core::NATIVE_TEX_MAX_DIM, pocketjs_core::NATIVE_TEX_MAX_DIM),
         (8256u32, 5504u32),
         (8256u32, 1u32),
-        (16384u32, 16384u32),
+        (device_dim, device_dim),
     ] {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let tex = gpu.device.create_texture(&wgpu::TextureDescriptor {
@@ -80,23 +97,30 @@ fn main() {
             Ok(()) => println!("create_texture({w}x{h}) = OK"),
             Err(_) => println!("create_texture({w}x{h}) = FAILED (panic/validation)"),
         }
-        // Force validation flush if available
         let _ = gpu.device.poll(wgpu::PollType::Wait);
     }
 
-    // Also probe PocketJS core admission constant gate (no GPU).
-    println!("\n--- PocketJS core NATIVE_TEX_MAX_DIM admission gate (CPU, no GPU) ---");
-    println!("8256 > 8192? {}", 8256u32 > pocketjs_core::NATIVE_TEX_MAX_DIM);
+    // Core admission is ceiling-based, not a fixed constant once a host
+    // installs device truth. Probe both the portable default and the
+    // installed device ceiling.
+    println!("\n--- PocketJS Core admission ceiling (CPU logical gate) ---");
+    let default_ui = pocket_ui_surface::UiSurface::new((8.0, 8.0));
+    let default_ceiling = default_ui.with_ui(|ui| ui.image_max_texture_dim());
+    println!("Ui default image_max_texture_dim = {default_ceiling}");
     println!(
-        "upload_owned_rgba8 would reject 8256-wide source under current constant? {}",
-        8256u32 > pocketjs_core::NATIVE_TEX_MAX_DIM
+        "8256 > portable default {default_ceiling}? {}",
+        8256u32 > default_ceiling
     );
+    default_ui.with_ui(|ui| ui.set_image_max_texture_dim(device_dim));
+    let installed = default_ui.with_ui(|ui| ui.image_max_texture_dim());
+    println!("Ui after set_image_max_texture_dim({device_dim}) = {installed}");
+    println!("8256 > installed {installed}? {}", 8256u32 > installed);
 
-    // Memory facts from code constants.
+    // Memory facts for the campaign corpus size (code constants only).
     let (w, h) = (8256u64, 5504u64);
     let pixels = w * h;
     let rgba8 = pixels * 4;
-    println!("\n--- 8256x5504 memory facts (from code path constants) ---");
+    println!("\n--- 8256x5504 memory facts ---");
     println!("source pixels = {pixels}");
     println!("RGBA8 level-0 bytes = {rgba8} ({:.2} MiB)", rgba8 as f64 / (1024.0 * 1024.0));
     let mip_levels = pocket_ui_wgpu::image_mip_level_count(w as u32, h as u32);
@@ -106,13 +130,17 @@ fn main() {
     for level in 0..mip_levels {
         let level_bytes = mw * mh * 4;
         mip_total += level_bytes;
-        println!("  mip[{level}] {mw}x{mh} = {level_bytes} bytes ({:.2} MiB)", level_bytes as f64 / (1024.0 * 1024.0));
+        println!(
+            "  mip[{level}] {mw}x{mh} = {level_bytes} bytes ({:.2} MiB)",
+            level_bytes as f64 / (1024.0 * 1024.0)
+        );
         mw = (mw / 2).max(1);
         mh = (mh / 2).max(1);
     }
-    println!("full mip-chain bytes = {mip_total} ({:.2} MiB)", mip_total as f64 / (1024.0 * 1024.0));
-    println!("mip extras beyond L0 = {:.2} MiB", (mip_total - rgba8) as f64 / (1024.0 * 1024.0));
-    println!("MAX_DECODE_PIXELS = 80000000; source pixels {pixels} allowed? {}", pixels <= 80_000_000);
+    println!(
+        "full mip-chain bytes = {mip_total} ({:.2} MiB)",
+        mip_total as f64 / (1024.0 * 1024.0)
+    );
 
     println!("\nprobe complete");
 }

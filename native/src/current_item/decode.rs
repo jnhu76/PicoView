@@ -70,6 +70,129 @@ impl ImageAdmissionPolicy {
     }
 }
 
+/// Integer proxy resource size under a policy. ALWAYS satisfies:
+/// - `1 <= cw <= max_resource_dim`
+/// - `1 <= ch <= max_resource_dim`
+/// - `cw * ch <= max_resource_pixels`
+///
+/// Derivation is not independent-axis `round(scale)` without a post-check —
+/// that can overshoot the pixel budget (counterexample 113×8858 @ 1,000,000
+/// → 113×8854 = 1,000,502). Instead:
+/// 1. ideal continuous scale = min(dim_ceiling, pixel_budget, never-upscale)
+/// 2. integer target = round(source × scale), clamped to `max_resource_dim`
+/// 3. hard shrink the longer axis until `cw*ch <= max_resource_pixels`
+/// 4. optional growth back toward the **ideal integer target only** (never
+///    free growth toward max_dim / remaining pixel budget)
+pub(super) fn proxy_resource_size(
+    src_w: u32,
+    src_h: u32,
+    max_resource_dim: u32,
+    max_resource_pixels: u64,
+) -> (u32, u32) {
+    let max_dim = max_resource_dim.max(1) as u64;
+    let max_pixels = max_resource_pixels.max(1);
+    let sw = src_w.max(1) as u64;
+    let sh = src_h.max(1) as u64;
+
+    let dim_scale = {
+        let by_w = max_dim as f64 / sw as f64;
+        let by_h = max_dim as f64 / sh as f64;
+        by_w.min(by_h).min(1.0)
+    };
+    let src_pixels = sw as f64 * sh as f64;
+    let pixel_scale = if src_pixels <= 0.0 {
+        1.0
+    } else {
+        ((max_pixels as f64) / src_pixels).sqrt().min(1.0)
+    };
+    let scale = dim_scale.min(pixel_scale);
+
+    // Ideal integer target (old dimension-only box-fit uses round; keep that
+    // when the combined policy still admits the rounded product).
+    let target_cw = ((sw as f64 * scale).round() as u64).clamp(1, max_dim);
+    let target_ch = ((sh as f64 * scale).round() as u64).clamp(1, max_dim);
+    let mut cw = target_cw;
+    let mut ch = target_ch;
+
+    // Hard invariant: shrink longer axis until product fits the pixel budget.
+    while cw * ch > max_pixels {
+        if cw >= ch && cw > 1 {
+            cw -= 1;
+        } else if ch > 1 {
+            ch -= 1;
+        } else if cw > 1 {
+            cw -= 1;
+        } else {
+            break;
+        }
+    }
+
+    // Recover quality only up to the ideal integer target — never past it,
+    // never past either ceiling.
+    loop {
+        if cw >= target_cw && ch >= target_ch {
+            break;
+        }
+        if cw * ch >= max_pixels {
+            break;
+        }
+        let grow_w = cw < target_cw && (cw + 1) * ch <= max_pixels && cw < max_dim;
+        let grow_h = ch < target_ch && cw * (ch + 1) <= max_pixels && ch < max_dim;
+        if grow_w && grow_h {
+            // Prefer catching up the axis further below its target (aspect).
+            let deficit_w = target_cw - cw;
+            let deficit_h = target_ch - ch;
+            if deficit_w >= deficit_h {
+                cw += 1;
+            } else {
+                ch += 1;
+            }
+        } else if grow_w {
+            cw += 1;
+        } else if grow_h {
+            ch += 1;
+        } else {
+            break;
+        }
+    }
+
+    // Final clamps (defensive).
+    cw = cw.clamp(1, max_dim).min(target_cw.max(1));
+    ch = ch.clamp(1, max_dim).min(target_ch.max(1));
+    while cw * ch > max_pixels {
+        if cw >= ch && cw > 1 {
+            cw -= 1;
+        } else if ch > 1 {
+            ch -= 1;
+        } else if cw > 1 {
+            cw -= 1;
+        } else {
+            break;
+        }
+    }
+    if cw < 1 {
+        cw = 1;
+    }
+    if ch < 1 {
+        ch = 1;
+    }
+    (cw as u32, ch as u32)
+}
+
+/// Assert the policy output-size invariant (tests + debug oracle).
+pub(super) fn proxy_size_holds_policy(
+    cw: u32,
+    ch: u32,
+    max_resource_dim: u32,
+    max_resource_pixels: u64,
+) -> bool {
+    cw >= 1
+        && ch >= 1
+        && cw <= max_resource_dim.max(1)
+        && ch <= max_resource_dim.max(1)
+        && (cw as u64 * ch as u64) <= max_resource_pixels.max(1)
+}
+
 /// Pure allocation guard for a decoded frame: the byte length a WIC RGBA
 /// conversion needs, or a bounded decode error.
 pub(super) fn decode_alloc_len(width: u32, height: u32) -> Result<usize, OpenError> {
@@ -160,21 +283,7 @@ pub(super) fn prepare_for_admission(
             rgba: Vec::new(),
         };
     }
-    // Fit into the dimension ceiling first.
-    let mut scale =
-        (max_dim as f64 / w as f64).min(max_dim as f64 / h as f64).min(1.0);
-    // Then bound the pixel count if the product safety budget is tighter.
-    let src_pixels = w as f64 * h as f64;
-    if src_pixels > 0.0 {
-        let pixel_scale = (max_pixels as f64 / src_pixels).sqrt();
-        if pixel_scale < scale {
-            scale = pixel_scale;
-        }
-    }
-    let (cw, ch) = (
-        ((w as f64 * scale).round() as u32).clamp(1, max_dim),
-        ((h as f64 * scale).round() as u32).clamp(1, max_dim),
-    );
+    let (cw, ch) = proxy_resource_size(w, h, max_dim, max_pixels);
     let mut pixels = vec![0u8; cw as usize * ch as usize * 4];
     let row = w as usize * 4;
     for cy in 0..ch {

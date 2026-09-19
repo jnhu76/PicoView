@@ -3,7 +3,7 @@
 
 use super::decode::{
     DecodedImage, ImageAdmissionPolicy, MAX_ERROR_CHARS, OpenError, decode_alloc_len,
-    open_decoded, prepare_for_admission, wic,
+    open_decoded, prepare_for_admission, proxy_resource_size, proxy_size_holds_policy, wic,
 };
 use super::publication::{
     BrowseSnapshot, ObservationBoundary, OpenIntent, RequestPhase, error_event, loading_event,
@@ -287,6 +287,125 @@ fn admission_case_f_malformed_dimensions_stay_bounded() {
         ImageAdmissionPolicy::from_usable_image_capability(16384).max_resource_pixels,
         80_000_000
     );
+}
+
+/// MINOR-2: max_resource_pixels is a strict invariant after proxy derivation.
+/// Historical counterexample: sqrt+round on both axes produced
+/// 113×8854 = 1,000,502 > 1,000,000.
+#[test]
+fn proxy_pixel_budget_counterexample_113x8858_stays_invariant() {
+    let (src_w, src_h) = (113u32, 8858u32);
+    let max_dim = 16384u32;
+    let max_pixels = 1_000_000u64;
+
+    // Document the historical invalid output from independent axis round().
+    let bad_scale = ((max_pixels as f64) / ((src_w as f64) * (src_h as f64))).sqrt();
+    let bad_cw = ((src_w as f64 * bad_scale).round() as u32).clamp(1, max_dim);
+    let bad_ch = ((src_h as f64 * bad_scale).round() as u32).clamp(1, max_dim);
+    let bad_product = bad_cw as u64 * bad_ch as u64;
+    // The old derivation can overshoot; if a given float rounding happens not
+    // to, the new function must still hold the invariant.
+    if bad_product > max_pixels {
+        assert!(
+            !proxy_size_holds_policy(bad_cw, bad_ch, max_dim, max_pixels),
+            "historical counterexample should violate the budget ({bad_cw}x{bad_ch}={bad_product})"
+        );
+    }
+
+    let (cw, ch) = proxy_resource_size(src_w, src_h, max_dim, max_pixels);
+    assert!(
+        proxy_size_holds_policy(cw, ch, max_dim, max_pixels),
+        "corrected size {cw}x{ch}={} must satisfy dim<={max_dim} and pixels<={max_pixels}",
+        cw as u64 * ch as u64
+    );
+    assert!(cw <= max_dim && ch <= max_dim);
+    assert!(cw as u64 * ch as u64 <= max_pixels);
+
+    // End-to-end prepare_for_admission must publish the same invariant.
+    let mut policy = ImageAdmissionPolicy::from_usable_image_capability(max_dim);
+    policy.max_resource_pixels = max_pixels;
+    let decode = DecodedImage {
+        width: src_w,
+        height: src_h,
+        rgba: vec![20u8; (src_w as usize) * (src_h as usize) * 4],
+    };
+    let res = prepare_for_admission(decode, &policy);
+    assert!(
+        proxy_size_holds_policy(res.width, res.height, max_dim, max_pixels),
+        "prepared proxy {}x{} violated policy",
+        res.width,
+        res.height
+    );
+    assert_ne!(
+        (res.width, res.height),
+        (src_w, src_h),
+        "113x8858 exceeds 1MP budget and must not claim full resolution"
+    );
+    assert_eq!(res.rgba.len(), (res.width * res.height * 4) as usize);
+}
+
+#[test]
+fn proxy_pixel_budget_exactly_on_budget_case() {
+    // Dimension fits, pixel budget binds exactly.
+    let (src_w, src_h) = (20u32, 20u32); // 400 px
+    let max_dim = 8192u32;
+    let max_pixels = 100u64;
+    let (cw, ch) = proxy_resource_size(src_w, src_h, max_dim, max_pixels);
+    assert!(proxy_size_holds_policy(cw, ch, max_dim, max_pixels));
+    assert_eq!(cw as u64 * ch as u64, max_pixels, "ideal exact-budget landing is 10x10");
+    assert_eq!((cw, ch), (10, 10));
+}
+
+#[test]
+fn proxy_dimension_bound_only_case() {
+    // Pixel budget does not bind; dimension ceiling does.
+    let (src_w, src_h) = (200u32, 50u32);
+    let max_dim = 100u32;
+    let max_pixels = 1_000_000_000u64;
+    let (cw, ch) = proxy_resource_size(src_w, src_h, max_dim, max_pixels);
+    assert!(proxy_size_holds_policy(cw, ch, max_dim, max_pixels));
+    assert_eq!((cw, ch), (100, 25));
+    assert!(cw as u64 * ch as u64 <= max_pixels);
+}
+
+#[test]
+fn proxy_exact_capability_8256_path_unchanged() {
+    // Raised-capability full-res path: no proxy, exact source geometry.
+    let policy = ImageAdmissionPolicy::from_usable_image_capability(16384);
+    assert!(policy.admits_exact(8256, 5504));
+    // Helper still returns a legal size if used; exact path never calls it.
+    let (cw, ch) = proxy_resource_size(8256, 5504, 16384, policy.max_resource_pixels);
+    assert!(proxy_size_holds_policy(cw, ch, 16384, policy.max_resource_pixels));
+    assert_eq!((cw, ch), (8256, 5504), "under both budgets helper keeps source size");
+}
+
+#[test]
+fn proxy_pixel_budget_invariant_holds_across_fuzz_sizes() {
+    let cases = [
+        (1u32, 1u32, 16384u32, 1u64),
+        (113, 8858, 16384, 1_000_000),
+        (8256, 5504, 8192, 80_000_000),
+        (8256, 5504, 16384, 1_000_000),
+        (7, 99999, 64, 10_000),
+        (4096, 4096, 2048, 100_000),
+        (100, 1, 50, 10),
+        (1, 100, 50, 10),
+        (333, 777, 300, 50_000),
+        (12345, 12, 8192, 40_000),
+    ];
+    for (w, h, dim, pixels) in cases {
+        let (cw, ch) = proxy_resource_size(w, h, dim, pixels);
+        assert!(
+            proxy_size_holds_policy(cw, ch, dim, pixels),
+            "invariant broken for {w}x{h} dim={dim} pixels={pixels} -> {cw}x{ch}={}",
+            cw as u64 * ch as u64
+        );
+        if w as u64 * h as u64 <= pixels && w <= dim && h <= dim {
+            // Exact-admissible sources are not proxied by prepare; helper
+            // still reports a legal size at or above a floor fit.
+            assert!(cw >= 1 && ch >= 1);
+        }
+    }
 }
 
 #[test]
