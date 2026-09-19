@@ -26,6 +26,7 @@ mod browse_session;
 mod current_item;
 mod presentation;
 mod runtime;
+mod svc_queue;
 
 use app::Host;
 use runtime::{Wake, parse_args};

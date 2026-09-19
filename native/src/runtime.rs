@@ -199,6 +199,9 @@ struct Runtime {
     ticks: u64,
     /// Native Current Item truth.
     current: CurrentItem,
+    /// Host-owned guest→host service lines awaiting their processing tick
+    /// (retention after the surface's drain-all handoff).
+    svc_pending: crate::svc_queue::SvcPending,
     /// Used to ask the window thread for UI-thread-only work (file dialog).
     proxy: EventLoopProxy<Wake>,
 }
@@ -332,6 +335,7 @@ impl Runtime {
             geometry: initial_geometry,
             ticks: 0,
             current,
+            svc_pending: crate::svc_queue::SvcPending::new(),
             proxy,
         })
     }
@@ -396,9 +400,19 @@ impl Runtime {
     fn tick(&mut self) -> Result<()> {
         self.offload.begin_frame();
         // Process guest commands: the guest sends command JSON lines via
-        // svcSend. Drain and process them before the guest frame. Each
-        // command gets its own RequestPhase token (consumed by open).
-        for line in self.surface.svc_drain().into_iter().take(64) {
+        // svcSend. svc_drain() empties the surface queue in one call, so the
+        // host owns the tail it cannot process this tick: refill pending
+        // storage, process at most MAX_SVC_LINES_PER_TICK, and leave the
+        // rest queued for later ticks — FIFO, never silently dropped.
+        let pending_before = self.svc_pending.len();
+        self.svc_pending.refill(self.surface.svc_drain());
+        if crate::svc_queue::crossed_high_water(pending_before, self.svc_pending.len()) {
+            log::warn!(
+                "svc pending queue crossed high-water mark: {} lines",
+                self.svc_pending.len()
+            );
+        }
+        for line in self.svc_pending.take_batch(crate::svc_queue::MAX_SVC_LINES_PER_TICK) {
             log::debug!("guest svc: {line}");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
                 if val.get("t").and_then(|v| v.as_str()) == Some("pv") {
