@@ -16,10 +16,13 @@ Current phase: **stabilization / rendering-quality closure** (R2 minification qu
 
 ## Current source baseline
 
-- Branch: `main`
-- Baseline: PR #66 merge `6eb578ef7215642ca7852113f9987f004a8c36bb`
+- Stage C campaign branch: `docs/mvp-authority-cleanup-1` (docs-only)
+- **Code baseline before Stage C** = PR #66 merge `6eb578ef7215642ca7852113f9987f004a8c36bb`
   (`refactor/native-structure-cleanup-1` — Stage B native structure)
-- Stage A R1 presentation consume is on main (Dynamic viewport from measured physical + live OS scale)
+- Stage C (this documentation authority cleanup) changes **docs only**.
+  `native/`, `guest/`, and `third_party/pocketjs/` are unchanged relative to that baseline.
+- Stage A R1 presentation consume is already in that code baseline (Dynamic viewport from measured physical + live OS scale)
+- Do not treat Stage C docs commits as a new runtime/code baseline
 - Historical Stage A/B campaign worktrees may still exist; do not reuse them for new work
 
 ---

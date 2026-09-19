@@ -41,7 +41,18 @@ purpose = PicoView Windows Desktop runtime integration
 
 # How to update this subtree
 #
-# 1. git fetch pocketjs
+# Fresh clones do not ship a `pocketjs` remote. Bootstrap it before any
+# fetch/subtree pull. Human-facing contract: docs/integration/POCKETJS.md
+#
+# 0. Bootstrap / verify the pocketjs remote (do not skip on a fresh clone):
+#      git remote get-url pocketjs
+#    - if the remote is missing:
+#        git remote add pocketjs git@github.com:jnhu76/pocketjs.git
+#    - if the remote exists but the URL is not git@github.com:jnhu76/pocketjs.git
+#      (or the equivalent https://github.com/jnhu76/pocketjs.git):
+#        STOP — do not re-point a different remote silently; fix identity first.
+# 1. Fetch the integration branch:
+#      git fetch pocketjs integration/picoview-desktop
 # 2. Verify the reviewed integration SHA:
 #      git rev-parse pocketjs/integration/picoview-desktop
 #    Confirm it matches the reviewed PocketJS campaign tip (human review).

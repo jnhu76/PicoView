@@ -80,18 +80,54 @@ This is **not** a git submodule and **not** a remote Cargo git dependency.
 
 ## Update flow
 
+A normal PicoView clone contains `third_party/pocketjs` source but **does not**
+define a git remote named `pocketjs`. Remote bootstrap is part of the update
+flow, not an optional precondition.
+
+### 0. Bootstrap / verify the `pocketjs` remote
+
+```bash
+git remote get-url pocketjs
+```
+
+- **Remote missing** (fresh clone, or never configured):
+
+  ```bash
+  git remote add pocketjs git@github.com:jnhu76/pocketjs.git
+  ```
+
+  Equivalent HTTPS URL `https://github.com/jnhu76/pocketjs.git` is acceptable
+  only if that is the clone’s deliberate auth path; identity must still be
+  `jnhu76/pocketjs`.
+
+- **Remote exists, URL wrong** (not `jnhu76/pocketjs`): **STOP.** Do not
+  silently re-point another remote. Repair identity before continuing.
+
+### 1–7. Reviewed import
+
 1. Develop and review the generic PocketJS change upstream (`jnhu76/pocketjs`).
 2. Integrate the reviewed commit onto `integration/picoview-desktop`.
-3. Verify the exact integration SHA on that branch (human review of the tip).
+3. Fetch and verify the exact integration SHA (human review of the tip):
+
+   ```bash
+   git fetch pocketjs integration/picoview-desktop
+   git rev-parse pocketjs/integration/picoview-desktop
+   ```
+
 4. Import into PicoView:
+
    ```bash
    git subtree pull --prefix=third_party/pocketjs pocketjs integration/picoview-desktop --squash
    ```
+
 5. Update `POCKETJS.lock` `revision` to that exact SHA.
 6. Verify tree/provenance (lock matches imported tip; path deps still resolve).
 7. Run PicoView tests (and PocketJS tests under `third_party/pocketjs` when relevant).
 
 Open a focused PicoView PR for the subtree + lock change. Do not mix unrelated product semantics into that PR.
+
+The update flow alone may require a `pocketjs` remote. Day-to-day **builds**
+never do: path dependencies resolve from `third_party/pocketjs` in-tree.
 
 ---
 
