@@ -23,7 +23,7 @@ fn main() {
             "missing guest artifacts (build the guest before the native build).\n\
              expected:\n  {}\n  {}\n\
              canonical guest build (from the repository root):\n\
-               pwsh -NoProfile -File scripts/build-guest.ps1\n\
+               powershell -NoProfile -File scripts/build-guest.ps1\n\
              which runs:\n\
                bun third_party/pocketjs/tools/pocket.ts compile --target windows-app \\\n\
                  --manifest guest/pocket.json --project-root . --outdir dist",

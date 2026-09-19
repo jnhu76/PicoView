@@ -5,7 +5,10 @@
 #   native  : those two generated artifacts -> picoview.exe            (cargo / build.rs)
 #   release : picoview.exe   -> portable zip + installer               (build-windows-release.ps1)
 #
-# Usage:  pwsh -NoProfile -File scripts\build-guest.ps1
+# Usage:  powershell -NoProfile -File scripts\build-guest.ps1
+#         (Windows PowerShell 5.1 — the validated shell for this release.
+#          PowerShell 7 `pwsh -NoProfile -File ...` is an equivalent optional
+#          spelling, not validated for this release.)
 #
 # The compile is a plain PocketJS *external project* build run from the
 # repository root: `--manifest guest/pocket.json --project-root .` with the

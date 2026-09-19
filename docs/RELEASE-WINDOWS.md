@@ -18,11 +18,14 @@ Three layers, each with one canonical command, all run from the repository root.
 No step creates a junction, symlink or copy of the framework, mutates
 `node_modules` to fake resolution, or writes to `third_party/pocketjs` sources.
 
+The canonical commands are validated under **Windows PowerShell 5.1**
+(`powershell.exe`, the shell shipped with Windows 11):
+
 | Layer | Produces | Canonical command |
 | --- | --- | --- |
-| Guest | `dist/picoview.js`, `dist/picoview.pak` | `pwsh -NoProfile -File scripts\build-guest.ps1` |
+| Guest | `dist/picoview.js`, `dist/picoview.pak` | `powershell -NoProfile -File scripts\build-guest.ps1` |
 | Native | `native/target/release/picoview.exe` | `cargo build --release --manifest-path native/Cargo.toml` |
-| Release | portable ZIP + installer | `pwsh -NoProfile -File scripts\build-windows-release.ps1` |
+| Release | portable ZIP + installer | `powershell -NoProfile -File scripts\build-windows-release.ps1` |
 
 The guest build compiles PicoView as a PocketJS **external project** from the
 repository root:
@@ -59,7 +62,7 @@ artifact is missing. The guest JS/PAK are embedded into the EXE at compile time
 One release entrypoint:
 
 ```powershell
-pwsh -NoProfile -File scripts\build-windows-release.ps1
+powershell -NoProfile -File scripts\build-windows-release.ps1
 ```
 
 Pipeline: guest build → `cargo build --release` → tests (guest 194 / native 64 at
@@ -68,13 +71,17 @@ only — no junction/symlink, no `node_modules` surgery, no `third_party` edits,
 no execution-policy bypass (`-SkipTests` skips the suites, `-Iscc <path>` points at
 `ISCC.exe`).
 
-Windows PowerShell 5.1 runs both scripts, spelled without `pwsh`:
+PowerShell 7 (`pwsh`) is an **equivalent optional** spelling of both scripts and
+is expected to work, but it is **not validated for this release** — the validated
+and released shell is Windows PowerShell 5.1 above:
 
 ```powershell
-powershell -NoProfile -File scripts\build-windows-release.ps1
+pwsh -NoProfile -File scripts\build-guest.ps1
+pwsh -NoProfile -File scripts\build-windows-release.ps1
 ```
 
-Requires: bun, Rust (msvc), Inno Setup 6 (`ISCC.exe`).
+Requires: bun, Rust (msvc), Inno Setup 6 (`ISCC.exe`), and Windows PowerShell 5.1
+(`powershell.exe` — present on every supported Windows 11 install).
 
 ## App identity (one icon authority)
 

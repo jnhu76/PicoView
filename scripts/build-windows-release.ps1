@@ -14,11 +14,12 @@
 #   PicoView-<version>-windows-x64-setup.exe
 # plus SHA-256 integrity hashes printed at the end.
 #
-# Usage:  pwsh -NoProfile -File scripts\build-windows-release.ps1
+# Usage:  powershell -NoProfile -File scripts\build-windows-release.ps1
 #         [-SkipTests] [-Iscc <path-to-ISCC.exe>]
 #
-# Windows PowerShell 5.1 also runs this script, spelled without pwsh:
-#   powershell -NoProfile -File scripts\build-windows-release.ps1
+# Windows PowerShell 5.1 is the validated shell for this release. PowerShell 7
+# is an equivalent optional spelling (`pwsh -NoProfile -File ...`) that is not
+# validated here.
 # (No execution-policy bypass is needed or documented: -File runs the script
 # under the machine's policy.)
 #

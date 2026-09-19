@@ -1,10 +1,12 @@
 # PICOVIEW-WINDOWS-RELEASE-BUILD-CORRECTIVE-1 — Evidence
 
 Status: **COMPLETE — junction topology removed, clean-checkout oracle PASS, release
-revalidated.** Branch `release/windows-release-hardening-1`. Prior head
+revalidated, closeout (validated shell made authoritative) recorded in §11.**
+Branch `release/windows-release-hardening-1`. Prior head
 `5193e20721ef42c44e39ef89ecf319f9cc55fccd`; corrective commit
 `b4b9dd08ab66e294c0e6c7192f21ba18414d81b4` (this evidence document is a
-docs-only follow-up on top of it).
+docs-only follow-up on top of it, extended by the closeout commit that follows
+`1e31ee4`).
 
 ## 1. Identity
 
@@ -124,16 +126,19 @@ and renderer, never a PicoView-side duplicate.
 
 | Layer | Input | Output | Command |
 | --- | --- | --- | --- |
-| Guest | `guest/*.ts(x)` | `dist/picoview.js`, `dist/picoview.pak` | `pwsh -NoProfile -File scripts/build-guest.ps1` |
+| Guest | `guest/*.ts(x)` | `dist/picoview.js`, `dist/picoview.pak` | `powershell -NoProfile -File scripts/build-guest.ps1` |
 | Native | those two generated artifacts | `native/target/release/picoview.exe` | `cargo build --release --manifest-path native/Cargo.toml` |
-| Release | `picoview.exe` | portable ZIP, installer, hashes | `pwsh -NoProfile -File scripts/build-windows-release.ps1` |
+| Release | `picoview.exe` | portable ZIP, installer, hashes | `powershell -NoProfile -File scripts/build-windows-release.ps1` |
+
+(Windows PowerShell 5.1 is the validated shell; the closeout in §11 records the
+authority inversion from the earlier `pwsh` spelling.)
 
 - `native/build.rs` does **not** invoke Bun (grep over `native/build.rs` and
   `native/src/**`: the only occurrence of `bun` is inside the failure message).
   Its `git diff` against `5193e20` is message-only — icon and VERSIONINFO
   embedding code is byte-identical.
 - The failure message now names the canonical guest build:
-  `pwsh -NoProfile -File scripts/build-guest.ps1`, and the compile it runs.
+  `powershell -NoProfile -File scripts/build-guest.ps1`, and the compile it runs.
 
 ## 7. Phase 5 — PowerShell is orchestration
 
@@ -143,10 +148,13 @@ and renderer, never a PicoView-side duplicate.
 invoke ISCC, report SHA-256. It contains no `mklink`, no junction, no
 `node_modules` surgery and no `third_party` edit.
 
-Documented invocation is `pwsh -NoProfile -File scripts\build-windows-release.ps1`;
-the script contains no execution-policy bypass. Windows PowerShell 5.1 is the
-same script spelled `powershell -NoProfile -File ...` (documented separately
-because 5.1 is what this machine has; `pwsh` is not installed here).
+Documented invocation is `powershell -NoProfile -File
+scripts\build-windows-release.ps1` (Windows PowerShell 5.1 — the shell every
+build in this campaign actually ran under, and the one the clean-checkout oracle
+in §8 used); the script contains no execution-policy bypass. PowerShell 7
+(`pwsh -NoProfile -File ...`) is an equivalent optional spelling and is **not**
+claimed as validated for this release: `pwsh` is not installed on this machine,
+so no run of it was observed.
 
 The guest build's own dependency step is explicit and lockfile-pinned — the
 vendored framework's install, the same one a PocketJS checkout needs
@@ -277,13 +285,88 @@ associated icon from the built binary).
 | C | Does the build depend on a previously existing junction? | No. Both `third_party/pocketjs/guest` and `node_modules/@pocketjs/framework` were deleted before the corrective builds; the clean worktree never had them. |
 | D | Does `third_party/pocketjs` become dirty after a build? | No. `git status` in both worktrees is clean after full builds; `bun.lock` unchanged. |
 | E | Does `build.rs` secretly invoke Bun? | No. `build.rs` only checks for the artifacts and panics with the command to run; no `Command`/process spawn. |
-| F | Is PocketJS generic external-project debt hidden in PicoView? | No. The external-project contract works (framework subpaths resolve in the compiler's own registry; committed `paths` cover the app-side specifiers). POCKETJS.lock and `third_party/pocketjs` are unchanged. Two upstream observations are recorded in §11 as non-blocking. |
+| F | Is PocketJS generic external-project debt hidden in PicoView? | No. The external-project contract works (framework subpaths resolve in the compiler's own registry; committed `paths` cover the app-side specifiers). POCKETJS.lock and `third_party/pocketjs` are unchanged. Two upstream observations are recorded in §12 as non-blocking. |
 | G | Can the guest compile run independently? | Yes — that exact command is what the passing builds ran, from the repository root. |
 | H | Can the native build run independently after the guest build? | Yes. `cargo build --release --manifest-path native/Cargo.toml` succeeded on its own and produced the EXE. |
 | I | Is PowerShell orchestration rather than dependency repair? | Yes. It runs the canonical guest build/test/cargo/ISCC commands; the only dependency step is the framework's own lockfile-pinned install, inside the guest build layer. |
 | J | Did the corrective change product/release semantics? | No. `packaging/`, `native/src/`, `guest/`, `assets/` are unchanged; the PAK is byte-identical; the JS differs only in module path comments; version authority, icon and installer inputs unchanged. |
 
-## 11. Upstream observations (non-blocking, not worked around silently)
+## 11. Closeout (PICOVIEW-WINDOWS-RELEASE-BUILD-CLOSEOUT-1)
+
+Follow-up on top of `1e31ee4` on the same branch. No product code changed; the
+closeout makes the shell that actually ran the campaign the documented release
+authority and re-verifies the topology claims on the final tree.
+
+**Authority inversion.** The canonical invocations are now
+
+```powershell
+powershell -NoProfile -File scripts\build-guest.ps1
+powershell -NoProfile -File scripts\build-windows-release.ps1
+```
+
+Windows PowerShell **5.1** — `powershell.exe`, version `5.1.26100.9444` on this
+machine — is the validated shell: it is what every build in this campaign and the
+§8 clean-checkout oracle ran under. PowerShell 7 (`pwsh -NoProfile -File ...`) is
+documented as an **equivalent optional** spelling only. It is **not claimed as
+validated for this release**: `pwsh` is not installed on this machine, so no run
+of it was observed. No `ExecutionPolicy Bypass` is added anywhere; the scripts run
+under `-NoProfile -File` and the machine's policy.
+
+Changed by the closeout: `docs/RELEASE-WINDOWS.md`, this evidence document,
+`scripts/build-guest.ps1` and `scripts/build-windows-release.ps1` (usage comments
+only — no logic), and the `native/build.rs` failure message's shell spelling.
+`git diff 1e31ee4 -- native/build.rs` is again message-only.
+
+**Topology re-verification (final tree, after the full release build):**
+
+| Check | Result |
+| --- | --- |
+| `mklink` in any release script | none (`git grep -i mklink -- scripts/`) |
+| junction/symlink creation primitives (`New-Item -ItemType Junction/SymbolicLink`, `CreateSymbolicLink`, `fsutil reparse`) | none |
+| `node_modules` mutation in scripts | none (the only occurrences are explanatory comments) |
+| `third_party` tracked writes | none — `git status --short third_party/` empty after the full build |
+| `third_party` untracked writes | only `third_party/pocketjs/node_modules`, the framework's own gitignored lockfile-pinned dependency install |
+| `POCKETJS.lock` | unchanged (`git diff` vs `HEAD` and vs `5193e20` both empty); revision still `720e6ee3ed91d53038ae6c6330420bb46dabca30` |
+| reparse points under the repository (`dir /AL /S`) | none |
+
+**Stale junction debris removed.** A repository-wide reparse scan found four
+junctions that survived from *earlier* campaigns' worktree scratch, not from the
+current build path:
+
+| Path | Target | State |
+| --- | --- | --- |
+| `.worktrees/live-dpi-acceptance-1/node_modules/@pocketjs/framework` | `…\live-dpi-acceptance-1\third_party\pocketjs` | old-topology junction |
+| `.worktrees/live-dpi-acceptance-1/third_party/pocketjs/guest` | `…\live-dpi-acceptance-1\guest` (absent) | old-topology junction, dangling |
+| `.worktrees/pure-black-shell-1/node_modules/@pocketjs/framework` | `…\pure-black-shell-1\third_party\pocketjs` | old-topology junction |
+| `.worktrees/pure-black-shell-1/third_party/pocketjs/guest` | `…\pure-black-shell-1\guest` (absent) | old-topology junction, dangling |
+
+Both owning worktrees were already deleted (`git worktree list` registers only
+the primary worktree; neither husk contains a `.git` link, a checkout, or a single
+regular file — `find -type f` returns 0 for both). The four links were unlinked
+with `Remove-Item`/`Directory.Delete(..., recursive: false)`, which removes the
+reparse point and not the target, and the two empty husk directories were then
+removed. `.worktrees/.gitignore` (which ignores the whole scratch tree) is
+untouched. Nothing was in the release path, and no byte of content was deleted.
+
+**Authoritative-command re-run** (whole documented entrypoint, Windows PowerShell
+5.1, `-NoProfile -File`, from the repository root, exit 0):
+
+| Stage | Result |
+| --- | --- |
+| framework dependency install | `bun install --frozen-lockfile --cwd third_party/pocketjs`, lockfile unchanged |
+| guest build | `dist/picoview.js` 391,714 B `sha256=a3f007a7…`; `dist/picoview.pak` 673,184 B `sha256=32a23b25…` (same hashes as every prior run — the closeout changed no build input) |
+| `cargo build --release` | `native/target/release/picoview.exe` 13,199,360 B |
+| `bun test guest/` | 194 pass, 0 fail, 1048 expect() calls across 12 files |
+| `cargo test --release` | 64 passed, 0 failed |
+| portable ZIP | 4,809,821 B `sha256=4f719dbfc8b11986fac208a2c308d6c8065199f03b90ef7b3312214bf1fbe3ab` |
+| installer | 5,689,715 B `sha256=c65b31320b802e37814e9ea548023fc4f0eeab813f886be5cdf4b2b3f03d8eca` |
+| post-build `git status` | only the closeout's own doc/comment edits; `third_party` and `POCKETJS.lock` clean |
+
+The EXE-derived artifact hashes differ from §9's, as expected: the native link is
+not bit-reproducible (§9 records the 20-byte PE debug-directory PDB signature),
+while the guest artifacts behind every run stay byte-identical.
+
+## 12. Upstream observations (non-blocking, not worked around silently)
 
 1. **App check has no project-owned ambient declaration hook.** PocketJS's app
    check passes only its own declaration files
