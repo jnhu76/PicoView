@@ -23,7 +23,8 @@ use anyhow::Result;
 use pocket_desktop_host::{PresentationGeometry, ViewportPolicy, resolve_geometry};
 use serde_json::json;
 use std::sync::Arc;
-use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
+use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
+use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::ElementState;
@@ -43,6 +44,127 @@ use winit::window::{Theme, Window, WindowId};
 pub(crate) const PRODUCT_MIN_CLIENT_W: f64 = 384.0;
 pub(crate) const PRODUCT_MIN_CLIENT_H: f64 = 240.0;
 
+/// R3 corrective: live presentation facts captured on the window thread.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct PresentationFacts {
+    pub measured_physical: (u32, u32),
+    pub os_scale: f64,
+}
+
+impl PresentationFacts {
+    fn into_input(self) -> Input {
+        Input::Presentation {
+            measured_physical: self.measured_physical,
+            os_scale: self.os_scale,
+        }
+    }
+}
+
+/// Producer-side latest-presentation enqueue result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum QueueOutcome {
+    /// Presentation entered the runtime input channel.
+    Sent,
+    /// Channel Full: retained as pending latest Presentation.
+    Pending,
+    /// Runtime input channel is gone — not success.
+    Disconnected,
+}
+
+/// Producer-side pending-presentation flush result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FlushOutcome {
+    /// Nothing pending.
+    Idle,
+    /// Pending Presentation entered the runtime input channel.
+    Sent,
+    /// Still Full; retry via event-loop wake.
+    StillPending,
+    /// Runtime input channel is gone — not success.
+    Disconnected,
+}
+
+/// Host-owned latest-presentation pending slot (R3 producer contract).
+///
+/// Presentation must never be silently discarded merely because the bounded
+/// input channel is temporarily Full. A Full `try_send` retains the facts;
+/// a newer Presentation replaces the pending slot (producer-side latest-wins).
+/// Flush retries until the facts enter the channel. `Disconnected` is never
+/// treated as delivered.
+///
+/// Barrier: non-Presentation inputs must not overtake a pending Presentation
+/// that was measured earlier. `barrier_allows_non_presentation` flushes first
+/// and reports whether a non-Presentation send is safe this turn.
+#[derive(Debug, Default)]
+pub(crate) struct PendingPresentation {
+    slot: Option<PresentationFacts>,
+}
+
+impl PendingPresentation {
+    pub(crate) fn is_pending(&self) -> bool {
+        self.slot.is_some()
+    }
+
+    pub(crate) fn peek(&self) -> Option<PresentationFacts> {
+        self.slot
+    }
+
+    /// Queue Presentation facts. Success clears older pending (already
+    /// superseded). Full replaces pending with the newer facts.
+    pub(crate) fn queue(
+        &mut self,
+        tx: &SyncSender<Input>,
+        facts: PresentationFacts,
+    ) -> QueueOutcome {
+        match tx.try_send(facts.into_input()) {
+            Ok(()) => {
+                self.slot = None;
+                QueueOutcome::Sent
+            }
+            Err(TrySendError::Full(_)) => {
+                self.slot = Some(facts);
+                QueueOutcome::Pending
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                // Keep facts visible; Host records failure and does not treat
+                // this as success.
+                self.slot = Some(facts);
+                QueueOutcome::Disconnected
+            }
+        }
+    }
+
+    /// Retry pending Presentation until it enters the channel.
+    pub(crate) fn flush(&mut self, tx: &SyncSender<Input>) -> FlushOutcome {
+        let Some(facts) = self.slot else {
+            return FlushOutcome::Idle;
+        };
+        match tx.try_send(facts.into_input()) {
+            Ok(()) => {
+                self.slot = None;
+                FlushOutcome::Sent
+            }
+            Err(TrySendError::Full(_)) => FlushOutcome::StillPending,
+            Err(TrySendError::Disconnected(_)) => {
+                self.slot = Some(facts);
+                FlushOutcome::Disconnected
+            }
+        }
+    }
+
+    /// Barrier gate for non-Presentation inputs.
+    ///
+    /// Returns true when any pending Presentation has been flushed (or none
+    /// is pending), so a subsequent non-Presentation `try_send` cannot
+    /// overtake a measured Presentation that never entered the channel.
+    pub(crate) fn barrier_allows_non_presentation(&mut self, tx: &SyncSender<Input>) -> bool {
+        if self.slot.is_none() {
+            return true;
+        }
+        matches!(self.flush(tx), FlushOutcome::Sent | FlushOutcome::Idle)
+    }
+}
+
 pub(crate) struct Host {
     window: Option<Arc<Window>>,
     surface: Option<presentation::Presentation>,
@@ -61,6 +183,8 @@ pub(crate) struct Host {
     /// The native window stays hidden until the first valid frame is
     /// presented, so the user never sees an uninitialized white client.
     shown: bool,
+    /// R3 producer-side latest Presentation when the input channel is Full.
+    pending_presentation: PendingPresentation,
 }
 
 impl Host {
@@ -83,6 +207,7 @@ impl Host {
             pointer: (0.0, 0.0),
             pointer_down: false,
             shown: false,
+            pending_presentation: PendingPresentation::default(),
         };
         host.startup = Some(RuntimeStartup {
             args,
@@ -100,6 +225,143 @@ impl Host {
 
     pub(crate) fn take_failure(&mut self) -> Option<String> {
         self.failure.take()
+    }
+
+    /// R3 producer contract: Presentation never silently dropped on Full.
+    fn queue_presentation(&mut self, measured_physical: (u32, u32), os_scale: f64) {
+        let facts = PresentationFacts {
+            measured_physical,
+            os_scale,
+        };
+        match self.pending_presentation.queue(&self.tx, facts) {
+            QueueOutcome::Sent => {
+                tlog(&format!(
+                    "R3 presentation queued: {}x{} @{}",
+                    measured_physical.0, measured_physical.1, os_scale
+                ));
+            }
+            QueueOutcome::Pending => {
+                tlog(&format!(
+                    "R3 presentation pending (channel full): {}x{} @{}",
+                    measured_physical.0, measured_physical.1, os_scale
+                ));
+            }
+            QueueOutcome::Disconnected => {
+                let msg = format!(
+                    "runtime input channel disconnected (presentation {}x{} @{})",
+                    measured_physical.0, measured_physical.1, os_scale
+                );
+                log::error!("{msg}");
+                self.failure = Some(msg);
+            }
+        }
+    }
+
+    /// Retry pending Presentation until it enters the runtime channel.
+    fn flush_pending_presentation(&mut self) -> bool {
+        let before = self.pending_presentation.peek();
+        match self.pending_presentation.flush(&self.tx) {
+            FlushOutcome::Idle => true,
+            FlushOutcome::Sent => {
+                if let Some(facts) = before {
+                    tlog(&format!(
+                        "R3 pending presentation flushed: {}x{} @{}",
+                        facts.measured_physical.0,
+                        facts.measured_physical.1,
+                        facts.os_scale
+                    ));
+                } else {
+                    tlog("R3 pending presentation flushed into runtime channel");
+                }
+                true
+            }
+            FlushOutcome::StillPending => {
+                if let Some(facts) = before {
+                    tlog(&format!(
+                        "R3 pending presentation still full; will retry: {}x{} @{}",
+                        facts.measured_physical.0,
+                        facts.measured_physical.1,
+                        facts.os_scale
+                    ));
+                }
+                false
+            }
+            FlushOutcome::Disconnected => {
+                let msg = "runtime input channel disconnected (presentation flush)";
+                log::error!("{msg}");
+                self.failure = Some(msg.into());
+                false
+            }
+        }
+    }
+
+    /// Host input send with R3 presentation reliability + barrier semantics.
+    ///
+    /// - Presentation: latest-wins pending slot; never silent Full drop.
+    /// - Non-Presentation: flush pending Presentation first; do not overtake
+    ///   a pending Presentation that cannot enter the channel this turn.
+    /// - Disconnected: record failure; never treat as success.
+    fn try_send_input(&mut self, input: Input, event_loop: Option<&ActiveEventLoop>) {
+        if let Input::Presentation {
+            measured_physical,
+            os_scale,
+        } = input
+        {
+            self.queue_presentation(measured_physical, os_scale);
+            if self.failure.is_some()
+                && let Some(event_loop) = event_loop
+            {
+                event_loop.exit();
+            }
+            return;
+        }
+
+        if !self
+            .pending_presentation
+            .barrier_allows_non_presentation(&self.tx)
+        {
+            if self.failure.is_some() {
+                if let Some(event_loop) = event_loop {
+                    event_loop.exit();
+                }
+                return;
+            }
+            // Pending Presentation could not enter. Terminal Quit still
+            // attempts delivery; other non-Presentation inputs must not
+            // overtake the barrier (Service/mouse were already Full-droppable).
+            match input {
+                Input::Quit => match self.tx.try_send(Input::Quit) {
+                    Ok(()) => {}
+                    Err(TrySendError::Disconnected(_)) => {
+                        self.failure =
+                            Some("runtime input channel disconnected (quit)".into());
+                        if let Some(event_loop) = event_loop {
+                            event_loop.exit();
+                        }
+                    }
+                    Err(TrySendError::Full(_)) => {
+                        tlog("R3 quit deferred: presentation pending / channel full");
+                    }
+                },
+                _ => {
+                    tlog("R3 non-presentation deferred: pending presentation not delivered");
+                }
+            }
+            return;
+        }
+
+        match self.tx.try_send(input) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                tlog("input channel full: drop non-presentation");
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                self.failure = Some("runtime input channel disconnected".into());
+                if let Some(event_loop) = event_loop {
+                    event_loop.exit();
+                }
+            }
+        }
     }
 
     fn present(&mut self) -> Result<()> {
@@ -266,11 +528,17 @@ impl ApplicationHandler<Wake> for Host {
                     .pick_file();
                 if let Some(path) = picked {
                     log::info!("open file dialog picked {}", path.display());
-                    self.tx.try_send(Input::OpenPath(path)).ok();
+                    self.try_send_input(Input::OpenPath(path), Some(event_loop));
                 }
                 // Cancel is a no-op: no publication change, no error state.
             }
             Wake::Output => {
+                // Worker produced output — the input channel may have drained.
+                self.flush_pending_presentation();
+                if self.failure.is_some() {
+                    event_loop.exit();
+                    return;
+                }
                 while let Ok(output) = self.rx.try_recv() {
                     if let Some(target) = output.target {
                         tlog(&format!("frame ready from worker (tick {})", output.tick));
@@ -305,6 +573,24 @@ impl ApplicationHandler<Wake> for Host {
         }
     }
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // R3 corrective: retry pending Presentation without blocking the
+        // winit/UI thread and without busy-spin. WaitUntil is event-loop-safe.
+        if self.pending_presentation.is_pending() {
+            self.flush_pending_presentation();
+            if self.failure.is_some() {
+                event_loop.exit();
+                return;
+            }
+            if self.pending_presentation.is_pending() {
+                event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
+                    Instant::now() + Duration::from_millis(16),
+                ));
+                return;
+            }
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+        }
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
     }
     fn window_event(
@@ -315,7 +601,7 @@ impl ApplicationHandler<Wake> for Host {
     ) {
         match event {
             winit::event::WindowEvent::CloseRequested => {
-                self.tx.try_send(Input::Quit).ok();
+                self.try_send_input(Input::Quit, Some(event_loop));
                 event_loop.exit();
             }
             winit::event::WindowEvent::ModifiersChanged(state) => {
@@ -328,12 +614,13 @@ impl ApplicationHandler<Wake> for Host {
                 // armed toolbar control (alt-tab mid-click). `"cancel":true`
                 // tells the guest to drop the press owner without activate.
                 self.pointer_down = false;
-                self.tx
-                    .try_send(Input::Service(
+                self.try_send_input(
+                    Input::Service(
                         json!({"t":"mouse","x":self.pointer.0,"y":self.pointer.1,"d":false,"b":0,"sh":false,"cancel":true})
                             .to_string(),
-                    ))
-                    .ok();
+                    ),
+                    Some(event_loop),
+                );
             }
             winit::event::WindowEvent::CursorMoved { position, .. } => {
                 let scale = self.window.as_ref().unwrap().scale_factor();
@@ -347,7 +634,7 @@ impl ApplicationHandler<Wake> for Host {
                     "sh": self.modifiers.shift_key(),
                 })
                 .to_string();
-                self.tx.try_send(Input::Service(line)).ok();
+                self.try_send_input(Input::Service(line), Some(event_loop));
             }
             winit::event::WindowEvent::MouseInput { state, button, .. } => {
                 if button == winit::event::MouseButton::Left {
@@ -362,7 +649,7 @@ impl ApplicationHandler<Wake> for Host {
                     "sh": self.modifiers.shift_key(),
                 })
                 .to_string();
-                self.tx.try_send(Input::Service(line)).ok();
+                self.try_send_input(Input::Service(line), Some(event_loop));
             }
             winit::event::WindowEvent::MouseWheel { delta, .. } => {
                 let dy = match delta {
@@ -380,24 +667,31 @@ impl ApplicationHandler<Wake> for Host {
                     "y": self.pointer.1
                 })
                 .to_string();
-                self.tx.try_send(Input::Service(line)).ok();
+                self.try_send_input(Input::Service(line), Some(event_loop));
             }
             winit::event::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 tlog(&format!("ScaleFactorChanged {scale_factor}"));
-                let Some(window) = &self.window else { return };
-                // R1 is not resize coalescing: preserve latest measured
-                // physical + live OS scale. Dynamic policy derives logical
-                // from current inner_size + new live scale. Temporary
-                // source/swapchain mismatch is allowed; permanent settled
-                // mismatch is not.
-                let measured = window.inner_size();
-                self.tx
-                    .try_send(Input::Presentation {
-                        measured_physical: (measured.width, measured.height),
+                let measured_physical = {
+                    let Some(window) = self.window.as_ref() else { return };
+                    // R1 is not resize coalescing: preserve latest measured
+                    // physical + live OS scale. Dynamic policy derives logical
+                    // from current inner_size + new live scale. Temporary
+                    // source/swapchain mismatch is allowed; permanent settled
+                    // mismatch is not.
+                    // R3 corrective: Full channel retains pending latest facts.
+                    let measured = window.inner_size();
+                    (measured.width, measured.height)
+                };
+                self.try_send_input(
+                    Input::Presentation {
+                        measured_physical,
                         os_scale: scale_factor,
-                    })
-                    .ok();
-                window.request_redraw();
+                    },
+                    Some(event_loop),
+                );
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
             }
             winit::event::WindowEvent::KeyboardInput { event, .. } => {
                 if event.state != ElementState::Pressed {
@@ -423,7 +717,7 @@ impl ApplicationHandler<Wake> for Host {
                     "ctl": ctl,
                 })
                 .to_string();
-                self.tx.try_send(Input::Service(line)).ok();
+                self.try_send_input(Input::Service(line), Some(event_loop));
             }
             winit::event::WindowEvent::RedrawRequested => {
                 tlog("RedrawRequested");
@@ -438,13 +732,15 @@ impl ApplicationHandler<Wake> for Host {
                 // Measured physical client size is presentation authority.
                 // Dynamic policy: runtime derives logical from measured size
                 // + current OS scale via shared R1 geometry.
+                // R3 corrective: Full channel retains pending latest facts.
                 let os_scale = self.window.as_ref().unwrap().scale_factor();
-                self.tx
-                    .try_send(Input::Presentation {
+                self.try_send_input(
+                    Input::Presentation {
                         measured_physical: (size.width, size.height),
                         os_scale,
-                    })
-                    .ok();
+                    },
+                    Some(event_loop),
+                );
                 self.window.as_ref().unwrap().request_redraw();
             }
             _ => {}
@@ -452,11 +748,17 @@ impl ApplicationHandler<Wake> for Host {
     }
 }
 
-/// Product-contract regressions for Dynamic R1 consumption (CORRECTIVE-1).
+/// Product-contract regressions for Dynamic R1 consumption (CORRECTIVE-1)
+/// plus R3 producer-side pending presentation delivery (CORRECTIVE-2).
 #[cfg(test)]
 mod tests {
-    use super::{PRODUCT_MIN_CLIENT_H, PRODUCT_MIN_CLIENT_W};
-    use pocket_desktop_host::{DESKTOP_DYNAMIC_MIN, ViewportPolicy, resolve_geometry};
+    use super::{
+        FlushOutcome, PRODUCT_MIN_CLIENT_H, PRODUCT_MIN_CLIENT_W, PendingPresentation,
+        PresentationFacts, QueueOutcome,
+    };
+    use crate::runtime::{Input, coalesce_presentation_batch};
+    use pocket_desktop_host::{DESKTOP_DYNAMIC_MIN, PresentationGeometry, ViewportPolicy, resolve_geometry};
+    use std::sync::mpsc::sync_channel;
 
     /// D. Product minimum remains 384×240 through PicoView window/product
     /// contract. PocketJS Dynamic floor 240×180 is platform capability only
@@ -478,5 +780,193 @@ mod tests {
         let tiny = resolve_geometry(ViewportPolicy::Dynamic, (960, 640), (200, 100), 2.0);
         assert_eq!(tiny.logical(), DESKTOP_DYNAMIC_MIN);
         assert_eq!(tiny.logical(), (240, 180));
+    }
+
+    fn facts(w: u32, h: u32, scale: f64) -> PresentationFacts {
+        PresentationFacts {
+            measured_physical: (w, h),
+            os_scale: scale,
+        }
+    }
+
+    fn is_pres_at(input: &Input, w: u32, h: u32, scale: f64) -> bool {
+        matches!(
+            input,
+            Input::Presentation { measured_physical, os_scale }
+                if *measured_physical == (w, h) && (*os_scale - scale).abs() < f64::EPSILON
+        )
+    }
+
+    /// A. Full channel retains final Presentation (does not silent-drop).
+    #[test]
+    fn full_channel_retains_final_presentation() {
+        let (tx, _rx) = sync_channel(1);
+        tx.try_send(Input::Service("fill".into())).unwrap();
+        let mut pending = PendingPresentation::default();
+        assert_eq!(
+            pending.queue(&tx, facts(800, 600, 1.0)),
+            QueueOutcome::Pending
+        );
+        assert!(pending.is_pending());
+        assert_eq!(pending.peek(), Some(facts(800, 600, 1.0)));
+        assert_eq!(pending.flush(&tx), FlushOutcome::StillPending);
+        assert_eq!(pending.peek(), Some(facts(800, 600, 1.0)));
+    }
+
+    /// B. Producer-side latest-wins: pending slot keeps only the newest facts.
+    #[test]
+    fn producer_side_latest_wins_replaces_pending() {
+        let (tx, _rx) = sync_channel(1);
+        tx.try_send(Input::Service("fill".into())).unwrap();
+        let mut pending = PendingPresentation::default();
+        assert_eq!(
+            pending.queue(&tx, facts(800, 600, 1.0)),
+            QueueOutcome::Pending
+        );
+        assert_eq!(
+            pending.queue(&tx, facts(900, 700, 1.0)),
+            QueueOutcome::Pending
+        );
+        assert_eq!(
+            pending.queue(&tx, facts(1200, 800, 1.0)),
+            QueueOutcome::Pending
+        );
+        assert_eq!(pending.peek(), Some(facts(1200, 800, 1.0)));
+    }
+
+    /// C. Eventual delivery: after capacity frees, exactly the latest enters.
+    #[test]
+    fn eventual_delivery_puts_exactly_latest_into_channel() {
+        let (tx, rx) = sync_channel(1);
+        tx.try_send(Input::Service("fill".into())).unwrap();
+        let mut pending = PendingPresentation::default();
+        pending.queue(&tx, facts(800, 600, 1.0));
+        pending.queue(&tx, facts(900, 700, 1.0));
+        pending.queue(&tx, facts(1200, 800, 1.0));
+        assert_eq!(pending.peek(), Some(facts(1200, 800, 1.0)));
+
+        // Consumer drains the filler; producer retries.
+        let _dropped = rx.try_recv().unwrap();
+        assert_eq!(pending.flush(&tx), FlushOutcome::Sent);
+        assert!(!pending.is_pending());
+        assert_eq!(pending.flush(&tx), FlushOutcome::Idle);
+
+        let batch: Vec<Input> = rx.try_iter().collect();
+        assert_eq!(batch.len(), 1);
+        assert!(is_pres_at(&batch[0], 1200, 800, 1.0));
+
+        // Consumer coalescing still observes the final facts once.
+        let applied = coalesce_presentation_batch(batch);
+        assert_eq!(applied.len(), 1);
+        assert!(is_pres_at(&applied[0], 1200, 800, 1.0));
+    }
+
+    /// D. No permanent final mismatch after latest Presentation is applied.
+    #[test]
+    fn no_permanent_final_mismatch_after_latest_delivery() {
+        let (tx, rx) = sync_channel(4);
+        let mut pending = PendingPresentation::default();
+        // Final requested client at 100% OS scale.
+        assert_eq!(
+            pending.queue(&tx, facts(1200, 800, 1.0)),
+            QueueOutcome::Sent
+        );
+        let batch: Vec<Input> = rx.try_iter().collect();
+        let applied = coalesce_presentation_batch(batch);
+        assert_eq!(applied.len(), 1);
+        let Input::Presentation {
+            measured_physical,
+            os_scale,
+        } = &applied[0]
+        else {
+            panic!("expected presentation");
+        };
+        let geo: PresentationGeometry = resolve_geometry(
+            ViewportPolicy::Dynamic,
+            (960, 640), // Host.viewport initial/default only
+            *measured_physical,
+            *os_scale,
+        );
+        assert_eq!(geo.logical(), (1200, 800));
+        assert_eq!(geo.physical(), (1200, 800));
+        assert!(geo.is_exact_present((1200, 800)));
+    }
+
+    /// E1. Barrier not weakened: pending Presentation flushes before Service.
+    #[test]
+    fn barrier_flushes_pending_presentation_before_non_presentation() {
+        let (tx, rx) = sync_channel(2);
+        tx.try_send(Input::Service("fill1".into())).unwrap();
+        tx.try_send(Input::Service("fill2".into())).unwrap();
+        let mut pending = PendingPresentation::default();
+        assert_eq!(
+            pending.queue(&tx, facts(640, 480, 1.0)),
+            QueueOutcome::Pending
+        );
+        // Free capacity for both flush + one Service.
+        assert!(rx.try_recv().is_ok());
+        assert!(rx.try_recv().is_ok());
+        assert!(pending.barrier_allows_non_presentation(&tx));
+        assert!(!pending.is_pending());
+        assert!(tx
+            .try_send(Input::Service(r#"{"t":"key","k":"0"}"#.into()))
+            .is_ok());
+
+        let batch: Vec<Input> = rx.try_iter().collect();
+        let applied = coalesce_presentation_batch(batch);
+        assert_eq!(applied.len(), 2);
+        assert!(is_pres_at(&applied[0], 640, 480, 1.0));
+        assert!(matches!(&applied[1], Input::Service(line) if line.contains("key")));
+    }
+
+    /// E2. Barrier not weakened: non-Presentation cannot overtake pending
+    /// Presentation when the channel stays Full.
+    #[test]
+    fn barrier_blocks_non_presentation_overtake_while_pending() {
+        let (tx, rx) = sync_channel(1);
+        tx.try_send(Input::Service("fill".into())).unwrap();
+        let mut pending = PendingPresentation::default();
+        pending.queue(&tx, facts(800, 600, 1.0));
+        // Still full — Service must not sneak in ahead of pending Presentation.
+        assert!(!pending.barrier_allows_non_presentation(&tx));
+        assert!(pending.is_pending());
+        // Channel still only has the filler.
+        let batch: Vec<Input> = rx.try_iter().collect();
+        assert_eq!(batch.len(), 1);
+        assert!(matches!(&batch[0], Input::Service(line) if line == "fill"));
+        assert_eq!(pending.peek(), Some(facts(800, 600, 1.0)));
+    }
+
+    /// Disconnected is not success: pending remains, outcome is failure.
+    #[test]
+    fn disconnected_is_not_treated_as_success() {
+        let (tx, rx) = sync_channel(1);
+        drop(rx);
+        let mut pending = PendingPresentation::default();
+        assert_eq!(
+            pending.queue(&tx, facts(1024, 768, 1.0)),
+            QueueOutcome::Disconnected
+        );
+        assert_eq!(pending.peek(), Some(facts(1024, 768, 1.0)));
+        assert_eq!(pending.flush(&tx), FlushOutcome::Disconnected);
+        assert!(pending.is_pending());
+    }
+
+    /// Successful newer Presentation clears obsolete pending facts.
+    #[test]
+    fn successful_newer_presentation_clears_pending() {
+        let (tx, rx) = sync_channel(1);
+        tx.try_send(Input::Service("fill".into())).unwrap();
+        let mut pending = PendingPresentation::default();
+        pending.queue(&tx, facts(800, 600, 1.0));
+        let _ = rx.try_recv().unwrap();
+        assert_eq!(
+            pending.queue(&tx, facts(1200, 800, 1.0)),
+            QueueOutcome::Sent
+        );
+        assert!(!pending.is_pending());
+        let batch: Vec<Input> = rx.try_iter().collect();
+        assert_eq!(batch.len(), 1);
+        assert!(is_pres_at(&batch[0], 1200, 800, 1.0));
     }
 }

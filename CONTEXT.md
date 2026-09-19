@@ -34,7 +34,7 @@ Current phase: **stabilization / rendering-quality closure** (R2 minification qu
 | Source path | `third_party/pocketjs` |
 | Upstream | `jnhu76/pocketjs` |
 | Integration branch | `integration/picoview-desktop` |
-| Provenance revision | `24638737473cc7cd85202ba15adba511b79d9980` |
+| Provenance revision | `4cf84b8d0124ae2e67681f279e6f5427917b4aff` |
 | Mechanism | `git subtree` (`--squash`) — not a submodule, not a Cargo git dependency |
 | Human contract | [`docs/integration/POCKETJS.md`](docs/integration/POCKETJS.md) |
 | Machine provenance | [`POCKETJS.lock`](POCKETJS.lock) |
@@ -77,8 +77,8 @@ There is no `gpu.rs` and no monolithic `current_item.rs`. Host presentation plum
 
 Architecture-authority work for MVP is closed. Known implementation debt (not authority redesign):
 
-- R2 image minification / mip quality under Fit and zoom-out
-- R3 resize scheduling and presentation quality
+- R2 image minification — **implemented** via PocketJS `4cf84b8` GPU mip chain for linear images (PICOVIEW-63 PR #68; pending review)
+- R3 resize scheduling — **implemented** via PicoView presentation-input latest-wins coalescing + Host producer-side pending-presentation slot (Full channel retains/retries final Presentation; Disconnected ≠ success) (same PR corrective; pending review)
 - Small visual corrective: toolbar icons, 12/14px fonts
 - Live DPI acceptance at 125/150/200%
 - Sampling partly stored as texture state rather than pure draw policy
