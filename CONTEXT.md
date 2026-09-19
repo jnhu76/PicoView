@@ -34,7 +34,7 @@ Current phase: **stabilization / rendering-quality closure** (R2 minification qu
 | Source path | `third_party/pocketjs` |
 | Upstream | `jnhu76/pocketjs` |
 | Integration branch | `integration/picoview-desktop` |
-| Provenance revision | `24638737473cc7cd85202ba15adba511b79d9980` |
+| Provenance revision | `4cf84b8d0124ae2e67681f279e6f5427917b4aff` |
 | Mechanism | `git subtree` (`--squash`) — not a submodule, not a Cargo git dependency |
 | Human contract | [`docs/integration/POCKETJS.md`](docs/integration/POCKETJS.md) |
 | Machine provenance | [`POCKETJS.lock`](POCKETJS.lock) |

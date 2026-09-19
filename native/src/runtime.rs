@@ -154,6 +154,33 @@ fn fnv1a64(words: &[u32]) -> u64 {
     hash
 }
 
+/// R3 latest-wins coalescing for one worker input batch.
+///
+/// Consecutive `Input::Presentation` events collapse to the latest measured
+/// physical + OS scale. Service / command / open / quit remain barriers: a
+/// non-presentation input flushes any pending presentation first, so command
+/// ordering still observes geometry that preceded the command. A trailing
+/// resize is applied once at the end of the batch.
+pub(crate) fn coalesce_presentation_batch(inputs: impl IntoIterator<Item = Input>) -> Vec<Input> {
+    let mut out = Vec::new();
+    let mut pending: Option<Input> = None;
+    for input in inputs {
+        match input {
+            Input::Presentation { .. } => pending = Some(input),
+            other => {
+                if let Some(presentation) = pending.take() {
+                    out.push(presentation);
+                }
+                out.push(other);
+            }
+        }
+    }
+    if let Some(presentation) = pending {
+        out.push(presentation);
+    }
+    out
+}
+
 struct Runtime {
     surface: UiSurface,
     guest: Guest,
@@ -472,8 +499,14 @@ pub(crate) fn run_runtime(
     // `RequestPhase` — a named, greppable misuse — so every queued handle's
     // replacing event is always observed by a frame that completes before
     // the boundary that frees it.
+    //
+    // R3 latest-wins: consecutive Presentation events coalesce to the latest
+    // measured geometry before a guest tick (`coalesce_presentation_batch`).
+    // Service/command/open remain barriers. No easing/spring — only obsolete
+    // intermediate resize applications are dropped.
     loop {
-        for input in inputs.try_iter().take(256) {
+        let batch: Vec<Input> = inputs.try_iter().take(256).collect();
+        for input in coalesce_presentation_batch(batch) {
             if !runtime.input(input)? {
                 return Ok(());
             }
@@ -520,6 +553,74 @@ pub(crate) fn run_runtime(
         } else {
             deadline = Instant::now();
         }
+    }
+}
+
+/// R3 coalescing: consecutive Presentation events collapse to the latest.
+#[cfg(test)]
+mod tests {
+    use super::{Input, coalesce_presentation_batch};
+    use std::path::PathBuf;
+
+    fn pres(w: u32, h: u32, scale: f64) -> Input {
+        Input::Presentation {
+            measured_physical: (w, h),
+            os_scale: scale,
+        }
+    }
+
+    fn is_pres_at(input: &Input, w: u32, h: u32, scale: f64) -> bool {
+        matches!(
+            input,
+            Input::Presentation { measured_physical, os_scale }
+                if *measured_physical == (w, h) && (*os_scale - scale).abs() < f64::EPSILON
+        )
+    }
+
+    #[test]
+    fn consecutive_resizes_coalesce_to_latest() {
+        let batch = [pres(800, 600, 1.0), pres(900, 700, 1.0), pres(1200, 800, 1.25)];
+        let applied = coalesce_presentation_batch(batch);
+        assert_eq!(applied.len(), 1);
+        assert!(is_pres_at(&applied[0], 1200, 800, 1.25));
+    }
+
+    #[test]
+    fn service_between_resizes_is_a_barrier() {
+        let batch = [
+            pres(800, 600, 1.0),
+            Input::Service(r#"{"t":"key","k":"0"}"#.into()),
+            pres(1000, 700, 1.0),
+        ];
+        let applied = coalesce_presentation_batch(batch);
+        assert_eq!(applied.len(), 3);
+        assert!(is_pres_at(&applied[0], 800, 600, 1.0));
+        assert!(matches!(&applied[1], Input::Service(line) if line.contains("key")));
+        assert!(is_pres_at(&applied[2], 1000, 700, 1.0));
+    }
+
+    #[test]
+    fn open_command_keeps_order_against_surrounding_resizes() {
+        let batch = [
+            pres(640, 480, 1.0),
+            pres(700, 500, 1.0),
+            Input::OpenPath(PathBuf::from(r"C:\img\a.jpg")),
+            pres(900, 600, 1.5),
+            pres(910, 610, 1.5),
+        ];
+        let applied = coalesce_presentation_batch(batch);
+        assert_eq!(applied.len(), 3);
+        assert!(is_pres_at(&applied[0], 700, 500, 1.0));
+        assert!(matches!(&applied[1], Input::OpenPath(p) if p.ends_with("a.jpg")));
+        assert!(is_pres_at(&applied[2], 910, 610, 1.5));
+    }
+
+    #[test]
+    fn empty_and_presentation_only_batches() {
+        assert!(coalesce_presentation_batch([]).is_empty());
+        let applied = coalesce_presentation_batch([pres(1, 1, 1.0)]);
+        assert_eq!(applied.len(), 1);
+        assert!(is_pres_at(&applied[0], 1, 1, 1.0));
     }
 }
 

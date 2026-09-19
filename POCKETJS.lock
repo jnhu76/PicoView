@@ -5,7 +5,7 @@ PicoView builds against the in-tree path `third_party/pocketjs`; it does not
 download PocketJS at build time.
 
 repository = git@github.com:jnhu76/pocketjs.git
-revision = 24638737473cc7cd85202ba15adba511b79d9980
+revision = 4cf84b8d0124ae2e67681f279e6f5427917b4aff
 branch_hint = integration/picoview-desktop
 source_path = third_party/pocketjs
 integration_method = git-subtree-squash
@@ -23,7 +23,11 @@ purpose = PicoView Windows Desktop runtime integration
 #   blit, RenderSignature) on the reviewed integration tip;
 # - `pocket-desktop-host` library export of generic R1 presentation geometry
 #   (PresentationGeometry / ViewportPolicy / RenderSignature / resolve_geometry)
-#   so PicoView consumes the shared rules instead of a local duplicate.
+#   so PicoView consumes the shared rules instead of a local duplicate;
+# - R2 generic minification quality: pocket-ui-wgpu linear image textures
+#   create a GPU mip chain (level count floor(log2(max(w,h)))+1), upload
+#   level 0 once, generate deeper levels on device; linear sampler uses
+#   Linear min/mag/mip filtering. No CPU pyramid.
 
 # Consumption rules
 #
@@ -63,6 +67,9 @@ purpose = PicoView Windows Desktop runtime integration
 #    third_party/pocketjs. Open a focused PicoView PR.
 
 # HISTORY
+# - 4cf84b8d0124ae2e67681f279e6f5427917b4aff
+#   (R2 pocket-ui-wgpu GPU mip chain for linear image minification).
+#   Advanced by PICOVIEW-63-IMAGE-PRESENTATION-QUALITY-1 from 2463873.
 # - 3a10550bdea3265ba1202fa322ed57a7adfbce84
 #   (R1 desktop presentation geometry in hosts/desktop + BlitSet export).
 #   Advanced to 2463873 by PICOVIEW-63-R1-CONSUME-SUBTREE-1 for the shared
