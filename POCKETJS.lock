@@ -5,7 +5,7 @@ PicoView builds against the in-tree path `third_party/pocketjs`; it does not
 download PocketJS at build time.
 
 repository = git@github.com:jnhu76/pocketjs.git
-revision = 3f31a20f3a0c82d74dc4e640fb55b889b6486a9f
+revision = 720e6ee3ed91d53038ae6c6330420bb46dabca30
 branch_hint = integration/picoview-desktop
 source_path = third_party/pocketjs
 integration_method = git-subtree-squash
@@ -32,7 +32,8 @@ purpose = PicoView Windows Desktop runtime integration
 #   only `max_texture_dimension_2d` to adapter.limits() at device creation;
 #   hosts export created-device truth via `Ui::set_image_max_texture_dim`;
 #   `upload_owned_rgba8` admits up to that installed ceiling
-#   (portable default remains `NATIVE_TEX_MAX_DIM` 8192).
+#   (portable default remains `NATIVE_TEX_MAX_DIM` 8192). AppSupervisor
+#   installs the same fact on every AppInstance child surface.
 
 # Consumption rules
 #
@@ -72,6 +73,9 @@ purpose = PicoView Windows Desktop runtime integration
 #    third_party/pocketjs. Open a focused PicoView PR.
 
 # HISTORY
+# - 720e6ee3ed91d53038ae6c6330420bb46dabca30
+#   (Desktop AppInstance surfaces inherit created-device image capability).
+#   Advanced by PICOVIEW-ACTUAL-SIZE-CAPABILITY-CORRECTIVE-1 from 3f31a20.
 # - 3f31a20f3a0c82d74dc4e640fb55b889b6486a9f
 #   (Desktop image device capability: adapter-bounded max_texture_dimension_2d
 #   request + Ui image admission ceiling export). Advanced by

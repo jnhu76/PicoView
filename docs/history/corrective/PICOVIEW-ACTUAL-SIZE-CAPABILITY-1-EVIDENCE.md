@@ -142,15 +142,16 @@ Live corpus case: `live_c_img_corpus_follows_installed_device_capability`.
 | M | Custom zoom #69 regression? | **NO guest semantic change**; zoom_editor/view_transform guest tests pass |
 | N | Accidental DPI/release work? | **NO** — 100% only; no toolbar/R2/R3 redesign |
 
-### MINOR residual
+## MINOR residual (PR #70 review) — closed by CORRECTIVE-1
 
-1. Interactive 1:1 click not automated in this session; truth is locked by native publication logs + unchanged guest gate tests + `can100` source proof.
-2. `hosts/desktop` child AppInstance surfaces do not yet copy `image_max_texture_dim` from the shell (PicoView does not use child surfaces). Conservative default 8192 remains for those children.
-3. `max_buffer_size` left at wgpu default 256 MiB; 173 MiB L0 upload succeeded on this host. If another backend stages whole planes larger than default buffer size, a follow-on may need a named raise — not assumed here.
+| MINOR | Closure |
+| --- | --- |
+| 1. Desktop child surfaces did not inherit device image capability | PocketJS `720e6ee`: AppSupervisor stores created-device `image_max_texture_dim` and installs it on root + every AppInstance child UiSurface. Test `child_surfaces_inherit_created_device_image_capability`. |
+| 2. `max_resource_pixels` not a strict invariant after proxy rounding | `proxy_resource_size`: ideal scale → integer target → hard shrink → grow only toward ideal target. Counterexample 113×8858 @ 1e6: old round path 113×8854=1,000,502; corrected holds `cw*ch<=1e6`. |
+| 3. Evidence tools stale / Product policy mirror | `gpu_cap_probe` reports current `desktop_image_required_limits`; `admission_live_accept` no longer mirrors `ImageAdmissionPolicy` constants. |
 
-### MAJOR
+CORRECTIVE-1 PocketJS lock: `720e6ee3ed91d53038ae6c6330420bb46dabca30`
 
-None.
 
 ## Non-goals honored
 
