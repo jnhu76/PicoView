@@ -1,7 +1,9 @@
 # PICOVIEW-LIVE-DPI-ACCEPTANCE-1 — Evidence
 
-Status: **IN PROGRESS** — Phase 0/1 complete, Phase 2 (100% baseline) complete,
-Phase 3 (125/150/200%) pending user-assisted display-scale changes.
+Status: **COMPLETE — ACCEPTANCE PASS**. Cold-start acceptance at 100% /
+125% / 150% / 200% all PASS; two genuine live transitions (200→150→100)
+PASS with full event-flow verification. No code changes required or made.
+Final summary in §9.
 
 Campaign: deferred live-DPI acceptance for PicoView on Windows 11. This is an
 acceptance/evidence campaign; no code changes are expected. Authority chain:
@@ -245,75 +247,157 @@ mid-resize bridge; no persistent mismatch; R3 latest-wins held.
   applied exactly. Recorded as harness coordinate fragility; the keyboard
   fallback it exposed is itself correct product behavior.
 
-### 6.4 Evidence class accounting
+### 6.4 Evidence class accounting (final)
 
-- 125% acceptance: **COLD_START_AT_SCALE** (the 100→125 change happened
-  while PicoView was not running, so it cannot be claimed as a live
-  transition; not faked in code per the campaign's no-false-evidence rule).
-- The genuine **LIVE_TRANSITION** (125→150) is captured next: PicoView stays
-  running with the observer harness attached while the user changes scale.
+- 125% acceptance: **COLD_START_AT_SCALE** (the user changed scale and signed
+  out; see §7.4 — the 125→150 "live transition" first attempted was actually
+  a session logoff, which terminated the running instance).
+- Genuine **LIVE_TRANSITION** evidence was captured later, per §7.3 and §8.3:
+  200%→150% and 150%→100% with PicoView running and an observer attached
+  (standard-preset scale changes apply immediately; only the Windows
+  *custom-scaling* page requires a sign-out).
 
-## 7. Phase 3 runbook — 150% / 200% (remaining)
+## 7. Phase 3 — 150% (evidence classes: COLD_START_AT_SCALE + LIVE_TRANSITION)
 
-Mission note: the campaign brief was truncated mid-§C in transmission; the
-section list below reconstructs D–H from the mission's stated verification
-targets (Remix icons, 12/14 typography, Fit/minification, resize smoothness,
-editable Product Zoom %, truthful Actual Size / 1:1, pointer/pan). Sections:
+### 7.1 OS state
 
-- **A. Boot / geometry** — fresh launch at the stable scale; verify
-  §3.2 matrix row + `R1 runtime booted` / `R1 presentation update` /
-  `R1 present:` lines; no permanent retained/swapchain mismatch.
-- **B. Live scale transition** — with PicoView running (`observe` mode
-  attached), change Windows scale; verify the event flow
-  `Windows scale event → measured physical → Input::Presentation → Dynamic
-  resolve → guest logical resize → render → Exact settle`; Transient/Linear
-  permitted mid-transition, Exact/Nearest required at settle; final live DPI
-  event must not be lost; then a fresh cold start at the same scale.
-- **C. Toolbar / Remix icons** — same checklist as §4.2 at the target scale:
-  centered, unclipped, no asymmetric scaling, no fuzziness from accidental
-  secondary scaling, hit targets product-consistent, disabled states
-  recognizable, `1:1` text centered. No icon redesign during acceptance.
-- **D. Typography** — 12/14 px status/toolbar text crisp and correctly
-  positioned at fractional scales.
-- **E. Image Fit / minification** — Fit of the 8256×5504 source at the target
-  scale; minification quality via the R2 mip path; no false Proxy.
-- **F. Resize smoothness** — resize across ≥2 sizes; Transient/Linear during
-  the drag, Exact/Nearest at settle; no stuck Linear.
-- **G. Editable Zoom % / truthful Actual Size** — zoom edits 85% and 127.5%
-  apply exactly; 1:1 gate (`can100`) truthful; no false 100% / incorrect
-  DPI-image scale (AGENTS hard stop).
-- **H. Pointer / pan** — real-input drag pans correctly at the target scale;
-  no coordinate drift between logical pointer space and image space.
+`probe-topology.ps1` after the user's change: `effective_dpi=144 scale=1.5`
+(verified before testing; the change itself was user-assisted in Windows
+Settings, no registry, no elevation).
 
-Evidence classes recorded per scale: `LIVE_TRANSITION` (scale change while
-PicoView is running) + `COLD_START_AT_SCALE` (fresh launch after the change).
-Minimum acceptance per the brief: cold-start at all three scales + at least
-one genuine live transition. No scale value is ever constructed in code.
+### 7.2 Sections A/C–H — cold start at 150% (PASS)
 
-UAC gate: if any step presents (or would present) a UAC prompt, the campaign
-stops immediately and reports `UAC_REQUIRED` with the exact operation.
+Boot log (fresh launch, requested logical 960×640):
 
-### Procedure for the next change (150%)
+```text
+R1 runtime booted: policy=Dynamic initial_requested=960x640 logical=960x640 physical=1440x960 live_scale=1.5 package_density=2 usable_image_dim=16384
+```
 
-1. Harness launches PicoView with the image and `--keep-open`, then `observe`
-   mode records geometry + R1 log lines into
-   `transition-live-125to150.jsonl` while the change happens.
-2. The user changes scale (Settings → System → Display → Scale → 150%).
-3. Verification: geometry JSONL shows the measured physical jump and the
-   scale change; the R1 log shows
-   `presentation update → surface reconfigure → present` with a final settled
-   `Exact / Nearest` present at retained == swapchain; the final live DPI
-   event is not lost; then a fresh cold start at 150% completes section A.
+Exactly the §3.2 matrix row for 150%. Oracle results (11 states):
+`logical_invariant_ok=true` and settled `Exact/Nearest` on every state —
+boot, Fit, 1:1, pan, resize to physical 1728×1080 (logical 1152×720),
+next/prev, and zoom edits `85%` / `127.5%` applied exactly. Status bar
+`Fit · 15.59%` == baseline `10.39% × 1.5` (image-space zoom, unchanged by OS
+scale); `dpi 1.5` shown. Icons/typography crisp at 1.5×
+(`phase3-150-boot.png`, `phase3-150-zoom-1275.png`).
 
-UAC gate: if any step presents (or would present) a UAC prompt, the campaign
-stops immediately and reports `UAC_REQUIRED` with the exact operation.
+### 7.3 LIVE_TRANSITION 200% → 150% (PASS)
 
-## 8. Evidence index
+With PicoView running (`observe` attached, JSONL
+`transition-live-200to150to100.jsonl`, app log excerpts verbatim):
 
-- `probe-topology.ps1` — Phase 0 topology probe (this directory, scratch).
-- `dpi_acceptance.py` — Phase 1–3 harness (scratch).
-- `run-p2-zoom-edits/`, `run-current/`, earlier `run-*` outputs — raw logs +
-  JSON summaries + screenshots per step (scratch).
+```text
+[337479.2ms] ScaleFactorChanged 1.5
+[337489.3ms] R1 presentation update: logical=1280x683 physical=1920x1025 os_scale=1.5   <- transient: new scale + old physical
+[337514.0ms] R1 render request: logical=1280x683 physical=1920x1025 live_scale=1.5      <- superseded below (R3 latest-wins)
+[337515.1ms] R1 presentation update: logical=960x513 physical=1440x769 os_scale=1.5     <- OS resized window, logical preserved
+[337533.4ms] surface reconfigure 1920x1025 -> 1440x769
+[337552.5ms] R1 present: retained=1920x1025 swapchain=1440x769 policy=Transient filter=Linear   <- size bridge
+[337571.3ms] R1 render request: logical=960x513 physical=1440x769 live_scale=1.5
+[337577.2ms] R1 present: retained=1440x769 swapchain=1440x769 policy=Exact filter=Nearest       <- settled
+```
+
+Verified: the event flow
+`ScaleFactorChanged → measured physical → Input::Presentation → Dynamic
+resolve → guest logical resize → render → Exact settle`; Transient/Linear
+only as the size bridge; the final live DPI event was not lost; the render
+requested at the transient geometry (1280×683) was superseded by the newer
+presentation input without wasted submission (R3 latest-wins held); no
+permanent retained/swapchain mismatch. The window's logical size (user had
+resized to 960×513 logical at 200%) was preserved across the hop:
+1920×1025 @2× → 1440×769 @1.5× → both = 960×513 logical.
+Post-transition UI: `Fit · 12.13% | dpi 1.5`, crisp
+(`phase3-live-150-after.png`).
+
+### 7.4 Session-logoff incident (reclassified — NOT a DPI defect)
+
+The first 125→150 attempt ended with the running PicoView disappearing with
+no log output, no panic, and no WER crash record. The exit-code watcher
+(launched for reproduction) recorded the ground truth when the user repeated
+the flow for 200%:
+
+```text
+exit_code = 1073807364 (0x40010004)   <- Windows session-logoff process termination
+```
+
+`0x40010004` is the standard termination code for user-session logoff. The
+user confirmed the workflow: their scale changes used the Windows
+**custom-scaling** page, which applies only after sign-out — the sign-out
+terminated PicoView. Reclassified: no DPI-transition defect; the 125→150 and
+150→200 "transitions" were session ends, and the subsequent acceptances are
+correctly classified COLD_START_AT_SCALE.
+
+## 8. Phase 3 — 200% (evidence classes: COLD_START_AT_SCALE + LIVE_TRANSITION)
+
+### 8.1 OS state
+
+`probe-topology.ps1`: `effective_dpi=192 scale=2` before testing.
+
+### 8.2 Sections A/C–H — cold start at 200% (PASS)
+
+Boot log: `logical=960x640 physical=1920x1280 live_scale=2` — the §3.2
+matrix row for 200%. Oracle results (11 states): all green; resize to
+physical 1920×1200 (logical 960×600); zoom edits `85%` / `127.5%` applied
+exactly; status bar `Fit · 20.78%` (== 10.39% × 2), `dpi 2`; icons and
+12/14 typography crisp at 2×.
+
+### 8.3 LIVE_TRANSITION 150% → 100% (PASS)
+
+Same observer session, verbatim:
+
+```text
+[478735.6ms] ScaleFactorChanged 1
+[478742.2ms] R1 presentation update: logical=1440x769 physical=1440x769 os_scale=1   <- transient: new scale + old physical
+[478763.1ms] R1 render request: logical=1440x769 physical=1440x769 live_scale=1
+[478765.5ms] R1 presentation update: logical=960x513 physical=960x513 os_scale=1     <- OS resized window, logical preserved
+[478783.6ms] surface reconfigure 1440x769 -> 960x513
+[478799.1ms] R1 present: retained=1440x769 swapchain=960x513 policy=Transient filter=Linear
+[478807.6ms] R1 present: retained=960x513 swapchain=960x513 policy=Exact filter=Nearest      <- settled
+```
+
+Across the full sequence the retained logical client stayed 960×513:
+1920×1025 @2× → 1440×769 @1.5× → 960×513 @1×. Post-transition UI:
+`Fit · 8.09% | dpi 1`, crisp (`phase3-live-100-after.png`).
+
+### 8.4 Press-path verification at 200% (manual; harness limitation recorded)
+
+Synthetic harness clicks (SetCursorPos + mouse_event) did not trigger guest
+presses at 200% in one session (toolbar `1:1` and status-bar zoom label),
+while the same synthetic clicks worked at 100/125/150% and real drags (pan)
+worked at 200%. Root cause was environmental, not product: after
+repositioning the window fully on-screen, synthetic clicks opened the zoom
+editor, and the user's manual clicks at 200% were verified working (toolbar
+`1:1` applies, zoom label enters edit state). Recorded as a harness
+positioning requirement: the harness now repositions the window fully
+on-screen after launch. No product defect.
+
+## 9. Final acceptance summary
+
+| Scale | Cold start (A/C–H) | Live transition | Evidence class |
+| --- | --- | --- | --- |
+| 100% | PASS (baseline, §4) | target of 150→100 hop (§8.3) | COLD_START + LIVE_TRANSITION |
+| 125% | PASS (§6) | n/a (not exercised live) | COLD_START_AT_SCALE |
+| 150% | PASS (§7.2) | PASS as target of 200→150 (§7.3) | COLD_START + LIVE_TRANSITION |
+| 200% | PASS (§8.2) | PASS as source of 200→150 | COLD_START + LIVE_TRANSITION |
+
+Mission minimum (cold-start at 125/150/200 + ≥1 genuine live transition):
+**exceeded** — cold-start PASS at all four scales plus two genuine live
+transitions (200→150, 150→100) with full event-flow verification. All
+geometry oracle invariants held at every recorded state across all scales;
+every settle returned Exact/Nearest; no final live DPI event was lost; R3
+latest-wins held. Product-behavior sections (Remix icons, 12/14 typography,
+Fit/minification via R2 mips, resize smoothness, editable Product Zoom %,
+truthful Actual Size, pointer/pan) verified at every scale; zoom editor
+press verified manually at 200%. No code changes were made; no UAC prompt
+appeared at any point; no registry or programmatic DPI manipulation was
+used.
+
+## 10. Evidence index
+
+- `probe-topology.ps1`, `dpi_acceptance.py`, `watch-exit.py`,
+  `read-crash-events.ps1` — harness (scratch; gitignored).
+- `run-*` outputs, `transition-live-200to150to100.jsonl`, `exit-record.json`
+  — raw logs/JSON/screenshots per step (scratch; gitignored).
 - Committed screenshots (this directory):
   - 100% baseline: toolbar/status/Fit (`phase2-100-boot.png`), 1:1
     (`phase2-100-one2one.png`), pan at 100% (`phase2-100-pan.png`), resize to
@@ -324,3 +408,7 @@ stops immediately and reports `UAC_REQUIRED` with the exact operation.
     1440×900 (`phase3-125-resize-1440x900.png`), pan at 1:1
     (`phase3-125-pan-1to1.png`), 85% (`phase3-125-zoom-85.png`), 127.5%
     (`phase3-125-zoom-1275.png`).
+  - 150%: boot/icons/dpi 1.5 (`phase3-150-boot.png`), 127.5%
+    (`phase3-150-zoom-1275.png`).
+  - Live transitions: after 200→150 (`phase3-live-150-after.png`), after
+    150→100 (`phase3-live-100-after.png`).
