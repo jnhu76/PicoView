@@ -74,7 +74,10 @@ Acceptance proxy (CPU stand-in for GPU mips, high-frequency Laplacian energy; lo
 | PNG graphic | 320×320 | 18.321 | 17.962 | −0.359 |
 | PNG graphic | 160×160 | 34.385 | 33.280 | −1.105 |
 
-Compare images: `cpu-compare-*-bilinear-*.png` vs `cpu-compare-*-mip-*.png`.
+Comparing images: the bilinear and mip-like capture sets that accompanied this
+table — twelve `cpu-compare-*.png` files — were removed from the tree for the
+owner's privacy [capture removed from current tree for owner privacy]. The
+numeric comparison above is unaffected.
 
 ---
 

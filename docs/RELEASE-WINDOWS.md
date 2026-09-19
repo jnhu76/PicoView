@@ -2,9 +2,11 @@
 
 How PicoView Windows release artifacts are produced, what they contain, and
 what they promise. Operational evidence for the current state:
-`docs/history/windows-release-build-corrective-1/EVIDENCE.md` (build topology)
-and `docs/history/windows-release-hardening-1/EVIDENCE.md` (identity,
-installer, install/uninstall, live acceptance).
+`docs/history/windows-release-build-corrective-1/EVIDENCE.md` (build topology),
+`docs/history/windows-release-final-corrective-1/EVIDENCE.md` (installer
+association identity, current wording and artifact hashes), and
+`docs/history/windows-release-hardening-1/EVIDENCE.md` (identity, installer,
+install/uninstall, live acceptance — its §8 build topology is superseded).
 
 ## Version authority
 
@@ -15,8 +17,11 @@ same value today; there is no second manually maintained release version.
 ## Build & release
 
 Three layers, each with one canonical command, all run from the repository root.
-No step creates a junction, symlink or copy of the framework, mutates
-`node_modules` to fake resolution, or writes to `third_party/pocketjs` sources.
+No step creates a junction, symlink or copy of the framework, creates or mutates
+`node_modules` at the repository root or anywhere else on the PicoView side to
+fake module resolution, or writes to `third_party/pocketjs` sources. The one
+dependency install in the path belongs to the vendored framework: its own pinned
+dependencies are restored into its own gitignored `node_modules` (details below).
 
 The canonical commands are validated under **Windows PowerShell 5.1**
 (`powershell.exe`, the shell shipped with Windows 11):
@@ -67,9 +72,10 @@ powershell -NoProfile -File scripts\build-windows-release.ps1
 
 Pipeline: guest build → `cargo build --release` → tests (guest 194 / native 64 at
 time of writing) → portable zip → installer → SHA-256 report. It is orchestration
-only — no junction/symlink, no `node_modules` surgery, no `third_party` edits, and
-no execution-policy bypass (`-SkipTests` skips the suites, `-Iscc <path>` points at
-`ISCC.exe`).
+only — no junction/symlink, no `node_modules` resolution surgery (the only install
+is the vendored framework's own pinned dependencies into its gitignored tree), no
+`third_party` source edits, and no execution-policy bypass (`-SkipTests` skips the
+suites, `-Iscc <path>` points at `ISCC.exe`).
 
 PowerShell 7 (`pwsh`) is an **equivalent optional** spelling of both scripts and
 is expected to work, but it is **not validated for this release** — the validated
@@ -117,6 +123,21 @@ the .iss writes no association keys itself. Scope: `.jpg .jpeg .png .bmp`
 `OpenWithProgids` membership + `PicoView.Image` ProgID. **PicoView never
 seizes the default viewer** — no extension default, no UserChoice. Open
 command is quoted: `"...picoview.exe" "%1"`.
+
+Registration is a per-user `HKCU` write while the installer itself is elevated,
+so the installer's `[Run]` entry carries `runasoriginaluser`. On a normal launch
+plus UAC consent the registration therefore lands in the hive of the user who
+started Setup — including the over-the-shoulder case where an administrator
+approves the prompt for a different user. Known limitation: when Setup is
+started with alternate-credential elevation (explicit "Run as administrator", or
+launched from an already-elevated process) Windows leaves no original user
+identity to recover, and Inno falls back to Setup's own credentials, so the keys
+land in that administrator's hive. The same asymmetry limits uninstall — the
+elevated uninstaller clears the hive of the identity running it, so after an
+alternate-credential install the original user's per-user entries can remain and
+must be cleared from that account by running
+`picoview.exe --unregister-associations`. No installer redesign is attempted for
+either case.
 
 Known limitation: filenames with CJK characters render tofu in the status
 bar (PocketJS baked-glyph atlas covers compile-time literals only) —

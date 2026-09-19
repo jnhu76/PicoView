@@ -146,7 +146,10 @@ authority inversion from the earlier `pwsh` spelling.)
 `native/Cargo.toml`), run the canonical guest build, `cargo build --release`, run
 `bun test guest/` and `cargo test --release`, stage the portable payload, zip it,
 invoke ISCC, report SHA-256. It contains no `mklink`, no junction, no
-`node_modules` surgery and no `third_party` edit.
+`node_modules` surgery to fake module resolution, and no edit to
+`third_party/pocketjs` sources; the framework's own lockfile-pinned install
+(below) is the only dependency step in the path, and it writes only inside that
+framework's gitignored tree.
 
 Documented invocation is `powershell -NoProfile -File
 scripts\build-windows-release.ps1` (Windows PowerShell 5.1 — the shell every
@@ -194,8 +197,9 @@ scripts\build-windows-release.ps1`, exit 0):
 
 Post-build state of the oracle worktree: `git status` **clean** (no tracked file
 changed anywhere, `third_party/pocketjs` included); no junction created; the only
-new paths are gitignored build outputs (`dist/`, `dist-release/`, `node_modules/`,
-`native/target/`).
+new paths are gitignored build outputs — `dist/`, `dist-release/`,
+`native/target/`, and the vendored framework's own
+`third_party/pocketjs/node_modules/`. Nothing was created at the repository root.
 
 Reproducibility: the guest artifacts from the clean worktree are **byte-identical**
 to the ones the same commit produced in the primary worktree (same JS and PAK

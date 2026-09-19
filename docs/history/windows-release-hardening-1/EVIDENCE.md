@@ -6,6 +6,29 @@ scope).** Branch `release/windows-release-hardening-1` off BASE
 `21cdaa1255a3266befd1b3ee53a48a256b52a9a3` (= `main` = `origin/main` at
 campaign start).
 
+> **Superseded in part — read this before using §8.**
+> Section **§8** (release entrypoint + reproducibility) records the build
+> topology **as it stood at the original hardening commit**, including a
+> junction-based guest compile that no longer exists. It is history, not
+> current authority.
+>
+> **SUPERSEDED BY:** [`docs/history/windows-release-build-corrective-1/EVIDENCE.md`](../windows-release-build-corrective-1/EVIDENCE.md)
+>
+> **FINAL RELEASE BUILD:** no junction, no symlink, external project from the
+> repository root. The canonical commands live in
+> [`docs/RELEASE-WINDOWS.md`](../../RELEASE-WINDOWS.md).
+>
+> The rest of this document (icon authority, EXE identity, installer,
+> associations, install/uninstall cycle, live acceptance, known limitation)
+> remains the evidence record for this campaign; two later corrections are
+> noted inline where they touch it.
+>
+> **Captures.** Every screenshot this document originally referenced (all of
+> `docs/history/windows-release-hardening-1/img/`) was removed from the tree for
+> the owner's privacy. Each reference is marked inline as
+> `[capture removed from current tree for owner privacy]`; the claims those
+> captures supported are unchanged, and no capture was restored or replaced.
+
 ## 1. Identity
 
 | Field | Value |
@@ -42,8 +65,8 @@ Deviation note: the generic 9-size recommendation (16/20/24/32/40/48/64/128/256)
 is not met by design — the owner-supplied file is used as-is, so 24/48/128
 entries are absent and Windows scales 32→24 / 64→48 from the same artwork.
 Small-size acceptance (16/32/64) verified visually
-(`img/ico-entries-16-32-64-256.png`): recognizable silhouette, no clipping,
-no halo, no excess margin.
+[capture removed from current tree for owner privacy]: recognizable silhouette,
+no clipping, no halo, no excess margin.
 
 ## 3. EXE identity (Phases 3–4)
 
@@ -59,7 +82,8 @@ no halo, no excess margin.
   no publisher identity or copyright holder; none was invented.
 
 Verified via `Get-Item().VersionInfo` on the built EXE (all fields correct)
-and `Icon.ExtractAssociatedIcon` (`img/explorer-associated-icon.png`).
+and `Icon.ExtractAssociatedIcon`
+[capture removed from current tree for owner privacy].
 
 Window/taskbar integration (`native/src/app.rs`): the window is created with
 `with_window_icon(Icon::from_resource(1, SM_CXSMICON))` and
@@ -69,9 +93,9 @@ loaded per frame. The small icon is sized to the system small-icon metric so
 100/125/150% DPI get crisp native sizes.
 
 Live acceptance: titlebar icon verified on the dev build and on the installed
-Program Files build (`img/dev-titlebar-zoom.png`,
-`img/installed-titlebar-zoom.png`); taskbar icon verified with the app in
-foreground (`img/taskbar-full.png`, bottom-right running app). Alt-Tab and
+Program Files build, and the taskbar icon verified with the app in foreground
+(bottom-right running app) [capture removed from current tree for owner
+privacy]. Alt-Tab and
 Start Menu share the same resource-1 authority (Start Menu .lnk icon
 location verified as `{app}\picoview.exe,0`).
 
@@ -86,7 +110,7 @@ Script: `packaging/windows/picoview-setup.iss`.
 | Install path | `C:\Program Files\PicoView\` (admin; UAC prompt expected and observed) |
 | Payload | `picoview.exe` only (guest JS/PAK embedded at compile time) — plus Inno's unins000.* |
 | Start Menu | `{group}\PicoView` → verified `PicoView.lnk` target + icon |
-| Desktop shortcut | optional task, **unchecked by default** (`img/installer-wizard-additional-tasks.png`) |
+| Desktop shortcut | optional task, **unchecked by default** [capture removed from current tree for owner privacy] |
 | Uninstall entry | `HKLM\...\Uninstall\{A7C3E0C1-...}_is1`: DisplayName `PicoView 0.1.0`, DisplayIcon → installed exe, UninstallString `unins000.exe` |
 | Installer display | SetupIconFile = same `picoview-app.ico`; wizard caption verified |
 | Version metadata | `AppVersion` passed by the release script from Cargo.toml; standalone ISCC falls back to reading the EXE's VERSIONINFO (same authority) |
@@ -145,19 +169,42 @@ and after launch). No association registration from the portable build.
 
 ## 8. Release entrypoint + reproducibility (Phases 13–15)
 
+> **HISTORICAL MECHANISM AT ORIGINAL HARDENING COMMIT — RETIRED.**
+>
+> **SUPERSEDED BY:** [`docs/history/windows-release-build-corrective-1/EVIDENCE.md`](../windows-release-build-corrective-1/EVIDENCE.md)
+>
+> **FINAL RELEASE BUILD:** no junction, no symlink, external project from the
+> repository root.
+
 One authoritative script: `scripts/build-windows-release.ps1`
 (guest compile → cargo release → tests → portable zip → installer → hashes).
-Guest compile runs from the subtree root via the sanctioned gitignored
-`third_party/pocketjs/guest` junction (created and removed per build —
-matches the .gitignore entry and historical evidence); guest tests resolve
-`@pocketjs/framework/*` through a gitignored `node_modules/@pocketjs/framework`
-junction created and removed by the script for the same reason. Neither the
-icon source directory `C:\Users\fred1\source\icons` nor any machine state
-outside the repo is referenced: a clean clone with bun + Rust + Inno Setup
-reproduces both artifacts. `dist-release/` is gitignored.
+At this commit the guest compile ran from the **framework subtree root** via a
+sanctioned gitignored `third_party/pocketjs/guest` junction (created and removed
+per build), and guest tests resolved `@pocketjs/framework/*` through a
+gitignored `node_modules/@pocketjs/framework` junction created and removed by the
+script for the same reason.
+
+Both junctions are **gone** and nothing replaced them: no symlink, no copied
+framework tree, no generated `node_modules` entry, no `PATH`/`NODE_PATH`
+manipulation. The current path compiles the guest as a PocketJS **external
+project from the repository root**, with module resolution carried by the
+committed root `tsconfig.json`:
+
+```powershell
+bun third_party/pocketjs/tools/pocket.ts compile --target windows-app `
+  --manifest guest/pocket.json --project-root . --outdir dist
+```
+
+Neither the icon source directory `C:\Users\fred1\source\icons` nor any machine
+state outside the repo is referenced: a clean clone with bun + Rust + Inno Setup
+reproduces both artifacts. `dist-release/` is gitignored. (Still true — the
+corrective campaign re-proved it with a clean-checkout oracle.)
 
 Guest bundle reproduced byte-identical to the committed live-DPI baseline
-(391 267 B js + 673 184 B pak).
+(391 267 B js + 673 184 B pak) **under the retired junction topology**. The
+current topology emits 391 714 B of JS — the same module set, every differing
+byte inside Bun's per-module path comments — and a byte-identical 673 184 B pak;
+the byte-level comparison is in the corrective evidence §9.
 
 ## 9. Tests (Phase 20)
 
@@ -192,7 +239,8 @@ Not a release blocker for this campaign.
 
 Opening a file whose name contains CJK characters renders tofu (□□) in the
 status bar filename slot
-(`img/cjk-path-open-statusbar-tofu.png`). **Root cause confirmed down to the
+[capture removed from current tree for owner privacy]. **Root cause confirmed
+down to the
 call chain** (tracked as #74):
 
 1. `guest/app.octane.tsx` status bar renders `{shownName}` — a **runtime**
@@ -231,12 +279,12 @@ OS-rendered correctly; the in-client tofu above is the only defect).
 
 | Q | Verdict |
 | --- | --- |
-| A. Titlebar still old icon? | NO — verified dev + installed (`img/*-titlebar-zoom.png`) |
+| A. Titlebar still old icon? | NO — verified dev + installed [capture removed from current tree for owner privacy] |
 | B. Explorer icon ≠ runtime taskbar icon? | NO — one resource; ExtractAssociatedIcon == titlebar artwork |
 | C. Entire icons dir committed? | NO — exactly 2 asset files + PROVENANCE.md |
 | D. Tiny source upscaled? | NO — ICO verbatim (real 16–256), master 1024 |
 | E. ICO multi-size? | YES — 16/32/64/256 @32bpp, verified from binary |
-| F. 16×16 recognizable? | YES — `img/ico-entries-16-32-64-256.png` |
+| F. 16×16 recognizable? | YES — [capture removed from current tree for owner privacy] |
 | G. Installer icon different/outdated? | NO — same .ico, wizard verified |
 | H. Version duplicated manually? | NO — Cargo.toml only; iss reads it via script/EXE |
 | I. Uninstall leaves stale registrations? | NO — full-cycle verified clean |

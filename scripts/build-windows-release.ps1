@@ -1,8 +1,12 @@
 # PicoView Windows release build — one authoritative entrypoint.
 #
 # Orchestration only: this script runs the canonical build commands and stages
-# release artifacts. It creates no junctions or symlinks, does not mutate
-# node_modules, and does not edit third_party/pocketjs.
+# release artifacts. It creates no junctions or symlinks, performs no
+# node_modules surgery to fake module resolution, and does not edit
+# third_party/pocketjs sources. The single dependency install in the whole path
+# is delegated to scripts/build-guest.ps1, which restores the vendored
+# framework's own pinned dependencies into its gitignored node_modules — no
+# PicoView-side or repository-root node_modules is created or modified.
 #
 # Layers (contract: docs/RELEASE-WINDOWS.md):
 #   guest   : guest/*.ts(x) -> dist/picoview.js + dist/picoview.pak   (scripts/build-guest.ps1)

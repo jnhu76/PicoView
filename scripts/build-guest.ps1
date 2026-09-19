@@ -13,7 +13,15 @@
 # The compile is a plain PocketJS *external project* build run from the
 # repository root: `--manifest guest/pocket.json --project-root .` with the
 # project's committed module resolution in tsconfig.json. It needs no junction,
-# no symlink, no PicoView-side node_modules and no edit to third_party/pocketjs.
+# no symlink, and no edit to third_party/pocketjs sources, and it neither
+# creates nor mutates node_modules at the repository root or anywhere else on
+# the PicoView side.
+#
+# The one dependency tree this script does touch is the vendored framework's
+# own gitignored one (step 1): PocketJS's pinned dependencies are restored into
+# third_party/pocketjs/node_modules from that framework's committed lockfile.
+# That is the framework's tree, not a PicoView one, and it is not a module
+# resolution workaround.
 #
 # The native build consumes dist/picoview.{js,pak} as immutable generated inputs
 # and never invokes Bun itself (native/build.rs only checks they exist).

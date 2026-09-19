@@ -26,8 +26,9 @@ GIF support; WebP not yet a proven baseline). PocketJS pin stays `24bab5e`.
 **Verification** — `bun test guest/` 77 pass; `cargo test` 30 pass;
 `cargo build --release` OK; `pocket.ts compile` bakes 9 SVG icons
 (32×32 @2x); `--register-associations` / `--unregister-associations` exit 0;
-quoted path-with-spaces opens with `handle=Some(9)`; Windows smoke boots
-`A.jpg` and stays alive. Independent review: no critical product/code
+quoted path-with-spaces opens with `handle=Some(9)`; Windows smoke boots the
+good smoke image and stays alive [capture removed from current tree for owner
+privacy]. Independent review: no critical product/code
 findings; keyboard smoke was environment-flaky (`focused=False`) and is
 covered by code + earlier session evidence.
 
