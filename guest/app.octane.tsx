@@ -41,7 +41,7 @@ import {
   publicationViewKeyFrom,
   reconcileViewForPublication,
   type PublicationViewKey,
-} from "./view_state.ts";
+} from "./publication_view.ts";
 import {
   actualSize,
   fitView,
