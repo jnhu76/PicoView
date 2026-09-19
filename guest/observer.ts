@@ -244,3 +244,50 @@ export function displayVerdict(s: ObserverState): DisplayVerdict {
   if (r?.status === "error") return "error";
   return "empty";
 }
+
+// --- Refresh status facet (post-release normalization C1) -----------------
+//
+// PRD §2.10: a refresh keeps the last-good publication in the main content,
+// so its request state must surface in the status area instead — otherwise a
+// loading or failed refresh is visually indistinguishable from no action.
+// This is a pure selector over ObserverState: the status bar renders exactly
+// what it returns, and it clears by returning null once the request facet is
+// gone (terminal ready/error consumed, or a new request replaced it).
+
+export interface RefreshStatusFacet {
+  kind: "loading" | "error";
+  /** Fully composed, layout-bounded status text for one status row. */
+  text: string;
+}
+
+/** Layout bound for the facet: the status row height is a frozen product
+ *  constant, so composed text is capped no matter how long the file name or
+ *  host error detail is. */
+const FACET_TEXT_MAX = 64;
+
+function capFacetText(s: string, max = FACET_TEXT_MAX): string {
+  const oneLine = s.split(/\r?\n/, 1)[0] ?? "";
+  if (oneLine.length <= max) return oneLine;
+  return oneLine.slice(0, max - 1) + "…";
+}
+
+/** The status-area facet for a refresh request, or null when nothing should
+ *  show. A new-item request never produces this facet — it owns the main
+ *  content itself (displayVerdict). */
+export function refreshStatus(s: ObserverState): RefreshStatusFacet | null {
+  const r = s.request;
+  if (!r || r.intent !== "refresh") return null;
+  if (r.status === "loading") {
+    const name = typeof r.name === "string" ? r.name.trim() : "";
+    return {
+      kind: "loading",
+      text: name ? capFacetText(`Refreshing ${name}…`) : "Refreshing…",
+    };
+  }
+  if (r.status === "error") {
+    const detail = typeof r.error === "string" ? r.error.trim() : "";
+    const composed = detail ? `Refresh failed: ${detail}` : "Refresh failed";
+    return { kind: "error", text: capFacetText(composed) };
+  }
+  return null;
+}

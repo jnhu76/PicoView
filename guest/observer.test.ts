@@ -263,3 +263,75 @@ test("browse state updates when navigation changes it", () => {
   });
   expect(s.browse).toMatchObject({ index: 1, count: 5, canPrevious: true, canNext: true });
 });
+
+// --- Refresh status facet (post-release normalization C1) -----------------
+// PRD §2.10 keeps the last-good publication in the main content during a
+// refresh, so the request state must surface in the status area instead.
+// These tests pin the pure facet selector the status bar renders.
+
+import { refreshStatus } from "./observer.ts";
+
+test("refresh loading surfaces a visible status facet beside the publication", () => {
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"));
+  expect(displayVerdict(s)).toBe("image"); // main content stays the image
+  const facet = refreshStatus(s);
+  expect(facet).not.toBeNull();
+  expect(facet!.kind).toBe("loading");
+  expect(facet!.text).toContain("Refreshing");
+  expect(facet!.text.length).toBeLessThanOrEqual(64);
+});
+
+test("refresh error surfaces a visible, meaningful, bounded failure facet", () => {
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), error(2, "refresh"));
+  expect(displayVerdict(s)).toBe("image");
+  const facet = refreshStatus(s);
+  expect(facet).not.toBeNull();
+  expect(facet!.kind).toBe("error");
+  expect(facet!.text).toContain("Refresh failed");
+  expect(facet!.text).toContain("could not decode image");
+  expect(facet!.text.length).toBeLessThanOrEqual(64);
+});
+
+test("refresh facet is bounded even for an oversized multiline host error", () => {
+  const long = "x".repeat(500) + "\nsecond line must not leak into the status row";
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), error(2, "refresh", long));
+  const facet = refreshStatus(s);
+  expect(facet).not.toBeNull();
+  expect(facet!.text.length).toBeLessThanOrEqual(64);
+  expect(facet!.text).not.toContain("second line");
+  expect(facet!.text.endsWith("…")).toBe(true);
+});
+
+test("last-good publication identity survives refresh loading and error", () => {
+  // One reduction chain: the publication object must be the SAME reference
+  // through refresh loading and refresh error (binding stays active).
+  let s = initialObserverState();
+  s = reduceObserver(s, ready(1, 11, 1920, 1080));
+  const published = s.publication;
+  expect(published).not.toBeNull();
+  s = reduceObserver(s, loading(2, "refresh"));
+  expect(s.publication).toBe(published);
+  s = reduceObserver(s, error(2, "refresh"));
+  expect(s.publication).toBe(published);
+});
+
+test("refresh facet clears when the refresh completes (ready)", () => {
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), ready(2, 22, 640, 480, 640, 480, "b.jpg"));
+  expect(s.request).toBeNull();
+  expect(refreshStatus(s)).toBeNull();
+});
+
+test("new-item requests never produce a refresh facet (behavior unchanged)", () => {
+  const loadingState = fold(loading(2, "new-item", "c.jpg"));
+  expect(displayVerdict(loadingState)).toBe("loading");
+  expect(refreshStatus(loadingState)).toBeNull();
+  const errorState = fold(ready(1, 11, 1920, 1080), loading(2, "new-item"), error(2, "new-item"));
+  expect(displayVerdict(errorState)).toBe("error");
+  expect(refreshStatus(errorState)).toBeNull();
+});
+
+test("no request at all produces no facet", () => {
+  expect(refreshStatus(initialObserverState())).toBeNull();
+  const settled = fold(ready(1, 11, 1920, 1080));
+  expect(refreshStatus(settled)).toBeNull();
+});

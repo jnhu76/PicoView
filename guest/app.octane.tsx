@@ -12,6 +12,7 @@ import {
 import {
   displayVerdict,
   initialObserverState,
+  refreshStatus,
   type ObserverState,
 } from "./observer.ts";
 import { textureKeyFor, type BoundPublication } from "./binding.ts";
@@ -387,6 +388,9 @@ export default function App() {
     ? `${publication.sourceWidth} × ${publication.sourceHeight}`
     : "";
   const canRefresh = !!publication || (shownName != null && shownName !== "");
+  // Refresh request state for the status row: a refresh keeps the last-good
+  // image in the main content (PRD §2.10), so loading/failure surfaces here.
+  const refreshFacet = refreshStatus(state);
 
   const apply = (fn: (s: ViewTransform) => ViewTransform) => {
     const next = fn(viewRef.current);
@@ -592,6 +596,19 @@ export default function App() {
             }
           >
             {publication.fullResolution ? "Full resolution" : "Proxy"}
+          </Text>
+        ) : null}
+        {/* Refresh request state: bounded single-line facet; a failure is
+            visibly distinct (warning ink) from an in-progress refresh. */}
+        {refreshFacet ? (
+          <Text
+            class={
+              refreshFacet.kind === "error"
+                ? "text-xs text-amber-400"
+                : "text-xs text-[#a0a0a0]"
+            }
+          >
+            {refreshFacet.text}
           </Text>
         ) : null}
         <View class="flex-1" />
