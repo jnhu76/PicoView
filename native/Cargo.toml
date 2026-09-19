@@ -9,6 +9,10 @@ description = "PicoView native host: Current Item authority, WIC baseline decode
 name = "picoview"
 path = "src/main.rs"
 
+[build-dependencies]
+# Windows EXE resources: app icon (assets/branding/picoview-app.ico) + VERSIONINFO.
+winresource = "0.1"
+
 # PocketJS is consumed from the in-tree git-subtree snapshot at
 # third_party/pocketjs (see POCKETJS.lock). Path dependencies only — no
 # PocketJS git/submodule sources. Future sync uses git subtree pull, not
@@ -38,5 +42,6 @@ windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_Variant",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 rfd = "0.15"

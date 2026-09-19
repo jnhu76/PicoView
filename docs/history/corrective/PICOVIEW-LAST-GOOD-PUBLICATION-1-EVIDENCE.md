@@ -356,14 +356,15 @@ growth across rounds.
 CORRECTIVE-2 release smokes (2026-09-17, PicoView head with the
 CORRECTIVE-2 guest sources; PocketJS `24bab5e`; Windows 11 10.0.26200;
 AMD Radeon(TM) Graphics iGPU / Vulkan / driver 25.8.1; bundle 345074
-bytes = the final reviewed bundle):
+bytes = the final reviewed bundle). Both smoke inputs were removed from the
+tree for the owner's privacy, so the paths are elided in the log below:
 
 ```text
-good:    test-media/real-screenshot.jpg → current item generation=1
+good:    [capture removed from current tree for owner privacy] → current item generation=1
          handle=Some(0) → render submit tick 1 → present submitted true;
          the window shows the image fitted to the window (1153 x 1198,
          "Ready") — the new binding path renders, never blank.
-corrupt: test-media/corrupt.jpg → current item generation=1 handle=None →
+corrupt: [capture removed from current tree for owner privacy] → current item generation=1 handle=None →
          render submit tick 1 → present submitted true; the window shows
          the bounded error item ("could not decode image…", status
          "Error") — the NewItem-failure path unmounts the Image and binds

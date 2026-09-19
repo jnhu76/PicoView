@@ -32,6 +32,38 @@ use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Theme, Window, WindowId};
 
+/// Titlebar identity icon: loaded once from the EXE resource table (icon
+/// resource 1 = `assets/branding/picoview-app.ico`, embedded by build.rs),
+/// sized to the system small-icon metric so 100/125/150% DPI each get a
+/// crisp native size instead of an upscaled 16px bitmap.
+#[cfg(windows)]
+fn app_window_icon() -> Option<winit::window::Icon> {
+    use winit::dpi::PhysicalSize;
+    use winit::platform::windows::IconExtWindows;
+    use windows::Win32::UI::WindowsAndMessaging::{SM_CXSMICON, GetSystemMetrics};
+
+    let size = unsafe { GetSystemMetrics(SM_CXSMICON) }.max(16) as u32;
+    winit::window::Icon::from_resource(1, Some(PhysicalSize::new(size, size))).ok()
+}
+
+/// Taskbar / Alt-Tab identity icon: same resource, system large default.
+#[cfg(windows)]
+fn app_taskbar_icon() -> Option<winit::window::Icon> {
+    use winit::platform::windows::IconExtWindows;
+
+    winit::window::Icon::from_resource(1, None).ok()
+}
+
+#[cfg(not(windows))]
+fn app_window_icon() -> Option<winit::window::Icon> {
+    None
+}
+
+#[cfg(not(windows))]
+fn app_taskbar_icon() -> Option<winit::window::Icon> {
+    None
+}
+
 /// PicoView product minimum logical client size.
 ///
 /// PocketJS `windows-app` capability floor is 240×180 logical
@@ -418,11 +450,19 @@ impl ApplicationHandler<Wake> for Host {
         if self.window.is_some() {
             return;
         }
+        #[cfg(windows)]
+        use winit::platform::windows::WindowAttributesExtWindows as _;
         let window = Arc::new(
             event_loop
                 .create_window(
                     Window::default_attributes()
                         .with_title(&self.title)
+                        // App identity, installed once from the EXE resource
+                        // table (winresource embeds assets/branding/
+                        // picoview-app.ico as icon resource 1). Titlebar and
+                        // taskbar read the same authority; nothing per frame.
+                        .with_window_icon(app_window_icon())
+                        .with_taskbar_icon(app_taskbar_icon())
                         // Dark native caption — matches the dark product chrome;
                         // avoids a light OS title bar sitting on a dark viewer.
                         .with_theme(Some(Theme::Dark))

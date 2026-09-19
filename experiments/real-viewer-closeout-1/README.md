@@ -7,12 +7,10 @@ POCKETJS.lock: `24bab5e8df7d0bb7003ad55c8637e4ee9351f3cb`
 
 ## Media
 
-| File | Role |
-| --- | --- |
-| A.jpg | good (color-fixture) |
-| B.jpg | good (real-screenshot) |
-| C.jpg | corrupt |
-| D.jpg | good (color-fixture) |
+Four smoke images were used: A (good, color fixture), B (good, real
+screenshot), C (corrupt), D (good, color fixture). All four were removed from
+the tree for the owner's privacy [capture removed from current tree for owner
+privacy] — not restored, not replaced. The A–D labels below keep those roles.
 
 ## Keyboard sequence (focused window, SendKeys)
 
@@ -38,7 +36,9 @@ R (refresh)
 {"t":"pv","cmd":"refresh"}
 ```
 
-Boot: `generation=1 handle=Some(0) path=…/A.jpg`, browse `count=4 index=Some(0)`.
+Boot: `generation=1 handle=Some(0) path=…<A>`, browse `count=4 index=Some(0)`
+(the A path is elided — that image was removed from the tree for the owner's
+privacy [capture removed from current tree for owner privacy]).
 Process remained alive through the full hold; presents continued
 (`swapchain present submitted` / `present end … submitted true`).
 No panic, no `frame() threw`.

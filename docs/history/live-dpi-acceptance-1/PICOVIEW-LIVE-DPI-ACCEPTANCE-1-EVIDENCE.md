@@ -5,6 +5,13 @@ Status: **COMPLETE — ACCEPTANCE PASS**. Cold-start acceptance at 100% /
 PASS with full event-flow verification. No code changes required or made.
 Final summary in §9.
 
+> **Captures.** Every screenshot this document originally committed to this
+> directory (`phase2-*.png`, `phase3-*.png`) was removed from the tree for the
+> owner's privacy. Each reference is marked inline as
+> `[capture removed from current tree for owner privacy]`; the observations
+> those captures supported are unchanged, and no capture was restored or
+> replaced. The verbatim logs and geometry-oracle results below are unaffected.
+
 Campaign: deferred live-DPI acceptance for PicoView on Windows 11. This is an
 acceptance/evidence campaign; no code changes are expected. Authority chain:
 PRD v0.6 (user-visible meaning), ARCHITECTURE.md §Dynamic viewport (line 886)
@@ -220,7 +227,8 @@ mid-resize bridge; no persistent mismatch; R3 latest-wins held.
 
 ### 6.2 Sections C–H — product behavior at 125% (PASS)
 
-- **C. Toolbar / Remix icons** (`phase3-125-boot.png`): crisp and centered at
+- **C. Toolbar / Remix icons** [capture removed from current tree for owner
+  privacy]: crisp and centered at
   1.25× (24 logical px → 30 physical px), no clipping, no asymmetric scaling,
   no fuzziness from secondary scaling, `1:1` text centered, edge chevrons
   appear only when navigation is available.
@@ -234,7 +242,8 @@ mid-resize bridge; no persistent mismatch; R3 latest-wins held.
   native image pixels (fullResolution, `can100` gate truthful). Product Zoom
   is image-space: at dpi 1.25 the image pixel scale is unchanged by the OS
   scale, presentation scales through the retained target.
-- **H. Pointer / pan** (`phase3-125-pan-1to1.png`): real-input drag pans at
+- **H. Pointer / pan** [capture removed from current tree for owner privacy]:
+  real-input drag pans at
   1:1; no logical/physical pointer drift observed.
 
 ### 6.3 Harness notes at 125% (tooling, not product)
@@ -279,7 +288,7 @@ boot, Fit, 1:1, pan, resize to physical 1728×1080 (logical 1152×720),
 next/prev, and zoom edits `85%` / `127.5%` applied exactly. Status bar
 `Fit · 15.59%` == baseline `10.39% × 1.5` (image-space zoom, unchanged by OS
 scale); `dpi 1.5` shown. Icons/typography crisp at 1.5×
-(`phase3-150-boot.png`, `phase3-150-zoom-1275.png`).
+[capture removed from current tree for owner privacy].
 
 ### 7.3 LIVE_TRANSITION 200% → 150% (PASS)
 
@@ -307,7 +316,7 @@ permanent retained/swapchain mismatch. The window's logical size (user had
 resized to 960×513 logical at 200%) was preserved across the hop:
 1920×1025 @2× → 1440×769 @1.5× → both = 960×513 logical.
 Post-transition UI: `Fit · 12.13% | dpi 1.5`, crisp
-(`phase3-live-150-after.png`).
+[capture removed from current tree for owner privacy].
 
 ### 7.4 Session-logoff incident (reclassified — NOT a DPI defect)
 
@@ -357,7 +366,8 @@ Same observer session, verbatim:
 
 Across the full sequence the retained logical client stayed 960×513:
 1920×1025 @2× → 1440×769 @1.5× → 960×513 @1×. Post-transition UI:
-`Fit · 8.09% | dpi 1`, crisp (`phase3-live-100-after.png`).
+`Fit · 8.09% | dpi 1`, crisp
+[capture removed from current tree for owner privacy].
 
 ### 8.4 Press-path verification at 200% (manual; harness limitation recorded)
 
@@ -398,20 +408,16 @@ used.
   `read-crash-events.ps1` — harness (scratch; gitignored).
 - `run-*` outputs, `transition-live-200to150to100.jsonl`, `exit-record.json`
   — raw logs/JSON/screenshots per step (scratch; gitignored).
-- Committed screenshots (this directory):
-  - 100% baseline: toolbar/status/Fit (`phase2-100-boot.png`), 1:1
-    (`phase2-100-one2one.png`), pan at 100% (`phase2-100-pan.png`), resize to
-    1200×800 logical (`phase2-100-resize-1200x800.png`), next-item
-    (`phase2-100-next.png`), 85% (`phase2-100-zoom-85.png`), 127.5%
-    (`phase2-100-zoom-1275.png`).
-  - 125%: boot/icons/dpi 1.25 (`phase3-125-boot.png`), resize to physical
-    1440×900 (`phase3-125-resize-1440x900.png`), pan at 1:1
-    (`phase3-125-pan-1to1.png`), 85% (`phase3-125-zoom-85.png`), 127.5%
-    (`phase3-125-zoom-1275.png`).
-  - 150%: boot/icons/dpi 1.5 (`phase3-150-boot.png`), 127.5%
-    (`phase3-150-zoom-1275.png`).
-  - Live transitions: after 200→150 (`phase3-live-150-after.png`), after
-    150→100 (`phase3-live-100-after.png`).
+- Screenshots: 16 captures were committed to this directory — 100% baseline
+  (toolbar/status/Fit, 1:1, pan, resize to 1200×800 logical, next-item, 85%,
+  127.5%), 125% (boot/icons/dpi 1.25, resize to physical 1440×900, pan at 1:1,
+  85%, 127.5%), 150% (boot/icons/dpi 1.5, 127.5%) and the two live-transition
+  states (after 200→150, after 150→100). **All 16 were removed from the tree
+  for the owner's privacy** [capture removed from current tree for owner
+  privacy]; they were not restored and no replacement was added. Every
+  observation they supported is stated in the sections above and remains
+  covered by the verbatim logs, the geometry-oracle output and the retained
+  test suites.
 
 ## 11. DISPLAY_RESTORE (closeout)
 

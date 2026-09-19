@@ -46,6 +46,10 @@ If answering a current-behavior question requires searching archived campaign ev
 | `corrective/` | CORRECTIVE-C1…C6, desktop/wgpu conformance cleanup, direct image admission migration, last-good publication evidence |
 | `startup/` | Startup audits, cross-OS control experiment, desktop startup experimental record + raw-evidence directories |
 | `mvp-2026-09/` | MVP-era product campaign evidence: V1 open-one-image, compose closeout specs, publication screenshots, historical PocketJS baseline |
+| `live-dpi-acceptance-1/` | Live-DPI acceptance campaign: per-scale cold-start and live display-scale transitions |
+| `windows-release-hardening-1/` | Windows release packaging campaign: icon authority, EXE resources, installer, associations, portable artifact, install/uninstall cycle |
+| `windows-release-build-corrective-1/` | Release build topology corrective: the guest compiles as a PocketJS external project, replacing the junction scaffolding |
+| `windows-release-final-corrective-1/` | Final release corrective: association registration as the original user, retired-junction evidence superseded, dead media references removed, `node_modules` wording corrected |
 
 Associated raw experiment material may also live under repository `experiments/` and `evidence/` paths; those are likewise non-normative.
 

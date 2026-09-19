@@ -115,8 +115,10 @@ consolidation is upstream, not this UI PR.
 **Verification** — see Delivery checklist after the conformance corrective
 build. Live Windows smoke screenshots (PrintWindow 960×640):
 
-- before (c0aa398): `…/screenshots/{A-image-ready,B-image-b,C-empty}-before.png`
-- after: `…/screenshots/{A-image-ready,B-image-b,C-empty}.png`
+- before (c0aa398): three captures (A image ready, B image b, C empty)
+  [capture removed from current tree for owner privacy]
+- after: the same three states [capture removed from current tree for owner
+  privacy]
 
 Residual glyph-edge softness in 96 DPI PrintWindow capture remains Issue #63
 presentation evidence. Issue #63 / PR #61 / `POCKETJS.lock=24bab5e` untouched
