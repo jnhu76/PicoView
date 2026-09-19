@@ -1,27 +1,40 @@
-// Icon assets + toolbar action semantics (PR #62 corrective-3).
+// Icon assets + toolbar action semantics (Remix Icon replacement).
 // SVGs live next to the guest entry and are baked at compile time.
-// PocketJS baker @ 24bab5e: filled circle/rect/path only — no stroke, no arcs A.
 //
-// Size policy: design grid is 20×20 logical units (viewBox 0 0 20 20);
-// display is w-5 h-5 (20×20 logical). Texture roots stay pow2 (32/64) solely
-// because the pak baker rejects non-pow2 textures — not as a display scale.
-// Never bake one design size and display another.
+// Provenance: guest/remix-icons.json
+//   Remix-Design/RemixIcon @ 9fb7967c0a4c09910161192bde99efd3df09f5eb
+//   family "line", license Remix Icon License v1.0.
+//
+// Size policy: Remix design grid is 24×24 (viewBox 0 0 24 24). Texture roots
+// stay pow2 (32×32) solely because the PocketJS pak baker rejects non-pow2
+// textures — not as a display scale. Toolbar/edge glyphs display as w-6 h-6
+// (24×24 logical) inside the existing 36×36 hit target. Never bake one design
+// size and display another.
 
 export const ICON_ASSETS = {
-  open: "icon-open.svg",
-  previous: "icon-prev.svg",
-  next: "icon-next.svg",
-  zoomOut: "icon-zoom-out.svg",
-  zoomIn: "icon-zoom-in.svg",
-  fit: "icon-fit.svg",
-  rotate: "icon-rotate.svg",
-  flipH: "icon-flip-h.svg",
-  flipV: "icon-flip-v.svg",
-  empty: "icon-empty.svg",
-  warn: "icon-warn.svg",
+  open: "folder-open-line.svg",
+  previous: "arrow-left-s-line.svg",
+  next: "arrow-right-s-line.svg",
+  zoomOut: "zoom-out-line.svg",
+  zoomIn: "zoom-in-line.svg",
+  fit: "aspect-ratio-line.svg",
+  rotate: "clockwise-line.svg",
+  flipH: "flip-horizontal-line.svg",
+  flipV: "flip-vertical-line.svg",
+  empty: "image-line.svg",
+  warn: "error-warning-line.svg",
 } as const;
 
 export type IconName = keyof typeof ICON_ASSETS;
+
+/** Expected Remix semantic → vendored filename map (tests + provenance). */
+export const REMIX_ICON_PROVENANCE = {
+  repository: "Remix-Design/RemixIcon",
+  revision: "9fb7967c0a4c09910161192bde99efd3df09f5eb",
+  license: "Remix Icon License v1.0",
+  family: "line",
+  designViewBox: "0 0 24 24",
+} as const;
 
 /**
  * Product semantic names for toolbar/edge actions.

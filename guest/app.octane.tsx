@@ -25,6 +25,12 @@ import {
 import { ICON_ASSETS, toolSemantic } from "./icons.ts";
 import { keyboardIntent } from "./keyboard.ts";
 import {
+  applyZoomEditorKey,
+  beginZoomEdit,
+  ZOOM_EDITOR_IDLE,
+  type ZoomEditorState,
+} from "./zoom_editor.ts";
+import {
   imageViewport,
   pointInImageViewport,
   SHELL_CHROME,
@@ -47,7 +53,10 @@ import {
   resetForNewPublication,
   rotateRight,
   setUserOrientation,
+  parseZoomPercent,
+  setProductZoom,
   zoomAt,
+  zoomEditBuffer,
   zoomIn,
   zoomLabel,
   zoomOut,
@@ -94,6 +103,9 @@ export default function App() {
   // MAJOR-B: last logical pointer known to the guest — survives across turns.
   const lastPointer = useRef({ x: 0, y: 0, known: false });
   const wheelAcc = useRef(0);
+  // Status-bar Product Zoom % editor (click-to-edit). Edit-mode keys are
+  // captured BEFORE keyboardIntent so "100" cannot fire Fit / 1:1.
+  const zoomEdit = useRef<ZoomEditorState>(ZOOM_EDITOR_IDLE);
   // MAJOR-2: svc mouse is not onPress. Wire PocketJS hit→press so toolbar
   // and side-chevron ToolButtons work with a real Windows mouse.
   const pointerPress = useRef(
@@ -192,6 +204,23 @@ export default function App() {
     for (const e of outcome.keyEvents) {
       const k = typeof e.k === "string" ? e.k : "";
       const ctrl = !!(e.cmd || e.ctl);
+      // CRITICAL: zoom editor owns its keyboard before product shortcuts.
+      if (zoomEdit.current.active) {
+        const result = applyZoomEditorKey(zoomEdit.current, k, (raw) => {
+          const parsed = parseZoomPercent(raw);
+          return parsed.ok
+            ? { ok: true, productZoom: parsed.productZoom }
+            : { ok: false };
+        });
+        zoomEdit.current = result.next;
+        if (result.action === "commit" && typeof result.productZoom === "number") {
+          applyView(
+            setProductZoom(img, vp, viewRef.current, result.productZoom),
+          );
+        }
+        // consume / cancel / invalid — never fall through to keyboardIntent
+        continue;
+      }
       const intent = keyboardIntent(k, {
         ctrl,
         canPrevious: st.browse.canPrevious,
@@ -240,7 +269,13 @@ export default function App() {
       if (cancel) {
         pointerPress.current.cancel();
         gesture.current = IDLE_GESTURE;
+        if (zoomEdit.current.active) zoomEdit.current = ZOOM_EDITOR_IDLE;
         continue;
+      }
+
+      // Clicking another control/canvas while editing cancels the editor first.
+      if (down && zoomEdit.current.active) {
+        zoomEdit.current = ZOOM_EDITOR_IDLE;
       }
 
       const claimed = pointerPress.current.update({ x, y, down });
@@ -463,9 +498,9 @@ export default function App() {
                 focusable
               >
                 <Image
-                  class="w-5 h-5"
+                  class="w-6 h-6"
                   src={ICON_ASSETS.previous}
-                  style={{ opacity: 0.92 }}
+                  style={{ opacity: 0.78 }}
                 />
               </View>
             ) : (
@@ -479,9 +514,9 @@ export default function App() {
                 focusable
               >
                 <Image
-                  class="w-5 h-5"
+                  class="w-6 h-6"
                   src={ICON_ASSETS.next}
-                  style={{ opacity: 0.92 }}
+                  style={{ opacity: 0.78 }}
                 />
               </View>
             ) : (
@@ -503,8 +538,8 @@ export default function App() {
         ) : verdict === "error" ? (
           <View class="flex-1 flex-col items-center justify-center gap-3">
             <Image class="w-10 h-10" src={ICON_ASSETS.warn} />
-            <Text class="text-base text-[#f0f0f0]">Could not open this image</Text>
-            <Text class="text-sm text-[#a0a0a0]">
+            <Text class="text-sm font-bold text-[#f0f0f0]">Could not open this image</Text>
+            <Text class="text-xs text-[#a0a0a0]">
               {request?.error ?? "The file may be corrupted or not supported."}
             </Text>
             {browse.canPrevious || browse.canNext ? (
@@ -533,7 +568,7 @@ export default function App() {
         ) : verdict === "empty" ? (
           <View class="flex-1 flex-col items-center justify-center gap-3">
             <Image class="w-12 h-12" src={ICON_ASSETS.empty} />
-            <Text class="text-base text-[#a0a0a0]">Open an image to get started</Text>
+            <Text class="text-sm font-bold text-[#a0a0a0]">Open an image to get started</Text>
             <View
               class="px-4 py-2 rounded bg-sky-600"
               onPress={() => cmdPickFile()}
@@ -561,8 +596,25 @@ export default function App() {
         ) : null}
         <View class="flex-1" />
         {/* Live product zoom (source-relative %). Fit shows "Fit · N%";
-            Zoom In/Out moves this number. 1:1 toolbar command = 100%. */}
-        {canImage ? <Text class="text-xs font-bold text-[#e6e6e6]">{zoomText}</Text> : null}
+            Zoom In/Out moves this number. 1:1 toolbar command = 100%.
+            Click/press enters exact manual % edit — not another toolbar control. */}
+        {canImage ? (
+          <View
+            class="px-1 focus:bg-[#1e1e1e] active:bg-[#1e1e1e]"
+            focusable
+            onPress={() => {
+              if (!canImage) return;
+              zoomEdit.current = beginZoomEdit(zoomEditBuffer(viewRef.current));
+              setRevision((revision.current += 1));
+            }}
+          >
+            <Text class="text-xs font-bold text-[#e6e6e6]">
+              {zoomEdit.current.active
+                ? `${zoomEdit.current.buffer}_`
+                : zoomText}
+            </Text>
+          </View>
+        ) : null}
         <Text class="text-xs text-[#a0a0a0]">{`dpi ${dpi}`}</Text>
         {posText ? <Text class="text-xs text-[#a0a0a0]">{posText}</Text> : null}
         {shownName ? (
@@ -579,7 +631,11 @@ function GroupGap() {
   return <View class="w-2 shrink-0" />;
 }
 
-/** Icon-first toolbar button. Hit 36×36; glyph 20×20 (authored size). */
+/**
+ * Icon-first toolbar button. Hit 36×36; Remix glyph 24×24 (w-6 h-6).
+ * Rest opacity is slightly below 1: Remix line fills at 24px read heavy at
+ * full ink on #252526. Geometry stays upstream; this is presentation only.
+ */
 function ToolButton({
   icon,
   textIcon,
@@ -618,9 +674,9 @@ function ToolButton({
         </Text>
       ) : icon ? (
         <Image
-          class="w-5 h-5"
+          class="w-6 h-6"
           src={icon}
-          style={{ opacity: off ? 0.38 : 1 }}
+          style={{ opacity: off ? 0.34 : 0.82 }}
         />
       ) : null}
     </View>

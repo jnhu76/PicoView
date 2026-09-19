@@ -536,6 +536,75 @@ export function setUserOrientation(
 }
 
 /**
+ * Exact Product Zoom commit for the status-bar editor.
+ * Reuses zoomAt() anchored at the image-viewport center so a panned image
+ * does not jump. Materializes Fit into manual mode; clamps via existing
+ * clampPan; preserves orientation. Does not snap to ZOOM_STEPS.
+ */
+export function setProductZoom(
+  img: OrientedImage,
+  viewport: ImageViewport,
+  state: ViewTransform,
+  productZoom: number,
+): ViewTransform {
+  const requested = Math.min(
+    MAX_PRODUCT_ZOOM,
+    Math.max(MIN_PRODUCT_ZOOM, productZoom),
+  );
+  const focusX = viewport.x + viewport.width / 2;
+  const focusY = viewport.y + viewport.height / 2;
+  return zoomAt(img, viewport, state, focusX, focusY, requested);
+}
+
+export type ZoomParseResult =
+  | { ok: true; percent: number; productZoom: number }
+  | { ok: false; reason: "empty" | "invalid" | "out-of-range" };
+
+/**
+ * Parse a user zoom-percent buffer into Product Zoom.
+ * Accepts optional trailing '%'. Rejects empty, non-finite, scientific
+ * notation, and out-of-range values without mutating ViewTransform.
+ */
+export function parseZoomPercent(raw: string): ZoomParseResult {
+  const stripped = raw.trim().replace(/%+$/g, "").trim();
+  if (stripped === "") return { ok: false, reason: "empty" };
+  // Finite decimal only — reject NaN / Infinity / 1e5 / hex / signs.
+  if (!/^\d+(\.\d+)?$/.test(stripped)) return { ok: false, reason: "invalid" };
+  const percent = Number(stripped);
+  if (!Number.isFinite(percent)) return { ok: false, reason: "invalid" };
+  const minPct = MIN_PRODUCT_ZOOM * 100;
+  const maxPct = MAX_PRODUCT_ZOOM * 100;
+  if (percent < minPct || percent > maxPct) {
+    return { ok: false, reason: "out-of-range" };
+  }
+  return { ok: true, percent, productZoom: percent / 100 };
+}
+
+/**
+ * Format a product-zoom factor as a percent number without the '%'.
+ * Destroys floating-point noise but preserves legitimate custom precision
+ * (6.25, 8.33, 127.5, 1600).
+ */
+export function formatZoomPercentNumber(z: number): string {
+  return formatPercentNumber(z * 100);
+}
+
+/** Edit-mode initial buffer for the current effective product zoom. */
+export function zoomEditBuffer(state: ViewTransform): string {
+  return formatZoomPercentNumber(state.productZoom);
+}
+
+function formatPercentNumber(pct: number): string {
+  // Quantize to 0.01% first so 84.9999999997 does not display as noise.
+  const q = Math.round(pct * 100) / 100;
+  if (!Number.isFinite(q)) return "0";
+  if (Math.abs(q - Math.round(q)) < 0.005) return String(Math.round(q));
+  let s = q.toFixed(2);
+  if (s.includes(".")) s = s.replace(/0+$/, "").replace(/\.$/, "");
+  return s;
+}
+
+/**
  * Display label for the status-bar zoom readout.
  * Product zoom is source-relative: 1.0 = Actual Size / 100% (NOT aspect ratio).
  * Fit still carries a real productZoom, so the % moves with Fit and with
@@ -557,9 +626,7 @@ export function zoomLabel(
 }
 
 function formatZoom(z: number): string {
-  const pct = z * 100;
-  if (Math.abs(pct - Math.round(pct)) < 0.05) return `${Math.round(pct)}%`;
-  return `${pct.toFixed(1)}%`;
+  return `${formatPercentNumber(z * 100)}%`;
 }
 
 /** PocketJS Image paint facts for the current user orientation. */

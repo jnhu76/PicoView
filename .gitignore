@@ -15,5 +15,9 @@ native/target/
 node_modules/
 __pycache__/
 
+# Local cook scaffolding junction (pocketjs/guest -> ../../guest); never commit.
+third_party/pocketjs/guest/
+third_party/pocketjs/node_modules/
+
 # A/B control binary target dir (investigation only, never committed)
 native/target-nog/

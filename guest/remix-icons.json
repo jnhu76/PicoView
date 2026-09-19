@@ -1,0 +1,54 @@
+{
+  "repository": "Remix-Design/RemixIcon",
+  "revision": "9fb7967c0a4c09910161192bde99efd3df09f5eb",
+  "license": "Remix Icon License v1.0",
+  "family": "line",
+  "designGrid": "0 0 24 24",
+  "notes": "Functional UI glyphs only — not PicoView branding. Vendored path geometry is upstream; baker adaptations limited to pow2 width/height, fill/currentColor → #E6E6E6, and XML header cleanup.",
+  "mapping": {
+    "open": {
+      "file": "folder-open-line.svg",
+      "upstream": "icons/Document/folder-open-line.svg"
+    },
+    "previous": {
+      "file": "arrow-left-s-line.svg",
+      "upstream": "icons/Arrows/arrow-left-s-line.svg"
+    },
+    "next": {
+      "file": "arrow-right-s-line.svg",
+      "upstream": "icons/Arrows/arrow-right-s-line.svg"
+    },
+    "zoomOut": {
+      "file": "zoom-out-line.svg",
+      "upstream": "icons/System/zoom-out-line.svg"
+    },
+    "zoomIn": {
+      "file": "zoom-in-line.svg",
+      "upstream": "icons/System/zoom-in-line.svg"
+    },
+    "fit": {
+      "file": "aspect-ratio-line.svg",
+      "upstream": "icons/Media/aspect-ratio-line.svg"
+    },
+    "rotate": {
+      "file": "clockwise-line.svg",
+      "upstream": "icons/Design/clockwise-line.svg"
+    },
+    "flipH": {
+      "file": "flip-horizontal-line.svg",
+      "upstream": "icons/Design/flip-horizontal-line.svg"
+    },
+    "flipV": {
+      "file": "flip-vertical-line.svg",
+      "upstream": "icons/Design/flip-vertical-line.svg"
+    },
+    "empty": {
+      "file": "image-line.svg",
+      "upstream": "icons/Media/image-line.svg"
+    },
+    "warn": {
+      "file": "error-warning-line.svg",
+      "upstream": "icons/System/error-warning-line.svg"
+    }
+  }
+}
