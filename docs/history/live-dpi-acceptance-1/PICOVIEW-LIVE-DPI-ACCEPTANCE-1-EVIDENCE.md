@@ -189,7 +189,71 @@ screenshots referenced above are committed next to this file.
 4. No UAC prompt appeared at any point (Settings-level scale changes are
    per-user and do not elevate; no registry edits were made or needed).
 
-## 6. Phase 3 runbook — 125% / 150% / 200% (pending; user-assisted)
+## 6. Phase 3 — 125% (evidence class: COLD_START_AT_SCALE; LIVE_TRANSITION deferred to next change)
+
+OS state verified before testing (`probe-topology.ps1`):
+`effective_dpi=120 scale=1.25 distinct_scales=1.25` (Windows Settings change
+made by the user at 2026-09-19 ≈16:4x +08:00; no registry, no elevation).
+
+### 6.1 Section A — boot / geometry (PASS)
+
+Boot log (fresh launch, requested logical 960×640):
+
+```text
+R1 runtime booted: policy=Dynamic initial_requested=960x640 logical=960x640 physical=1200x800 live_scale=1.25 package_density=2 usable_image_dim=16384
+```
+
+This is exactly the §3.2 matrix row for 125%: measured physical 1200×800,
+resolved logical 960×640 (`round(1200/1.25)`, `round(800/1.25)`), live OS
+scale (not package density 2) driving the derivation. Status bar shows
+`dpi 1.25`; guest `Fit · 12.99%` == baseline `10.39% × 1.25` (image Fit is
+image-space; the logical viewport grew 1.25× in physical terms).
+
+Oracle results (9 states, run `p3-125` + corrected runs `p3-125b/c`):
+all `logical_invariant_ok=true`, all settled `settle_exact_ok=true`
+(retained == swapchain, Exact / Nearest). Resize to physical 1440×900 →
+logical 1152×720, settled retained/swapchain 1440×900 Exact/Nearest.
+Resize policy stream (37 presents): `Exact` + `Transient` only as the
+mid-resize bridge; no persistent mismatch; R3 latest-wins held.
+
+### 6.2 Sections C–H — product behavior at 125% (PASS)
+
+- **C. Toolbar / Remix icons** (`phase3-125-boot.png`): crisp and centered at
+  1.25× (24 logical px → 30 physical px), no clipping, no asymmetric scaling,
+  no fuzziness from secondary scaling, `1:1` text centered, edge chevrons
+  appear only when navigation is available.
+- **D. Typography**: 12/14 px status/toolbar text sharp at fractional scale.
+- **E. Fit / minification**: 8256×5504 source fit into 1200×800 physical
+  client at `Fit · 12.99%`, full-resolution path, no false Proxy.
+- **F. Resize smoothness**: physical 1200×800 → 1440×900; Transient/Linear
+  during the transition, Exact/Nearest at settle.
+- **G. Editable Zoom % / truthful Actual Size**: `85%` and `127.5%` applied
+  exactly (labels `85%`, `127.5%`; decimal accepted). 1:1 → `100%` with
+  native image pixels (fullResolution, `can100` gate truthful). Product Zoom
+  is image-space: at dpi 1.25 the image pixel scale is unchanged by the OS
+  scale, presentation scales through the retained target.
+- **H. Pointer / pan** (`phase3-125-pan-1to1.png`): real-input drag pans at
+  1:1; no logical/physical pointer drift observed.
+
+### 6.3 Harness notes at 125% (tooling, not product)
+
+- The zoom-label click coordinate must be taken against the **current**
+  physical client size, and the label must be in its wide `Fit · N%` state
+  for a deterministic hit. One run with a stale coordinate missed the label;
+  the typed `1` then legitimately fired the `1:1` keyboard intent (label
+  `100%`) — retested with a Fit reset before each edit: `85%`/`127.5%`
+  applied exactly. Recorded as harness coordinate fragility; the keyboard
+  fallback it exposed is itself correct product behavior.
+
+### 6.4 Evidence class accounting
+
+- 125% acceptance: **COLD_START_AT_SCALE** (the 100→125 change happened
+  while PicoView was not running, so it cannot be claimed as a live
+  transition; not faked in code per the campaign's no-false-evidence rule).
+- The genuine **LIVE_TRANSITION** (125→150) is captured next: PicoView stays
+  running with the observer harness attached while the user changes scale.
+
+## 7. Phase 3 runbook — 150% / 200% (remaining)
 
 Mission note: the campaign brief was truncated mid-§C in transmission; the
 section list below reconstructs D–H from the mission's stated verification
@@ -229,25 +293,34 @@ one genuine live transition. No scale value is ever constructed in code.
 UAC gate: if any step presents (or would present) a UAC prompt, the campaign
 stops immediately and reports `UAC_REQUIRED` with the exact operation.
 
-### USER_ACTION_REQUIRED (first gate)
+### Procedure for the next change (150%)
 
-```text
-USER_ACTION_REQUIRED:
-  Set Windows display scale to 125%
-  (Settings → System → Display → Scale)
-  Then tell me "125 ready"
-```
+1. Harness launches PicoView with the image and `--keep-open`, then `observe`
+   mode records geometry + R1 log lines into
+   `transition-live-125to150.jsonl` while the change happens.
+2. The user changes scale (Settings → System → Display → Scale → 150%).
+3. Verification: geometry JSONL shows the measured physical jump and the
+   scale change; the R1 log shows
+   `presentation update → surface reconfigure → present` with a final settled
+   `Exact / Nearest` present at retained == swapchain; the final live DPI
+   event is not lost; then a fresh cold start at 150% completes section A.
 
-After that, the remaining scales follow the same pattern (150%, then 200%).
+UAC gate: if any step presents (or would present) a UAC prompt, the campaign
+stops immediately and reports `UAC_REQUIRED` with the exact operation.
 
-## 7. Evidence index
+## 8. Evidence index
 
 - `probe-topology.ps1` — Phase 0 topology probe (this directory, scratch).
 - `dpi_acceptance.py` — Phase 1–3 harness (scratch).
-- `run-p2-zoom-edits/`, earlier `run-*` outputs — raw logs + JSON summaries +
-  screenshots per step (scratch).
-- Committed screenshots (this directory): baseline toolbar/status/Fit
-  (`phase2-100-boot.png`), 1:1 (`phase2-100-one2one.png`), pan at 100%
-  (`phase2-100-pan.png`), resize to 1200×800 logical
-  (`phase2-100-resize-1200x800.png`), next-item (`phase2-100-next.png`),
-  85% (`phase2-100-zoom-85.png`), 127.5% (`phase2-100-zoom-1275.png`).
+- `run-p2-zoom-edits/`, `run-current/`, earlier `run-*` outputs — raw logs +
+  JSON summaries + screenshots per step (scratch).
+- Committed screenshots (this directory):
+  - 100% baseline: toolbar/status/Fit (`phase2-100-boot.png`), 1:1
+    (`phase2-100-one2one.png`), pan at 100% (`phase2-100-pan.png`), resize to
+    1200×800 logical (`phase2-100-resize-1200x800.png`), next-item
+    (`phase2-100-next.png`), 85% (`phase2-100-zoom-85.png`), 127.5%
+    (`phase2-100-zoom-1275.png`).
+  - 125%: boot/icons/dpi 1.25 (`phase3-125-boot.png`), resize to physical
+    1440×900 (`phase3-125-resize-1440x900.png`), pan at 1:1
+    (`phase3-125-pan-1to1.png`), 85% (`phase3-125-zoom-85.png`), 127.5%
+    (`phase3-125-zoom-1275.png`).
