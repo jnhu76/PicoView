@@ -1,13 +1,13 @@
 {
-  "icon-open.svg": { "linear": true },
-  "icon-prev.svg": { "linear": true },
-  "icon-next.svg": { "linear": true },
-  "icon-zoom-out.svg": { "linear": true },
-  "icon-zoom-in.svg": { "linear": true },
-  "icon-fit.svg": { "linear": true },
-  "icon-rotate.svg": { "linear": true },
-  "icon-flip-h.svg": { "linear": true },
-  "icon-flip-v.svg": { "linear": true },
-  "icon-empty.svg": { "linear": true },
-  "icon-warn.svg": { "linear": true }
+  "folder-open-line.svg": { "linear": true },
+  "arrow-left-s-line.svg": { "linear": true },
+  "arrow-right-s-line.svg": { "linear": true },
+  "zoom-out-line.svg": { "linear": true },
+  "zoom-in-line.svg": { "linear": true },
+  "aspect-ratio-line.svg": { "linear": true },
+  "loop-right-line.svg": { "linear": true },
+  "flip-horizontal-line.svg": { "linear": true },
+  "flip-vertical-line.svg": { "linear": true },
+  "image-line.svg": { "linear": true },
+  "error-warning-line.svg": { "linear": true }
 }

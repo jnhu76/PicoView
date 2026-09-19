@@ -30,6 +30,10 @@ import {
   zoomIn,
   zoomLabel,
   zoomOut,
+  formatZoomPercentNumber,
+  parseZoomPercent,
+  setProductZoom,
+  zoomEditBuffer,
   type OrientedImage,
   type ImageViewport,
   type UserOrientation,
@@ -293,19 +297,15 @@ test("fit label includes live product zoom percent", () => {
 });
 
 test("zoom in/out moves the status zoom number", () => {
-  const fmt = (z: number) => {
-    const pct = z * 100;
-    return Math.abs(pct - Math.round(pct)) < 0.05
-      ? `${Math.round(pct)}%`
-      : `${pct.toFixed(1)}%`;
-  };
   const fit = fitView(landscape, vp, initialViewTransform(1));
   const zin = zoomIn(landscape, vp, fit);
   const zout = zoomOut(landscape, vp, zin);
   const full = { fullResolution: true, hasImage: true };
-  expect(zoomLabel(fit, full)).toBe(`Fit · ${fmt(fit.productZoom)}`);
-  expect(zoomLabel(zin, full)).toBe(fmt(zin.productZoom));
-  expect(zoomLabel(zout, full)).toBe(fmt(zout.productZoom));
+  expect(zoomLabel(fit, full)).toBe(
+    `Fit · ${formatZoomPercentNumber(fit.productZoom)}%`,
+  );
+  expect(zoomLabel(zin, full)).toBe(`${formatZoomPercentNumber(zin.productZoom)}%`);
+  expect(zoomLabel(zout, full)).toBe(`${formatZoomPercentNumber(zout.productZoom)}%`);
   expect(zin.productZoom).not.toBe(fit.productZoom);
   // 1:1 command is Actual Size = productZoom 1.0 = 100% (not an aspect ratio).
   const a = actualSize(zin);
