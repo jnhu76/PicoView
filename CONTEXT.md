@@ -10,7 +10,7 @@ PicoView is a Windows 11 local image viewer on PocketJS.
 
 **MVP is feature-complete.** The viewer can open a local image, browse previous/next, apply Fit / 1:1 / zoom / pan, rotate/flip, open via native dialog, and register file associations. Product use is local-only.
 
-Current phase: **stabilization / rendering-quality closure** (R2 minification quality, R3 resize scheduling, small visual corrections, live DPI acceptance). Not in release hardening yet.
+Current phase: **release hardening** (R2/R3 quality closure and live DPI acceptance complete on `main`). Windows release packaging — app icon authority, EXE resources, Inno Setup installer, portable artifact, release script — is authored on `release/windows-release-hardening-1` (authority: [`docs/RELEASE-WINDOWS.md`](docs/RELEASE-WINDOWS.md)).
 
 ---
 
