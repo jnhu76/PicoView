@@ -7,7 +7,7 @@
 | Campaign | PICOVIEW-63-IMAGE-PRESENTATION-QUALITY-CORRECTIVE-1 |
 | PR | https://github.com/jnhu76/PicoView/pull/68 |
 | PRIOR_HEAD | `744d4fbb3407e56b3e88f29a87f3e5b1b8b75539` |
-| NEW_HEAD | `d90891a9fc4378fc09d808dbcb784701b62c9547` |
+| NEW_HEAD | PR #68 branch tip after this corrective (see git tip / PR head) |
 | Branch | `fix/63-image-presentation-quality-1` |
 | Worktree | `C:\Users\fred1\source\PicoView-wt-63` |
 | PocketJS lock | `4cf84b8d0124ae2e67681f279e6f5427917b4aff` (**unchanged**) |
