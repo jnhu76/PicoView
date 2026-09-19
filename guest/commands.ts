@@ -9,14 +9,18 @@
 
 import { getOps } from "@pocketjs/framework/host";
 
-let channelAvailable: boolean | null = null;
+let channelConfirmed = false;
 
-/** Check whether the native Picoview command channel is available. */
+/** Check whether the native Picoview command channel is available.
+ *  A false answer is never memoized: the host can install its command
+ *  channel after guest boot (late host install), so availability keeps
+ *  being re-probed until it answers true once. The cost is one bounded
+ *  host op per unanswered user command. */
 function ensureChannel(): boolean {
-  if (channelAvailable !== null) return channelAvailable;
+  if (channelConfirmed) return true;
   const ops = getOps();
-  channelAvailable = !!ops.svcOpen?.("picoview");
-  return channelAvailable;
+  channelConfirmed = !!ops.svcOpen?.("picoview");
+  return channelConfirmed;
 }
 
 /** Send a raw command object to native. Returns true if sent. */
@@ -41,11 +45,6 @@ export function cmdNext(): boolean {
 /** Refresh the current image (re-decode from disk). */
 export function cmdRefresh(): boolean {
   return send({ cmd: "refresh" });
-}
-
-/** Open a specific file path (native CurrentItem pipeline). */
-export function cmdOpen(path: string): boolean {
-  return send({ cmd: "open", path });
 }
 
 /** Ask the host to show a native Open File dialog (Windows UI thread). */

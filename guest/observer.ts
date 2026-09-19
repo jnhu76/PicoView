@@ -111,8 +111,6 @@ export interface SvcLine {
   x?: unknown;
   y?: unknown;
   d?: unknown;
-  b?: unknown;
-  sh?: unknown;
   /** Host gesture cancel (focus-loss). Not a release — must not press. */
   cancel?: unknown;
   /** Wheel / scroll events. */

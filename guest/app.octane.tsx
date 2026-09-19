@@ -10,13 +10,12 @@ import {
   setActiveNode,
 } from "@pocketjs/framework/input";
 import {
-  displayVerdict,
   initialObserverState,
-  refreshStatus,
   type ObserverState,
 } from "./observer.ts";
 import { textureKeyFor, type BoundPublication } from "./binding.ts";
 import { runGuestTurn } from "./turn.ts";
+import { deriveDisplayState } from "./display_state.ts";
 import {
   cmdPrevious,
   cmdNext,
@@ -32,7 +31,6 @@ import {
   type ZoomEditorState,
 } from "./zoom_editor.ts";
 import {
-  imageViewport,
   pointInImageViewport,
   SHELL_CHROME,
   wheelFocusPoint,
@@ -59,9 +57,7 @@ import {
   zoomAt,
   zoomEditBuffer,
   zoomIn,
-  zoomLabel,
   zoomOut,
-  type OrientedImage,
   type ViewEnvironment,
   type ViewTransform,
 } from "./view_transform.ts";
@@ -70,6 +66,7 @@ import {
   IDLE_GESTURE,
   classifyGestureOwner,
   nextHeldGesture,
+  pointerCoords,
   type HeldGesture,
 } from "./pointer_press.ts";
 
@@ -139,22 +136,17 @@ export default function App() {
       registerTexture(outcome.register.key, outcome.register.handle);
     }
 
-    const st = item.current;
-    const pub = st.publication;
-    const vpRaw = st.viewport;
-    const dpi = vpRaw?.dpi && vpRaw.dpi > 0 ? vpRaw.dpi : 1;
-    const winW = vpRaw?.w ?? 960;
-    const winH = vpRaw?.h ?? 640;
-    const vp = imageViewport(winW, winH);
-    const img: OrientedImage = {
-      width: pub ? pub.resourceWidth || pub.sourceWidth : 0,
-      height: pub ? pub.resourceHeight || pub.sourceHeight : 0,
-    };
-    const hasImage = img.width > 0 && img.height > 0;
+    // ONE display derivation for the whole frame (C4): input routing below
+    // consumes the same derived facts the render tree renders.
+    const d = deriveDisplayState(item.current, viewRef.current);
+    const { vp, img, dpi, hasImage, canImage, can100 } = d;
 
     const nextKey = publicationViewKeyFrom(item.current);
     const action = reconcileViewForPublication(viewKey.current, nextKey);
     if (action === "reset") {
+      // Publication identity changed: an active zoom editor must not commit
+      // its in-progress % against a different image.
+      zoomEdit.current = ZOOM_EDITOR_IDLE;
       viewRef.current = hasImage
         ? resetForNewPublication(img, vp, dpi)
         : initialViewTransform(dpi);
@@ -180,28 +172,13 @@ export default function App() {
     }
     envKey.current = env;
 
-    const apply = (fn: (s: ViewTransform) => ViewTransform) => {
-      const next = fn(viewRef.current);
-      viewRef.current = next;
-      setViewState(next);
-    };
     const applyView = (next: ViewTransform) => {
       viewRef.current = next;
       setViewState(next);
     };
 
-    const canImage = displayVerdict(st) === "image" && hasImage;
-    const can100 = pub?.fullResolution === true;
-
     // --- keyboard ---
-    const shownForKeyboard =
-      displayVerdict(st) === "image"
-        ? pub?.name
-        : displayVerdict(st) === "loading" || displayVerdict(st) === "error"
-          ? st.request?.name
-          : undefined;
-    const canRefreshForKeyboard =
-      !!pub || (shownForKeyboard != null && shownForKeyboard !== "");
+    const browse = item.current.browse;
     for (const e of outcome.keyEvents) {
       const k = typeof e.k === "string" ? e.k : "";
       const ctrl = !!(e.cmd || e.ctl);
@@ -224,9 +201,9 @@ export default function App() {
       }
       const intent = keyboardIntent(k, {
         ctrl,
-        canPrevious: st.browse.canPrevious,
-        canNext: st.browse.canNext,
-        canRefresh: canRefreshForKeyboard,
+        canPrevious: browse.canPrevious,
+        canNext: browse.canNext,
+        canRefresh: d.canRefresh,
         canImage,
         can100,
       });
@@ -260,19 +237,21 @@ export default function App() {
 
     // --- pointer drag pan + toolbar/chevron onPress (MAJOR-C ownership) ---
     for (const e of outcome.mouseEvents) {
-      const x = typeof e.x === "number" ? e.x : 0;
-      const y = typeof e.y === "number" ? e.y : 0;
       const down = e.d === true;
       const cancel = e.cancel === true;
-      // Latest logical pointer is authority for later wheel turns (MAJOR-B).
-      lastPointer.current = { x, y, known: true };
-
       if (cancel) {
         pointerPress.current.cancel();
         gesture.current = IDLE_GESTURE;
         if (zoomEdit.current.active) zoomEdit.current = ZOOM_EDITOR_IDLE;
         continue;
       }
+      // Malformed packets carry no pointer truth: skip entirely so no press,
+      // pan, or wheel anchor acts on a fabricated (0,0) position.
+      const coords = pointerCoords(e);
+      if (!coords) continue;
+      const { x, y } = coords;
+      // Latest logical pointer is authority for later wheel turns (MAJOR-B).
+      lastPointer.current = { x, y, known: true };
 
       // Clicking another control/canvas while editing cancels the editor first.
       if (down && zoomEdit.current.active) {
@@ -349,49 +328,17 @@ export default function App() {
     }
   });
 
-  const state = item.current;
-  const verdict = displayVerdict(state);
-  const publication = state.publication;
-  const request = state.request;
+  // ONE display derivation shared with the frame hook (C4). No display fact
+  // is re-derived here.
+  const d = deriveDisplayState(item.current, viewState);
+  const { verdict, canImage, can100, shownName } = d;
+  const publication = item.current.publication;
+  const request = item.current.request;
   const bound = binding.current;
-  const browse = state.browse;
-  const viewport = state.viewport;
-  const dpi = viewport?.dpi && viewport.dpi > 0 ? viewport.dpi : 1;
-  const winW = viewport?.w ?? 960;
-  const winH = viewport?.h ?? 640;
-  const vp = imageViewport(winW, winH);
-  const img: OrientedImage = {
-    width: publication ? publication.resourceWidth || publication.sourceWidth : 0,
-    height: publication ? publication.resourceHeight || publication.sourceHeight : 0,
-  };
-  const canImage = verdict === "image" && img.width > 0;
-  const can100 = publication?.fullResolution === true;
-  const style = canImage
-    ? pocketImageStyle(img, viewState, vp)
-    : null;
-  const zoomText = zoomLabel(viewState, {
-    fullResolution: publication?.fullResolution === true,
-    hasImage: canImage,
-  });
-
-  const shownName =
-    verdict === "image"
-      ? publication?.name
-      : verdict === "loading" || verdict === "error"
-        ? request?.name
-        : undefined;
-  const posText =
-    browse.count > 0 && browse.index !== null
-      ? `${browse.index + 1} / ${browse.count}`
-      : "";
-  const dimText = publication
-    ? `${publication.sourceWidth} × ${publication.sourceHeight}`
-    : "";
-  const canRefresh = !!publication || (shownName != null && shownName !== "");
-  // Refresh request state for the status row: a refresh keeps the last-good
-  // image in the main content (PRD §2.10), so loading/failure surfaces here.
-  const refreshFacet = refreshStatus(state);
-
+  const browse = item.current.browse;
+  const style = canImage ? pocketImageStyle(d.img, viewState, d.vp) : null;
+  // Toolbar apply: the frame hook routes inputs through applyView on
+  // viewRef.current; toolbar presses here apply against the same ref.
   const apply = (fn: (s: ViewTransform) => ViewTransform) => {
     const next = fn(viewRef.current);
     viewRef.current = next;
@@ -420,19 +367,19 @@ export default function App() {
           icon={ICON_ASSETS.zoomOut}
           semantic={toolSemantic("zoomOut")}
           disabled={!canImage}
-          onPress={() => apply(s => zoomOut(img, vp, s))}
+          onPress={() => apply(s => zoomOut(d.img, d.vp, s))}
         />
         <ToolButton
           icon={ICON_ASSETS.zoomIn}
           semantic={toolSemantic("zoomIn")}
           disabled={!canImage}
-          onPress={() => apply(s => zoomIn(img, vp, s))}
+          onPress={() => apply(s => zoomIn(d.img, d.vp, s))}
         />
         <ToolButton
           icon={ICON_ASSETS.fit}
           semantic={toolSemantic("fit")}
           disabled={!canImage}
-          onPress={() => apply(s => fitView(img, vp, s))}
+          onPress={() => apply(s => fitView(d.img, d.vp, s))}
         />
         <ToolButton
           textIcon="1:1"
@@ -446,7 +393,7 @@ export default function App() {
           semantic={toolSemantic("rotate")}
           disabled={!canImage}
           onPress={() =>
-            apply(s => setUserOrientation(img, vp, s, rotateRight(s.orientation)))
+            apply(s => setUserOrientation(d.img, d.vp, s, rotateRight(s.orientation)))
           }
         />
         <ToolButton
@@ -455,7 +402,7 @@ export default function App() {
           disabled={!canImage}
           onPress={() =>
             apply(s =>
-              setUserOrientation(img, vp, s, flipHorizontal(s.orientation)),
+              setUserOrientation(d.img, d.vp, s, flipHorizontal(s.orientation)),
             )
           }
         />
@@ -465,7 +412,7 @@ export default function App() {
           disabled={!canImage}
           onPress={() =>
             apply(s =>
-              setUserOrientation(img, vp, s, flipVertical(s.orientation)),
+              setUserOrientation(d.img, d.vp, s, flipVertical(s.orientation)),
             )
           }
         />
@@ -478,8 +425,8 @@ export default function App() {
             src={textureKeyFor(bound.slot)}
             style={{
               posType: 1,
-              insetL: Math.round(style.insetL - vp.x),
-              insetT: Math.round(style.insetT - vp.y),
+              insetL: Math.round(style.insetL - d.vp.x),
+              insetT: Math.round(style.insetT - d.vp.y),
               width: Math.round(style.width),
               height: Math.round(style.height),
               rotate: style.rotate,
@@ -530,12 +477,11 @@ export default function App() {
         ) : null}
 
         {/* Overlay only for non-image states. When an image is bound, never
-            stack empty/loading/error on top of the publication. */}
-        {verdict === "image" && !bound ? (
-          <View class="flex-1 flex-col items-center justify-center">
-            <Text class="text-sm text-[#a0a0a0]">Preparing image...</Text>
-          </View>
-        ) : verdict === "loading" ? (
+            stack empty/loading/error on top of the publication. Under the
+            binding invariant a publication observed in a turn commits its
+            binding in that same turn, so verdict==="image" always has a
+            bound publication here; the image branch still guards `bound`. */}
+        {verdict === "loading" ? (
           <View class="flex-1 flex-col items-center justify-center">
             <Text class="text-sm text-[#a0a0a0]">{`Opening ${truncateName(request?.name) || "image"}...`}</Text>
           </View>
@@ -586,7 +532,7 @@ export default function App() {
 
       {/* Status — height frozen in SHELL_CHROME.statusH */}
       <View class="flex-row items-center px-3 bg-[#252526] gap-3" style={{ height: SHELL_CHROME.statusH }}>
-        {dimText ? <Text class="text-xs text-[#a0a0a0]">{dimText}</Text> : null}
+        {d.dimText ? <Text class="text-xs text-[#a0a0a0]">{d.dimText}</Text> : null}
         {publication ? (
           <Text
             class={
@@ -600,15 +546,15 @@ export default function App() {
         ) : null}
         {/* Refresh request state: bounded single-line facet; a failure is
             visibly distinct (warning ink) from an in-progress refresh. */}
-        {refreshFacet ? (
+        {d.refreshFacet ? (
           <Text
             class={
-              refreshFacet.kind === "error"
+              d.refreshFacet.kind === "error"
                 ? "text-xs text-amber-400"
                 : "text-xs text-[#a0a0a0]"
             }
           >
-            {refreshFacet.text}
+            {d.refreshFacet.text}
           </Text>
         ) : null}
         <View class="flex-1" />
@@ -628,12 +574,12 @@ export default function App() {
             <Text class="text-xs font-bold text-[#e6e6e6]">
               {zoomEdit.current.active
                 ? `${zoomEdit.current.buffer}_`
-                : zoomText}
+                : d.zoomText}
             </Text>
           </View>
         ) : null}
-        <Text class="text-xs text-[#a0a0a0]">{`dpi ${dpi}`}</Text>
-        {posText ? <Text class="text-xs text-[#a0a0a0]">{posText}</Text> : null}
+        <Text class="text-xs text-[#a0a0a0]">{`dpi ${d.dpi}`}</Text>
+        {d.posText ? <Text class="text-xs text-[#a0a0a0]">{d.posText}</Text> : null}
         {shownName ? (
           <Text class="text-xs text-[#a0a0a0]">{truncateName(shownName, 28)}</Text>
         ) : null}
