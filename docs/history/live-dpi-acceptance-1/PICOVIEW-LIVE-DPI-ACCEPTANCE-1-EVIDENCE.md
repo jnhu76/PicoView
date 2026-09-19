@@ -412,3 +412,19 @@ used.
     (`phase3-150-zoom-1275.png`).
   - Live transitions: after 200→150 (`phase3-live-150-after.png`), after
     150→100 (`phase3-live-100-after.png`).
+
+## 11. DISPLAY_RESTORE (closeout)
+
+| Field | Value |
+| --- | --- |
+| baseline_scale | 100% (effective_dpi=96, scale=1) |
+| final_scale | 100% (effective_dpi=96, scale=1) |
+| restored | true |
+| resolution_unchanged | true (2560×1440) |
+| monitor_configuration_unchanged | true (`\\.\DISPLAY1`, primary, single monitor) |
+
+Verified at closeout via `GetDpiForMonitor` MDT_EFFECTIVE_DPI query (native
+Windows, per-monitor DPI aware): `device=\\.\DISPLAY1 resolution=2560x1440
+dpi=96 scale=1 scale_pct=100`. The OS scale was restored to the original
+baseline after the campaign completed. No UAC prompt was required for
+restoration.
