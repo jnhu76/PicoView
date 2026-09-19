@@ -34,11 +34,18 @@ use pocket_ui_surface::UiSurface;
 use std::path::{Path, PathBuf};
 
 pub use crate::browse_session::BrowseSession;
-pub use decode::{DecodedImage, OpenError};
+pub use decode::{DecodedImage, ImageAdmissionPolicy, OpenError};
 pub use publication::{ObservationBoundary, OpenIntent, RequestPhase};
 
 use decode::{open_decoded, prepare_for_admission};
 use publication::{BrowseSnapshot, LiveResource, error_event, loading_event, ready_event};
+
+/// Build Product admission policy from created-device image capability.
+/// Small host/runtime bridge: callers pass `device.limits().max_texture_dimension_2d`.
+/// Image/Product code never queries wgpu.
+pub fn decode_policy_for_device(device_max_texture_dim: u32) -> ImageAdmissionPolicy {
+    ImageAdmissionPolicy::from_usable_image_capability(device_max_texture_dim)
+}
 
 pub const SVC_TYPE: &str = "current-item";
 /// Texture key prefix the guest binds ready handles under (mirrored in
@@ -87,6 +94,10 @@ pub struct CurrentItem {
     /// BrowseSession: directory enumeration and navigation. Present only
     /// when the viewer is in browse mode (an initial image was provided).
     browse: Option<BrowseSession>,
+    /// Product admission policy: usable device image capability + bounded
+    /// CPU safety. Starts portable; the runtime installs created-device truth
+    /// before the first Product open when a GPU path exists.
+    admission: ImageAdmissionPolicy,
 }
 
 impl CurrentItem {
@@ -96,6 +107,7 @@ impl CurrentItem {
             live: None,
             superseded: Vec::new(),
             browse: None,
+            admission: ImageAdmissionPolicy::portable_default(),
         }
     }
 
@@ -108,9 +120,22 @@ impl CurrentItem {
             live: None,
             superseded: Vec::new(),
             browse: Some(browse),
+            admission: ImageAdmissionPolicy::portable_default(),
         };
         // Emit the initial browse state.
         item
+    }
+
+    /// Install the usable image admission policy (device capability + product
+    /// safety). Must be called before the first open when a created-device
+    /// fact is known; does not re-prepare an already published resource.
+    pub fn set_admission_policy(&mut self, policy: ImageAdmissionPolicy) {
+        self.admission = policy;
+    }
+
+    /// Current admission policy (tests / diagnostics).
+    pub fn admission_policy(&self) -> ImageAdmissionPolicy {
+        self.admission
     }
 
     pub fn generation(&self) -> u64 {
@@ -234,10 +259,22 @@ impl CurrentItem {
             Ok(decoded) => {
                 let source_w = decoded.width;
                 let source_h = decoded.height;
-                let image = prepare_for_admission(decoded);
+                let image = prepare_for_admission(decoded, &self.admission);
                 let resource_w = image.width;
                 let resource_h = image.height;
+                // fullResolution is derived from geometry truth, never a
+                // capability pretence: resource must equal source exactly.
                 let full_resolution = source_w == resource_w && source_h == resource_h;
+                log::info!(
+                    "current-item open: source={}x{} resource={}x{} fullResolution={} policy.max_dim={} policy.max_pixels={}",
+                    source_w,
+                    source_h,
+                    resource_w,
+                    resource_h,
+                    full_resolution,
+                    self.admission.max_resource_dim,
+                    self.admission.max_resource_pixels
+                );
                 self.publish(
                     surface,
                     phase,

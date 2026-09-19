@@ -2,8 +2,8 @@
 //! `current_item.rs` module; only the import surface differs.
 
 use super::decode::{
-    DecodedImage, MAX_ERROR_CHARS, OpenError, decode_alloc_len, open_decoded,
-    prepare_for_admission, wic,
+    DecodedImage, ImageAdmissionPolicy, MAX_ERROR_CHARS, OpenError, decode_alloc_len,
+    open_decoded, prepare_for_admission, proxy_resource_size, proxy_size_holds_policy, wic,
 };
 use super::publication::{
     BrowseSnapshot, ObservationBoundary, OpenIntent, RequestPhase, error_event, loading_event,
@@ -94,7 +94,7 @@ fn ordinary_decodes_prepare_as_the_decoder_plane_verbatim() {
             rgba: vec![17u8; (w * h * 4) as usize],
         };
         let source_ptr = decode.rgba.as_ptr();
-        let prepared = prepare_for_admission(decode);
+        let prepared = prepare_for_admission(decode, &ImageAdmissionPolicy::portable_default());
         assert_eq!(
             (prepared.width, prepared.height),
             (w, h),
@@ -126,7 +126,7 @@ fn exif_oriented_decode_keeps_full_resolution_in_o_space() {
     };
     let source_w = decode.width;
     let source_h = decode.height;
-    let image = prepare_for_admission(decode);
+    let image = prepare_for_admission(decode, &ImageAdmissionPolicy::portable_default());
     let resource_w = image.width;
     let resource_h = image.height;
     let full_resolution = source_w == resource_w && source_h == resource_h;
@@ -140,7 +140,7 @@ fn exif_oriented_decode_keeps_full_resolution_in_o_space() {
 
 #[test]
 fn giant_decodes_prepare_as_fitted_planes() {
-    // One axis above the admission ceiling (8192): the resource is
+    // One axis above the portable admission ceiling (8192): the resource is
     // box-fitted into the admission limit, bounded, never rejected, and
     // still large enough that fit-to-window display is GPU minification
     // of real pixels. The fill is channel-asymmetric so the oracle also
@@ -156,13 +156,255 @@ fn giant_decodes_prepare_as_fitted_planes() {
         height: h,
         rgba,
     };
-    let res = prepare_for_admission(decode);
+    let policy = ImageAdmissionPolicy::portable_default();
+    let res = prepare_for_admission(decode, &policy);
     assert_eq!(res.width, 8192);
     assert_eq!(res.height, (100 * 8192 + w / 2) / w);
     assert!(res.width <= pocketjs_core::NATIVE_TEX_MAX_DIM);
     assert_eq!(res.rgba.len(), (res.width * res.height * 4) as usize);
     for px in res.rgba.chunks_exact(4) {
         assert_eq!(px, &[17, 34, 51, 255], "box-fit output must stay R,G,B,A");
+    }
+}
+
+#[test]
+fn admission_case_a_device_8192_giant_is_proxy() {
+    // CASE A: device max dimension = 8192, source 8256×5504 → proxy.
+    let policy = ImageAdmissionPolicy::from_usable_image_capability(8192);
+    let decode = DecodedImage {
+        width: 8256,
+        height: 5504,
+        rgba: vec![20u8; (8256u64 * 5504u64 * 4) as usize],
+    };
+    let source = (decode.width, decode.height);
+    let res = prepare_for_admission(decode, &policy);
+    let full = source == (res.width, res.height);
+    assert!(!full, "8256 must not claim full resolution on an 8192 device");
+    assert!(res.width <= 8192 && res.height <= 8192);
+    assert!(res.rgba.len() == (res.width * res.height * 4) as usize);
+}
+
+#[test]
+fn admission_case_b_device_allows_8256_exact_full_resolution() {
+    // CASE B: device max dimension >= 8256 and product budgets allow → exact.
+    let policy = ImageAdmissionPolicy::from_usable_image_capability(16384);
+    let decode = DecodedImage {
+        width: 8256,
+        height: 5504,
+        rgba: vec![20u8; (8256u64 * 5504u64 * 4) as usize],
+    };
+    let source_ptr = decode.rgba.as_ptr();
+    let res = prepare_for_admission(decode, &policy);
+    assert_eq!((res.width, res.height), (8256, 5504));
+    assert!(std::ptr::eq(res.rgba.as_ptr(), source_ptr), "full path must move, not copy");
+    let full_resolution = res.width == 8256 && res.height == 5504;
+    assert!(full_resolution);
+}
+
+#[test]
+fn admission_case_c_pixel_budget_rejects_never_false_full() {
+    // CASE C: dimension fits device, but product pixel budget rejects → proxy
+    // or bounded rejection. NEVER falsely fullResolution.
+    let mut policy = ImageAdmissionPolicy::from_usable_image_capability(16384);
+    policy.max_resource_pixels = 1_000_000; // far below 8256×5504
+    assert!(!policy.admits_exact(8256, 5504));
+    let decode = DecodedImage {
+        width: 8256,
+        height: 5504,
+        rgba: vec![20u8; (8256u64 * 5504u64 * 4) as usize],
+    };
+    let res = prepare_for_admission(decode, &policy);
+    let full = res.width == 8256 && res.height == 5504;
+    assert!(!full, "budget rejection must never claim full resolution");
+    assert!(res.width <= 16384 && res.height <= 16384);
+    let pixels = res.width as u64 * res.height as u64;
+    assert!(
+        pixels <= policy.max_resource_pixels,
+        "proxy must stay within product pixel budget ({pixels} > {})",
+        policy.max_resource_pixels
+    );
+}
+
+#[test]
+fn admission_case_d_exact_on_supported_boundary() {
+    // CASE D: source exactly on the supported dimension boundary → exact
+    // when other budgets permit.
+    let policy = ImageAdmissionPolicy::from_usable_image_capability(8256);
+    let decode = DecodedImage {
+        width: 8256,
+        height: 1,
+        rgba: vec![1u8; 8256 * 4],
+    };
+    let res = prepare_for_admission(decode, &policy);
+    assert_eq!((res.width, res.height), (8256, 1));
+    // One pixel past the boundary on either axis becomes proxy.
+    let over = DecodedImage {
+        width: 8257,
+        height: 1,
+        rgba: vec![1u8; 8257 * 4],
+    };
+    let proxied = prepare_for_admission(over, &policy);
+    assert!(proxied.width <= 8256 && (proxied.width, proxied.height) != (8257, 1));
+}
+
+#[test]
+fn admission_case_e_normal_1254_stays_full_resolution() {
+    // CASE E: ordinary control image remains full-resolution under both
+    // portable and raised-capability policies.
+    for dim in [pocketjs_core::NATIVE_TEX_MAX_DIM, 16384] {
+        let policy = ImageAdmissionPolicy::from_usable_image_capability(dim);
+        let decode = DecodedImage {
+            width: 1254,
+            height: 1254,
+            rgba: vec![3u8; 1254 * 1254 * 4],
+        };
+        let source_ptr = decode.rgba.as_ptr();
+        let res = prepare_for_admission(decode, &policy);
+        assert_eq!((res.width, res.height), (1254, 1254), "dim={dim}");
+        assert!(std::ptr::eq(res.rgba.as_ptr(), source_ptr), "dim={dim}");
+        assert!(res.width == 1254 && res.height == 1254);
+    }
+}
+
+#[test]
+fn admission_case_f_malformed_dimensions_stay_bounded() {
+    // CASE F: decode guard still rejects absurd containers before allocation.
+    assert!(decode_alloc_len(65535, 65535).is_err());
+    assert!(decode_alloc_len(1, 1).is_ok());
+    // Zero / empty prepared inputs stay bounded (no panic).
+    let policy = ImageAdmissionPolicy::from_usable_image_capability(16384);
+    let empty = DecodedImage {
+        width: 0,
+        height: 0,
+        rgba: Vec::new(),
+    };
+    let res = prepare_for_admission(empty, &policy);
+    // Malformed empty input does not claim full-resolution geometry.
+    assert!((res.width, res.height) != (0, 0) || res.rgba.is_empty());
+    assert!(res.rgba.len() <= 4);
+    // Product CPU guard remains part of every device-derived policy.
+    assert_eq!(
+        ImageAdmissionPolicy::from_usable_image_capability(16384).max_resource_pixels,
+        80_000_000
+    );
+}
+
+/// MINOR-2: max_resource_pixels is a strict invariant after proxy derivation.
+/// Historical counterexample: sqrt+round on both axes produced
+/// 113×8854 = 1,000,502 > 1,000,000.
+#[test]
+fn proxy_pixel_budget_counterexample_113x8858_stays_invariant() {
+    let (src_w, src_h) = (113u32, 8858u32);
+    let max_dim = 16384u32;
+    let max_pixels = 1_000_000u64;
+
+    // Document the historical invalid output from independent axis round().
+    let bad_scale = ((max_pixels as f64) / ((src_w as f64) * (src_h as f64))).sqrt();
+    let bad_cw = ((src_w as f64 * bad_scale).round() as u32).clamp(1, max_dim);
+    let bad_ch = ((src_h as f64 * bad_scale).round() as u32).clamp(1, max_dim);
+    let bad_product = bad_cw as u64 * bad_ch as u64;
+    // The old derivation can overshoot; if a given float rounding happens not
+    // to, the new function must still hold the invariant.
+    if bad_product > max_pixels {
+        assert!(
+            !proxy_size_holds_policy(bad_cw, bad_ch, max_dim, max_pixels),
+            "historical counterexample should violate the budget ({bad_cw}x{bad_ch}={bad_product})"
+        );
+    }
+
+    let (cw, ch) = proxy_resource_size(src_w, src_h, max_dim, max_pixels);
+    assert!(
+        proxy_size_holds_policy(cw, ch, max_dim, max_pixels),
+        "corrected size {cw}x{ch}={} must satisfy dim<={max_dim} and pixels<={max_pixels}",
+        cw as u64 * ch as u64
+    );
+    assert!(cw <= max_dim && ch <= max_dim);
+    assert!(cw as u64 * ch as u64 <= max_pixels);
+
+    // End-to-end prepare_for_admission must publish the same invariant.
+    let mut policy = ImageAdmissionPolicy::from_usable_image_capability(max_dim);
+    policy.max_resource_pixels = max_pixels;
+    let decode = DecodedImage {
+        width: src_w,
+        height: src_h,
+        rgba: vec![20u8; (src_w as usize) * (src_h as usize) * 4],
+    };
+    let res = prepare_for_admission(decode, &policy);
+    assert!(
+        proxy_size_holds_policy(res.width, res.height, max_dim, max_pixels),
+        "prepared proxy {}x{} violated policy",
+        res.width,
+        res.height
+    );
+    assert_ne!(
+        (res.width, res.height),
+        (src_w, src_h),
+        "113x8858 exceeds 1MP budget and must not claim full resolution"
+    );
+    assert_eq!(res.rgba.len(), (res.width * res.height * 4) as usize);
+}
+
+#[test]
+fn proxy_pixel_budget_exactly_on_budget_case() {
+    // Dimension fits, pixel budget binds exactly.
+    let (src_w, src_h) = (20u32, 20u32); // 400 px
+    let max_dim = 8192u32;
+    let max_pixels = 100u64;
+    let (cw, ch) = proxy_resource_size(src_w, src_h, max_dim, max_pixels);
+    assert!(proxy_size_holds_policy(cw, ch, max_dim, max_pixels));
+    assert_eq!(cw as u64 * ch as u64, max_pixels, "ideal exact-budget landing is 10x10");
+    assert_eq!((cw, ch), (10, 10));
+}
+
+#[test]
+fn proxy_dimension_bound_only_case() {
+    // Pixel budget does not bind; dimension ceiling does.
+    let (src_w, src_h) = (200u32, 50u32);
+    let max_dim = 100u32;
+    let max_pixels = 1_000_000_000u64;
+    let (cw, ch) = proxy_resource_size(src_w, src_h, max_dim, max_pixels);
+    assert!(proxy_size_holds_policy(cw, ch, max_dim, max_pixels));
+    assert_eq!((cw, ch), (100, 25));
+    assert!(cw as u64 * ch as u64 <= max_pixels);
+}
+
+#[test]
+fn proxy_exact_capability_8256_path_unchanged() {
+    // Raised-capability full-res path: no proxy, exact source geometry.
+    let policy = ImageAdmissionPolicy::from_usable_image_capability(16384);
+    assert!(policy.admits_exact(8256, 5504));
+    // Helper still returns a legal size if used; exact path never calls it.
+    let (cw, ch) = proxy_resource_size(8256, 5504, 16384, policy.max_resource_pixels);
+    assert!(proxy_size_holds_policy(cw, ch, 16384, policy.max_resource_pixels));
+    assert_eq!((cw, ch), (8256, 5504), "under both budgets helper keeps source size");
+}
+
+#[test]
+fn proxy_pixel_budget_invariant_holds_across_fuzz_sizes() {
+    let cases = [
+        (1u32, 1u32, 16384u32, 1u64),
+        (113, 8858, 16384, 1_000_000),
+        (8256, 5504, 8192, 80_000_000),
+        (8256, 5504, 16384, 1_000_000),
+        (7, 99999, 64, 10_000),
+        (4096, 4096, 2048, 100_000),
+        (100, 1, 50, 10),
+        (1, 100, 50, 10),
+        (333, 777, 300, 50_000),
+        (12345, 12, 8192, 40_000),
+    ];
+    for (w, h, dim, pixels) in cases {
+        let (cw, ch) = proxy_resource_size(w, h, dim, pixels);
+        assert!(
+            proxy_size_holds_policy(cw, ch, dim, pixels),
+            "invariant broken for {w}x{h} dim={dim} pixels={pixels} -> {cw}x{ch}={}",
+            cw as u64 * ch as u64
+        );
+        if w as u64 * h as u64 <= pixels && w <= dim && h <= dim {
+            // Exact-admissible sources are not proxied by prepare; helper
+            // still reports a legal size at or above a floor fit.
+            assert!(cw >= 1 && ch >= 1);
+        }
     }
 }
 
@@ -1062,6 +1304,82 @@ fn guest_texture_key_matches_host_hint() {
     // The single Image render site must resolve the RECONCILED binding,
     // not a publication field or a hand-rolled key.
     assert!(guest_app.contains("src={textureKeyFor(bound.slot)}"));
+}
+
+#[cfg(windows)]
+#[test]
+fn live_c_img_corpus_follows_installed_device_capability() {
+    // Phase 9 local evidence path: real Windows decode of the campaign
+    // corpus under (1) portable default policy and (2) raised device
+    // capability. Does not claim interactive 1:1 button clicks; those fall
+    // out of publication.fullResolution via the unchanged guest gate.
+    use crate::current_item::decode_policy_for_device;
+    let giant = Path::new(r"C:\img\001R0E0aly1i50ph1thhjj66dc48w1l102.jpg");
+    let control = Path::new(r"C:\img\153fcfe9-d06a-411e-98b5-3fb62a77afc3.png");
+    if !giant.is_file() || !control.is_file() {
+        eprintln!("C:\\img corpus missing; skipping live corpus test");
+        return;
+    }
+    let surface = UiSurface::new((96.0, 64.0));
+
+    // Portable default (pre-fix policy class): giant becomes proxy.
+    let mut portable = CurrentItem::new();
+    portable.set_admission_policy(decode_policy_for_device(8192));
+    surface.with_ui(|ui| ui.set_image_max_texture_dim(8192));
+    portable.open(&surface, request_phase(), giant, OpenIntent::NewItem);
+    let handle = portable.live_handle().expect("giant open publishes under portable policy");
+    surface.with_ui(|ui| {
+        let view = ui.texture(handle).expect("portable giant resource");
+        assert!(view.w <= 8192 && view.h <= 8192);
+        assert_ne!(
+            (view.w, view.h),
+            (8256, 5504),
+            "portable 8192 ceiling must not claim exact 8256×5504"
+        );
+    });
+
+    // Raised created-device capability: giant admits at exact source size.
+    let surface2 = UiSurface::new((96.0, 64.0));
+    surface2.with_ui(|ui| {
+        assert_eq!(ui.image_max_texture_dim(), pocketjs_core::NATIVE_TEX_MAX_DIM);
+        ui.set_image_max_texture_dim(16384);
+        assert_eq!(ui.image_max_texture_dim(), 16384);
+    });
+    let mut capable = CurrentItem::new();
+    capable.set_admission_policy(decode_policy_for_device(16384));
+    capable.open(&surface2, request_phase(), giant, OpenIntent::NewItem);
+    let ghandle = capable.live_handle().expect("giant open publishes under device capability");
+    let (sw, sh) = capable
+        .live_source_dimensions()
+        .expect("source dims published");
+    surface2.with_ui(|ui| {
+        let view = ui.texture(ghandle).expect("capable giant resource");
+        assert_eq!(
+            (view.w, view.h),
+            (sw, sh),
+            "resource must equal source when capability allows"
+        );
+        assert_eq!((view.w, view.h), (8256, 5504), "source is the 8256×5504 corpus JPEG");
+        assert!(view.linear);
+    });
+    // fullResolution derivation: source==resource ⇒ guest can100 stays true.
+    assert_eq!((sw, sh), (8256, 5504));
+
+    // Control PNG remains full resolution under both policies.
+    for dim in [8192u32, 16384u32] {
+        let s = UiSurface::new((96.0, 64.0));
+        s.with_ui(|ui| ui.set_image_max_texture_dim(dim));
+        let mut item = CurrentItem::new();
+        item.set_admission_policy(decode_policy_for_device(dim));
+        item.open(&s, request_phase(), control, OpenIntent::NewItem);
+        let h = item.live_handle().expect("control open publishes");
+        let (cw, ch) = item.live_source_dimensions().unwrap();
+        s.with_ui(|ui| {
+            let view = ui.texture(h).expect("control resource");
+            assert_eq!((view.w, view.h), (1254, 1254), "dim={dim}");
+            assert_eq!((cw, ch), (1254, 1254));
+        });
+    }
 }
 
 // decode_wic is cfg-gated; provide the symbol name used by tests above.

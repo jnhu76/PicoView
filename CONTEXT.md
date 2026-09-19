@@ -82,8 +82,11 @@ Architecture-authority work for MVP is closed. Known implementation debt (not au
 - Small visual corrective: toolbar icons, 12/14px fonts
 - Live DPI acceptance at 125/150/200%
 - Sampling partly stored as texture state rather than pure draw policy
-- `NATIVE_TEX_MAX_DIM` embeds a backend-class limit used as admission/downsample trigger
-- Giant-image path reduces without a fully separated truthful full-resolution capability
+- Desktop image admission follows created-device capability (`Ui::image_max_texture_dim` /
+  PicoView `ImageAdmissionPolicy`); `NATIVE_TEX_MAX_DIM` remains the portable default
+  ceiling until a host installs device truth
+- Giant-image Proxy path remains for sources that exceed usable capability or the
+  product pixel budget; full-resolution is derived (`resource == source`)
 - Color/alpha admission remains RGBA8-oriented rather than the generic Architecture contract
 - Windows path has no proved software renderer fallback
 - Packaging / file-association regression / clean-machine build not closed
