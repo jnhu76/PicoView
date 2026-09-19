@@ -6,7 +6,10 @@
 //! decision. The window/event-loop authority lives in `app.rs`; native host
 //! presentation plumbing lives in `presentation.rs`.
 
-use crate::current_item::{Command, CurrentItem, ObservationBoundary, OpenIntent, RequestPhase};
+use crate::current_item::decode_policy_for_device;
+use crate::current_item::{
+    Command, CurrentItem, ObservationBoundary, OpenIntent, RequestPhase,
+};
 use crate::presentation;
 use anyhow::{Context as _, Result, anyhow};
 use pocket_desktop_host::{
@@ -205,6 +208,7 @@ impl Runtime {
         args: &Args,
         initial_geometry: PresentationGeometry,
         proxy: EventLoopProxy<Wake>,
+        usable_image_dim: u32,
     ) -> Result<Self> {
         // Production path: embedded artifacts, no CWD / dist discovery.
         // Developer override: explicit --js and/or --pak paths only.
@@ -239,6 +243,11 @@ impl Runtime {
             UiSurface::new_with_density((logical_w as f32, logical_h as f32), args.density);
         surface.set_identity(HOST_ID, HOST_ABI);
         surface.set_tick_rate(60);
+        // Export created-device image capability into PocketJS logical
+        // admission AND into Product CurrentItem admission policy. The fact
+        // is device.limits().max_texture_dimension_2d — never adapter-only
+        // support, never a second GPU authority inside decode/Product.
+        surface.with_ui(|ui| ui.set_image_max_texture_dim(usable_image_dim));
         // Enable guest→native command channel: the guest calls svcOpen("picoview")
         // to confirm the channel, then svcSend() to push command JSON lines.
         surface.set_svc_allowlist(["picoview"]);
@@ -271,6 +280,7 @@ impl Runtime {
             // containing the initial image. The browse session enumerates
             // supported images and enables Previous/Next navigation.
             let mut item = CurrentItem::with_browse(path);
+            item.set_admission_policy(decode_policy_for_device(usable_image_dim));
             // V1's only open: the boot image is a new item (there is no prior
             // publication to preserve). Boot is a legal request phase —
             // strictly before any guest turn.
@@ -281,10 +291,12 @@ impl Runtime {
                 OpenIntent::NewItem,
             );
             log::info!(
-                "current item: generation={} handle={:?} path={}",
+                "current item: generation={} handle={:?} path={} usable_image_dim={} policy={:?}",
                 item.generation(),
                 item.live_handle(),
-                path.display()
+                path.display(),
+                usable_image_dim,
+                item.admission_policy()
             );
             if let Some(browse) = item.browse() {
                 log::info!(
@@ -296,10 +308,12 @@ impl Runtime {
             }
             item
         } else {
-            CurrentItem::new()
+            let mut item = CurrentItem::new();
+            item.set_admission_policy(decode_policy_for_device(usable_image_dim));
+            item
         };
         crate::tlog(&format!(
-            "R1 runtime booted: policy=Dynamic initial_requested={}x{} logical={}x{} physical={}x{} live_scale={} package_density={}",
+            "R1 runtime booted: policy=Dynamic initial_requested={}x{} logical={}x{} physical={}x{} live_scale={} package_density={} usable_image_dim={}",
             initial_requested_logical.0,
             initial_requested_logical.1,
             logical_w,
@@ -307,7 +321,8 @@ impl Runtime {
             initial_geometry.physical_w,
             initial_geometry.physical_h,
             live_scale,
-            args.density
+            args.density,
+            usable_image_dim
         ));
         Ok(Self {
             surface,
@@ -473,8 +488,16 @@ pub(crate) fn run_runtime(
 ) -> Result<()> {
     use std::sync::atomic::AtomicBool;
     let available = Arc::new(AtomicBool::new(true));
+    // Execution authority for image admission: the created device fact.
+    // Adapter support alone is not sufficient.
+    let usable_image_dim = gpu.device.limits().max_texture_dimension_2d;
+    log::info!(
+        "PicoView image capability: adapter_max_tex2d={} device_max_tex2d={}",
+        gpu.adapter.limits().max_texture_dimension_2d,
+        usable_image_dim
+    );
     let mut renderer = presentation::Renderer::new(gpu);
-    let mut runtime = Runtime::boot(&args, initial_geometry, proxy.clone())?;
+    let mut runtime = Runtime::boot(&args, initial_geometry, proxy.clone(), usable_image_dim)?;
     // Shared R1 demand identity. Committed only after a target is produced
     // and handed to the presenter — never on pool miss / render None /
     // channel backpressure — so retries are not suppressed.

@@ -9,23 +9,66 @@
 //! admission by `publication` / `CurrentItem::publish` — this module never
 //! introduces an extra full-plane CPU copy on the ordinary path.
 
-/// PocketJS owned-admission ceiling (`spec::NATIVE_TEX_MAX_DIM`, matched to
-/// the wgpu default max texture dimension the Desktop backend requests).
-/// Images above this on either axis are box-fitted down into it — a bounded
-/// degradation for giant images only, compensating for the admission
-/// dimension ceiling at the pinned PocketJS integration revision. It is not
-/// product resize semantics, and it is not an image semantic limit; truthful
-/// full-resolution capability is later product work (ARCHITECTURE §15).
-/// Normal photos pass through with source geometry untouched.
-pub(super) const MAX_RESOURCE_DIM: u32 = pocketjs_core::NATIVE_TEX_MAX_DIM;
-/// svc is a bounded-semantic channel; error strings are capped.
-pub(super) const MAX_ERROR_CHARS: usize = 200;
 /// Decode allocation guard: a container may declare absurd frame dimensions
 /// (up to 65535x65535 for JPEG) before any pixel is validated; allocating
 /// w*h*4 for those would abort the process on OOM instead of failing bounded.
-/// 80 megapixels comfortably covers real photographs (the seam's 8192^2
-/// admission ceiling is 67 MP, so this guard binds first).
-const MAX_DECODE_PIXELS: u64 = 80_000_000;
+/// 80 megapixels comfortably covers real photographs and remains the bounded
+/// CPU safety policy even when the GPU device can create larger textures.
+/// Do not delete this merely because adapter/device dimensions rise.
+pub(super) const MAX_DECODE_PIXELS: u64 = 80_000_000;
+/// svc is a bounded-semantic channel; error strings are capped.
+pub(super) const MAX_ERROR_CHARS: usize = 200;
+
+/// Product admission policy: usable device image capability + bounded PicoView
+/// safety. Built from PocketJS created-device truth
+/// (`Ui::image_max_texture_dim` / `device.limits().max_texture_dimension_2d`),
+/// never from adapter marketing limits and never from a second GPU query
+/// inside Image/Product code.
+///
+/// Semantics:
+/// - source axes ≤ `max_resource_dim` AND source pixels ≤ `max_resource_pixels`
+///   → preserve source geometry exactly (full resolution);
+/// - otherwise → bounded Proxy box-fit into `max_resource_dim`.
+///
+/// `fullResolution` remains derived: `resource == source`. Never a free
+/// boolean that pretends full resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImageAdmissionPolicy {
+    /// Usable per-side resource dimension (created-device image capability
+    /// after host export; portable default is PocketJS `NATIVE_TEX_MAX_DIM`).
+    pub max_resource_dim: u32,
+    /// Bounded product pixel safety budget for an admitted resource plane.
+    pub max_resource_pixels: u64,
+}
+
+impl ImageAdmissionPolicy {
+    /// Portable/default policy before any device capability is installed:
+    /// PocketJS portable ceiling + existing CPU decode pixel guard.
+    pub fn portable_default() -> Self {
+        Self {
+            max_resource_dim: pocketjs_core::NATIVE_TEX_MAX_DIM,
+            max_resource_pixels: MAX_DECODE_PIXELS,
+        }
+    }
+
+    /// Policy from usable created-device image capability. Keeps the existing
+    /// product CPU pixel guard; only the dimension ceiling follows device truth.
+    pub fn from_usable_image_capability(max_texture_dim: u32) -> Self {
+        Self {
+            max_resource_dim: max_texture_dim.max(1),
+            max_resource_pixels: MAX_DECODE_PIXELS,
+        }
+    }
+
+    /// True when the source can be admitted at exact source geometry.
+    pub fn admits_exact(&self, width: u32, height: u32) -> bool {
+        width >= 1
+            && height >= 1
+            && width <= self.max_resource_dim
+            && height <= self.max_resource_dim
+            && (width as u64 * height as u64) <= self.max_resource_pixels
+    }
+}
 
 /// Pure allocation guard for a decoded frame: the byte length a WIC RGBA
 /// conversion needs, or a bounded decode error.
@@ -89,23 +132,48 @@ pub(super) fn open_decoded(path: &std::path::Path) -> Result<DecodedImage, OpenE
     decode_wic(&bytes)
 }
 
-/// Prepare a decode for owned admission. An ordinary image (both axes within
-/// the admission ceiling) returns unchanged — the decoder's own RGBA plane is
-/// the admission body, verbatim at source resolution, and no second plane is
-/// materialized (ADR-0002 §3 decision order: directly consume the admitted
-/// representation). Only a giant image above MAX_RESOURCE_DIM on either axis
-/// is consumed and box-fitted down into the ceiling (bounded degradation for
-/// giant images; viewport paging is a later-slice concern), and the box-fit
-/// output stays in R,G,B,A byte order.
-pub(super) fn prepare_for_admission(decoded: DecodedImage) -> DecodedImage {
-    if decoded.width <= MAX_RESOURCE_DIM && decoded.height <= MAX_RESOURCE_DIM {
+/// Prepare a decode for owned admission under an explicit policy. An image
+/// that fits usable device capability + product safety returns unchanged —
+/// the decoder's own RGBA plane is the admission body, verbatim at source
+/// resolution, and no second plane is materialized (ADR-0002 §3 decision
+/// order: directly consume the admitted representation). Otherwise the plane
+/// is box-fitted into the policy ceiling (bounded Proxy degradation) and the
+/// box-fit output stays in R,G,B,A byte order.
+pub(super) fn prepare_for_admission(
+    decoded: DecodedImage,
+    policy: &ImageAdmissionPolicy,
+) -> DecodedImage {
+    if policy.admits_exact(decoded.width, decoded.height) {
         return decoded;
     }
+    let max_dim = policy.max_resource_dim.max(1);
+    let max_pixels = policy.max_resource_pixels.max(1);
     let (w, h) = (decoded.width.max(1), decoded.height.max(1));
-    let scale = (MAX_RESOURCE_DIM as f64 / w as f64).min(MAX_RESOURCE_DIM as f64 / h as f64);
+    let src_bytes = w as usize * h as usize * 4;
+    // Malformed/empty planes never index past the allocation. Production
+    // WIC decodes always match this length; the guard keeps adversarial
+    // inputs bounded instead of panicking.
+    if decoded.rgba.len() < src_bytes {
+        return DecodedImage {
+            width: 0,
+            height: 0,
+            rgba: Vec::new(),
+        };
+    }
+    // Fit into the dimension ceiling first.
+    let mut scale =
+        (max_dim as f64 / w as f64).min(max_dim as f64 / h as f64).min(1.0);
+    // Then bound the pixel count if the product safety budget is tighter.
+    let src_pixels = w as f64 * h as f64;
+    if src_pixels > 0.0 {
+        let pixel_scale = (max_pixels as f64 / src_pixels).sqrt();
+        if pixel_scale < scale {
+            scale = pixel_scale;
+        }
+    }
     let (cw, ch) = (
-        ((w as f64 * scale).round() as u32).clamp(1, MAX_RESOURCE_DIM),
-        ((h as f64 * scale).round() as u32).clamp(1, MAX_RESOURCE_DIM),
+        ((w as f64 * scale).round() as u32).clamp(1, max_dim),
+        ((h as f64 * scale).round() as u32).clamp(1, max_dim),
     );
     let mut pixels = vec![0u8; cw as usize * ch as usize * 4];
     let row = w as usize * 4;

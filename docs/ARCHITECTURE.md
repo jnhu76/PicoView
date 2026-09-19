@@ -882,8 +882,8 @@ across commits.
 Still open:
 
 - current sampling preference is partly stored as texture state rather than purely generic draw policy;
-- current `NATIVE_TEX_MAX_DIM` embeds a wgpu-default-class limit in core and PicoView uses it as an admission/downsample trigger;
-- current giant-image path silently creates a reduced resource, so full-resolution capability needs truthful separation;
+- Desktop device creation requests adapter-bounded `max_texture_dimension_2d` (only that generic limit); hosts export created-device truth via `Ui::set_image_max_texture_dim`; PicoView CurrentItem admission consumes `ImageAdmissionPolicy` built from that fact + `MAX_DECODE_PIXELS`. Portable `NATIVE_TEX_MAX_DIM` remains the default until device truth is installed;
+- giant-image Proxy remains only when usable capability or product pixel budget rejects exact geometry; `fullResolution` stays derived (`resource == source`) and the existing 1:1 gate remains `can100 = publication.fullResolution === true`;
 - host window/swapchain plumbing remains product-owned in `native/src/presentation.rs`; generic R1 geometry/signature/filter identity is consumed from shared `pocket-desktop-host` + `pocket-ui-wgpu` (no second local geometry implementation). PicoView presentation policy is **Dynamic** (`viewport.dynamic` in `guest/pocket.json`): live logical is derived from measured physical + OS scale; `Host.viewport` is only the initial/default requested logical size. Product window/OS minimum remains 384×240 logical (not PocketJS platform floor 240×180);
 - current Windows presentation path has no proved software renderer fallback;
 - current color/alpha boundary is effectively RGBA8/PSM-oriented rather than the generic admission contract;
