@@ -77,8 +77,8 @@ There is no `gpu.rs` and no monolithic `current_item.rs`. Host presentation plum
 
 Architecture-authority work for MVP is closed. Known implementation debt (not authority redesign):
 
-- R2 image minification / mip quality under Fit and zoom-out
-- R3 resize scheduling and presentation quality
+- R2 image minification — **implemented** via PocketJS `4cf84b8` GPU mip chain for linear images (PICOVIEW-63 PR #68; pending review)
+- R3 resize scheduling — **implemented** via PicoView presentation-input latest-wins coalescing (same PR; pending review)
 - Small visual corrective: toolbar icons, 12/14px fonts
 - Live DPI acceptance at 125/150/200%
 - Sampling partly stored as texture state rather than pure draw policy
