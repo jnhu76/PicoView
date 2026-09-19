@@ -1,0 +1,85 @@
+{
+  // PicoView is a PocketJS application project: the guest app source lives in
+  // `guest/` and consumes the framework vendored in-tree at
+  // `third_party/pocketjs`.
+  //
+  // This file is the project's committed module resolution. It replaces the
+  // former build-time junction topology (`third_party/pocketjs/guest` and
+  // `node_modules/@pocketjs/framework`): the modules the guest imports resolve
+  // by path into the vendored subtree, never through a manufactured
+  // `node_modules` tree.
+  //
+  // The rows below mirror the framework's PUBLISHED exports map
+  // (third_party/pocketjs/package.json "exports") for the specifiers guest/
+  // imports — the resolution an external app would get from an installed
+  // `@pocketjs/framework`. They do not decide what gets built: the compiler
+  // resolves `@pocketjs/framework/*` from its own subpath registry
+  // (framework/compiler/subpaths.ts, applied in framework/compiler/jsx-plugin.ts)
+  // and pass 1 walks that same graph, so the per-framework entry stays
+  // PocketJS's decision. These rows make the same modules visible to
+  // TypeScript and to Bun's resolver.
+  //
+  // `octane` is the framework's runtime package and the canonical bare import
+  // for octane hooks — every PocketJS octane app imports it directly
+  // (e.g. third_party/pocketjs/apps/cards/app.octane.tsx). It resolves to the
+  // single copy the vendored framework itself uses, so app and renderer share
+  // one reactive ownership domain instead of two.
+  "compilerOptions": {
+    // Same values the PocketJS app check compiles the guest with
+    // (framework/compiler/app-check.ts); it inherits this file, so editor and
+    // compiler diagnostics agree.
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    // The guest runs on PocketJS's QuickJS host, not in a browser: no DOM. This
+    // is also what makes the framework's app typing work — jsx.d.ts supplies a
+    // type-only stand-in for solid-js's DOM `Node`, which only holds while
+    // lib.dom is absent (see that file's comment).
+    "lib": ["ESNext"],
+    "strict": true,
+    "noEmit": true,
+    // The guest's JSX is typed from the framework's global declarations
+    // (framework/src/jsx.d.ts), as PocketJS's own octane apps are: the
+    // framework's octane components are typed with solid's Component type.
+    "jsx": "preserve",
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    // Ambient globals of the guest host, taken from the environment PocketJS
+    // itself typechecks apps in (third_party/pocketjs/tsconfig.json:
+    // `types: ["bun"]`): the QuickJS host globals the framework's own polyfill
+    // references (queueMicrotask/setTimeout/console —
+    // framework/src/scheduler-polyfill.ts). Pinned to the vendored install's
+    // @types so no ancestor directory can supply them instead.
+    "typeRoots": ["third_party/pocketjs/node_modules/@types"],
+    "types": ["bun"],
+    "baseUrl": ".",
+    "paths": {
+      // Published "." export (framework/src/index.ts).
+      "@pocketjs/framework": ["third_party/pocketjs/framework/src/index.ts"],
+      "@pocketjs/framework/host": ["third_party/pocketjs/framework/src/host.ts"],
+      "@pocketjs/framework/input": ["third_party/pocketjs/framework/src/input-api.ts"],
+      // Published "./octane/*" exports.
+      "@pocketjs/framework/octane/components": [
+        "third_party/pocketjs/framework/src/components-octane.tsx"
+      ],
+      "@pocketjs/framework/octane/lifecycle": [
+        "third_party/pocketjs/framework/src/lifecycle-octane.ts"
+      ],
+      "@pocketjs/framework/octane/renderer": [
+        "third_party/pocketjs/framework/src/renderer-octane.ts"
+      ],
+      // Framework runtime package (third_party/pocketjs/package.json
+      // dependencies), resolved through the vendored install.
+      "octane": ["third_party/pocketjs/node_modules/octane"]
+    }
+  },
+  // The app source graph the PocketJS compiler type-checks. Guest *test* files
+  // are run by Bun (which supplies `bun:test` / `node:*` itself) and are not
+  // part of the app entry graph the compiler checks.
+  "files": [
+    "third_party/pocketjs/framework/src/jsx.d.ts",
+    "third_party/pocketjs/framework/src/vue-sfc.d.ts"
+  ],
+  "include": ["guest"],
+  "exclude": ["guest/**/*.test.ts"]
+}

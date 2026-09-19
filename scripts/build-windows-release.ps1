@@ -1,13 +1,26 @@
 # PicoView Windows release build — one authoritative entrypoint.
 #
-# Pipeline: guest compile -> cargo release -> tests -> portable zip -> installer.
+# Orchestration only: this script runs the canonical build commands and stages
+# release artifacts. It creates no junctions or symlinks, does not mutate
+# node_modules, and does not edit third_party/pocketjs.
+#
+# Layers (contract: docs/RELEASE-WINDOWS.md):
+#   guest   : guest/*.ts(x) -> dist/picoview.js + dist/picoview.pak   (scripts/build-guest.ps1)
+#   native  : those generated artifacts -> picoview.exe               (cargo / build.rs)
+#   release : picoview.exe  -> portable zip + installer               (this script)
+#
 # Produces, under dist-release/:
 #   PicoView-<version>-windows-x64-portable.zip
 #   PicoView-<version>-windows-x64-setup.exe
 # plus SHA-256 integrity hashes printed at the end.
 #
-# Usage:  powershell -ExecutionPolicy Bypass -File scripts\build-windows-release.ps1
+# Usage:  pwsh -NoProfile -File scripts\build-windows-release.ps1
 #         [-SkipTests] [-Iscc <path-to-ISCC.exe>]
+#
+# Windows PowerShell 5.1 also runs this script, spelled without pwsh:
+#   powershell -NoProfile -File scripts\build-windows-release.ps1
+# (No execution-policy bypass is needed or documented: -File runs the script
+# under the machine's policy.)
 #
 # Version authority: native/Cargo.toml package version (the same value baked
 # into the EXE VERSIONINFO by build.rs and read by the installer script).
@@ -31,26 +44,10 @@ if ($cargoToml -notmatch '(?m)^\s*version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"') {
 $Version = $Matches[1]
 Write-Host "PicoView version (native/Cargo.toml): $Version"
 
-# --- 1. guest compile ---------------------------------------------------------
-# pocket.ts must run from the PocketJS subtree root (tsconfig module mappings).
-# The guest junction is sanctioned local scaffolding (gitignored); created and
-# removed per build so nothing depends on prior machine state.
-Step "guest compile (pocket.ts, windows-app)"
-$Junction = "$Root\third_party\pocketjs\guest"
-$Created = $false
-if (-not (Test-Path $Junction)) {
-    cmd /c "mklink /J `"$Junction`" `"$Root\guest`"" | Out-Null
-    $Created = $true
-}
-try {
-    Push-Location "$Root\third_party\pocketjs"
-    bun tools/pocket.ts compile --target windows-app --manifest guest/pocket.json `
-        --project-root . --outdir ../../dist
-    if ($LASTEXITCODE -ne 0) { throw "guest compile failed ($LASTEXITCODE)" }
-} finally {
-    Pop-Location
-    if ($Created -and (Test-Path $Junction)) { cmd /c "rmdir `"$Junction`"" | Out-Null }
-}
+# --- 1. guest build -----------------------------------------------------------
+Step "guest build"
+& (Join-Path $PSScriptRoot "build-guest.ps1")
+if ($LASTEXITCODE -ne 0) { throw "guest build failed ($LASTEXITCODE)" }
 
 # --- 2. native release build ---------------------------------------------------
 Step "cargo build --release"
@@ -64,22 +61,9 @@ if (-not (Test-Path $Exe)) { throw "release exe missing: $Exe" }
 # --- 3. tests -------------------------------------------------------------------
 if (-not $SkipTests) {
     Step "bun test guest/"
-    # guest tests import "@pocketjs/framework/*" — resolved through the
-    # gitignored local node_modules junction into the in-tree subtree
-    # (same sanctioned scaffolding pattern as the guest compile junction).
-    $Link = "$Root\node_modules\@pocketjs\framework"
-    $CreatedLink = $false
-    if (-not (Test-Path $Link)) {
-        New-Item -ItemType Directory -Path "$Root\node_modules\@pocketjs" -Force | Out-Null
-        cmd /c "mklink /J `"$Link`" `"$Root\third_party\pocketjs`"" | Out-Null
-        $CreatedLink = $true
-    }
-    try {
-        bun test guest/
-        if ($LASTEXITCODE -ne 0) { throw "guest tests failed ($LASTEXITCODE)" }
-    } finally {
-        if ($CreatedLink) { cmd /c "rmdir `"$Link`"" | Out-Null }
-    }
+    bun test guest/
+    if ($LASTEXITCODE -ne 0) { throw "guest tests failed ($LASTEXITCODE)" }
+
     Step "cargo test --release"
     Push-Location "$Root\native"
     cargo test --release

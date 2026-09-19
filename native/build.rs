@@ -20,10 +20,12 @@ fn main() {
     println!("cargo:rerun-if-changed={}", pak.display());
     if !js.is_file() || !pak.is_file() {
         panic!(
-            "missing guest artifacts (compile guest before native).\n\
+            "missing guest artifacts (build the guest before the native build).\n\
              expected:\n  {}\n  {}\n\
-             recipe (from PocketJS checkout):\n\
-               bun tools/pocket.ts compile --target windows-app \\\n\
+             canonical guest build (from the repository root):\n\
+               pwsh -NoProfile -File scripts/build-guest.ps1\n\
+             which runs:\n\
+               bun third_party/pocketjs/tools/pocket.ts compile --target windows-app \\\n\
                  --manifest guest/pocket.json --project-root . --outdir dist",
             js.display(),
             pak.display()

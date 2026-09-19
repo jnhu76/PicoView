@@ -11,13 +11,14 @@ dist/
 native/target/
 
 # Local dependency install (owner workspace state; see docs evidence for
-# the exact toolchain identity used per ticket).
+# the exact toolchain identity used per ticket), plus the vendored PocketJS
+# framework's own install (bun install --frozen-lockfile, see
+# scripts/build-guest.ps1).
 node_modules/
 __pycache__/
 
-# Local cook scaffolding junction (pocketjs/guest -> ../../guest); never commit.
-third_party/pocketjs/guest/
-third_party/pocketjs/node_modules/
+# Transient PocketJS app-check scratch directory (removed by the compiler).
+.pocketjs-app-check-*/
 
 # A/B control binary target dir (investigation only, never committed)
 native/target-nog/

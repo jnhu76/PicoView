@@ -2,7 +2,9 @@
 
 How PicoView Windows release artifacts are produced, what they contain, and
 what they promise. Operational evidence for the current state:
-`docs/history/windows-release-hardening-1/EVIDENCE.md`.
+`docs/history/windows-release-build-corrective-1/EVIDENCE.md` (build topology)
+and `docs/history/windows-release-hardening-1/EVIDENCE.md` (identity,
+installer, install/uninstall, live acceptance).
 
 ## Version authority
 
@@ -12,20 +14,67 @@ same value today; there is no second manually maintained release version.
 
 ## Build & release
 
-One entrypoint:
+Three layers, each with one canonical command, all run from the repository root.
+No step creates a junction, symlink or copy of the framework, mutates
+`node_modules` to fake resolution, or writes to `third_party/pocketjs` sources.
+
+| Layer | Produces | Canonical command |
+| --- | --- | --- |
+| Guest | `dist/picoview.js`, `dist/picoview.pak` | `pwsh -NoProfile -File scripts\build-guest.ps1` |
+| Native | `native/target/release/picoview.exe` | `cargo build --release --manifest-path native/Cargo.toml` |
+| Release | portable ZIP + installer | `pwsh -NoProfile -File scripts\build-windows-release.ps1` |
+
+The guest build compiles PicoView as a PocketJS **external project** from the
+repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build-windows-release.ps1
+bun third_party/pocketjs/tools/pocket.ts compile --target windows-app `
+  --manifest guest/pocket.json --project-root . --outdir dist
 ```
 
-Pipeline: guest compile (`bun tools/pocket.ts compile --target windows-app`,
-run from the subtree root with the gitignored `third_party/pocketjs/guest`
-junction created/removed per build) → `cargo build --release` → tests
-(guest 194 / native 64 at time of writing) → portable zip → installer →
-SHA-256 report. Requires: bun, Rust (msvc), Inno Setup 6 (`ISCC.exe`).
+`guest/pocket.json` is the manifest, `--project-root .` is the repository root,
+and the project's committed module resolution is `tsconfig.json`: its `paths` map
+the guest's `@pocketjs/framework/*` and `octane` imports onto the in-tree
+framework files (the same targets the framework publishes in its `exports` map).
+`bun test guest/` resolves through the same configuration. The compile must not
+need `third_party/pocketjs/guest`, a `node_modules/@pocketjs/framework` entry, or
+any other generated topology.
 
-The guest JS/PAK are embedded into the EXE at compile time
+Before compiling, `scripts/build-guest.ps1` installs the vendored framework's own
+runtime dependencies from its committed lockfile:
+
+```powershell
+bun install --frozen-lockfile --cwd third_party/pocketjs
+```
+
+(`octane`, `solid-js` and the rest of `third_party/pocketjs/package.json`.) They
+install into the framework's own gitignored `node_modules`, so app and renderer
+share exactly one copy of each — the install a PocketJS checkout requires anyway.
+
+The native layer consumes `dist/picoview.{js,pak}` as generated inputs and never
+invokes Bun; `native/build.rs` fails with the guest command to run when either
+artifact is missing. The guest JS/PAK are embedded into the EXE at compile time
 (`native/src/assets.rs`); the runtime payload is the single EXE.
+
+One release entrypoint:
+
+```powershell
+pwsh -NoProfile -File scripts\build-windows-release.ps1
+```
+
+Pipeline: guest build → `cargo build --release` → tests (guest 194 / native 64 at
+time of writing) → portable zip → installer → SHA-256 report. It is orchestration
+only — no junction/symlink, no `node_modules` surgery, no `third_party` edits, and
+no execution-policy bypass (`-SkipTests` skips the suites, `-Iscc <path>` points at
+`ISCC.exe`).
+
+Windows PowerShell 5.1 runs both scripts, spelled without `pwsh`:
+
+```powershell
+powershell -NoProfile -File scripts\build-windows-release.ps1
+```
+
+Requires: bun, Rust (msvc), Inno Setup 6 (`ISCC.exe`).
 
 ## App identity (one icon authority)
 
