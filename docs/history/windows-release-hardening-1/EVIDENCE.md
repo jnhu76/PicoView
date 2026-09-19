@@ -192,23 +192,36 @@ Not a release blocker for this campaign.
 
 Opening a file whose name contains CJK characters renders tofu (□□) in the
 status bar filename slot
-(`img/cjk-path-open-statusbar-tofu.png`). Root cause, traced:
+(`img/cjk-path-open-statusbar-tofu.png`). **Root cause confirmed down to the
+call chain** (tracked as #74):
 
-- the status bar renders the runtime item name
-  (`guest/app.octane.tsx` — "Filename / index stay in the status bar");
-- PocketJS text is a **compile-time baked-glyph atlas**: pass 1 collects
-  codepoints from source literals (`tools/build.ts` walk → `bakeAtlases`);
-  characters that only ever occur in runtime strings (user filenames) were
-  never baked and render as notdef/boxes.
+1. `guest/app.octane.tsx` status bar renders `{shownName}` — a **runtime**
+   string delivered by the host (current-item filename), not a source literal.
+2. `framework/src/native-tree.ts` text-node ops (`createTextNode` /
+   `replaceText`) carry it into the node tree.
+3. `engine/core/src/text.rs` resolves each codepoint by binary-searching the
+   atlas cmap; **a miss resolves to gid 0, which is by construction the tofu
+   box** (header lines 4–6; `lookup` 141–144; `glyph_for` 299–303).
+4. The cmap can only contain compile-time literals: `tools/build.ts` pass 1
+   collects codepoints exclusively from source string literals
+   (`jsx-plugin.ts:254`) and `bake-font.ts:371-372` bakes exactly
+   "gid 0 = tofu; gid k+1 = k-th glyph". Measured for the PicoView guest:
+   **89 literal codepoints → 100 glyphs per slot** (89 + tofu) across all five
+   baked slots.
+5. No runtime path can add glyphs — `engine/crates/pocket-text/src/lib.rs:1-2`
+   contractually supplies immutable, compile-time-baked fonts only
+   ("No system fonts … Hosts supply immutable fonts"); `--extra-chars=` and
+   `fonts.json` are compile-time mechanisms.
 
 Assessment: pre-existing generic PocketJS text-system scope, not a defect
 introduced by this campaign (reproduces on `main` for any CJK-named file).
 The product truth "a status readout" (PRD §2.11) does not mandate raw
-filename display. A genuine fix (runtime glyph resolution / system-font
-fallback for runtime text) is a generic PocketJS capability and belongs
-upstream per the cross-repo rule — recorded for a future PocketJS campaign,
-not patched locally. Per campaign scope rule: reported, not silently
-expanded.
+filename display. Baking CJK wholesale is not viable (current pak = 673 184 B
+with 89 literals; a common-3500 subset multiplies every slot atlas ~35× and
+still misses rare characters). The genuine fix — runtime glyph resolution /
+host-supplied dynamic fallback for runtime text — is a generic PocketJS
+capability and belongs upstream per the cross-repo rule. Per campaign scope
+rule: reported (#74), not silently expanded.
 
 Minor pre-existing cosmetic note: CJK glyphs also do not render in the
 window titlebar filename region for the same reason (native caption text is
