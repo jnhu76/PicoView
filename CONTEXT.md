@@ -12,6 +12,8 @@ PicoView is a Windows 11 local image viewer on PocketJS.
 
 Current phase: **release hardening** (R2/R3 quality closure and live DPI acceptance complete on `main`). Windows release packaging — app icon authority, EXE resources, Inno Setup installer, portable artifact, release script — is authored on `release/windows-release-hardening-1` (authority: [`docs/RELEASE-WINDOWS.md`](docs/RELEASE-WINDOWS.md)).
 
+Release **build topology** (corrective: PICOVIEW-WINDOWS-RELEASE-BUILD-CORRECTIVE-1): the guest compiles as a PocketJS *external project* from the repository root — `tsconfig.json` carries the project's module resolution, `scripts/build-guest.ps1` is the canonical guest build, and the release script is orchestration only. No junction/symlink scaffolding and no `node_modules` surgery anywhere in the build path; evidence: [`docs/history/windows-release-build-corrective-1/EVIDENCE.md`](docs/history/windows-release-build-corrective-1/EVIDENCE.md).
+
 ---
 
 ## Current source baseline
