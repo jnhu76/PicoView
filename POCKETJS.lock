@@ -41,7 +41,18 @@ purpose = PicoView Windows Desktop runtime integration
 
 # How to update this subtree
 #
-# 1. git fetch pocketjs
+# Fresh clones do not ship a `pocketjs` remote. Bootstrap it before any
+# fetch/subtree pull. Human-facing contract: docs/integration/POCKETJS.md
+#
+# 0. Bootstrap / verify the pocketjs remote (do not skip on a fresh clone):
+#      git remote get-url pocketjs
+#    - if the remote is missing:
+#        git remote add pocketjs git@github.com:jnhu76/pocketjs.git
+#    - if the remote exists but the URL is not git@github.com:jnhu76/pocketjs.git
+#      (or the equivalent https://github.com/jnhu76/pocketjs.git):
+#        STOP — do not re-point a different remote silently; fix identity first.
+# 1. Fetch the integration branch:
+#      git fetch pocketjs integration/picoview-desktop
 # 2. Verify the reviewed integration SHA:
 #      git rev-parse pocketjs/integration/picoview-desktop
 #    Confirm it matches the reviewed PocketJS campaign tip (human review).
@@ -63,4 +74,4 @@ purpose = PicoView Windows Desktop runtime integration
 # - 6e631f463016a258e63fc9a5f922117b94d4f89f → df869a51225df5e310b84612c9195030c058b6d9
 #   (jnhu76/pocketjs#1, the V1 image-quality corrective): introduced
 #   Ui::register_native_texture / Ui::texture_live_bytes. Superseded by owned
-#   admission; see docs/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md.
+#   admission; see docs/history/corrective/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md.

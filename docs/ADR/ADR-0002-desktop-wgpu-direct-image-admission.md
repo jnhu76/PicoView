@@ -183,18 +183,21 @@ For PicoView Windows/Desktop, stop implementation and repair the design if conti
 
 ## Current implementation differential
 
-**Resolved 2026-09-16.** The differential below existed at the PocketJS
-revision used during the architecture reset. `POCKETJS-DESKTOP-DIRECT-IMAGE-ADMISSION-1`
-(jnhu76/pocketjs PR #2, reviewed HEAD `24bab5e`) added
-`Ui::upload_owned_rgba8`: a host decoder's tight RGBA8 plane MOVES into the
-existing logical texture record (`TexBacking::Owned`), and `pocket-ui-wgpu`
-borrows `PSM_8888`/Owned planes directly into `Queue::write_texture` with no
-conversion or staging plane. `PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1`
-consumed that revision — `POCKETJS.lock` and every PicoView Cargo git
-dependency pin `24bab5e` on `integration/picoview-desktop`, and PicoView
-publishes ordinary decodes through the owned API. The ordinary image path now
-creates zero repository CPU-to-CPU full-plane copies after decode. Evidence:
-`docs/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md`.
+**Resolved.** The differential below existed at an earlier PocketJS revision.
+Generic capability `Ui::upload_owned_rgba8` (developed in `jnhu76/pocketjs`,
+frozen on `integration/picoview-desktop`) moves a host decoder's tight RGBA8
+plane into the existing logical texture record (`TexBacking::Owned`), and
+`pocket-ui-wgpu` borrows Owned planes directly into `Queue::write_texture`
+with no conversion or staging plane.
+
+**Current consume:** PicoView imports that capability via the in-tree git
+subtree at `third_party/pocketjs`. `POCKETJS.lock` `revision` is
+`24638737473cc7cd85202ba15adba511b79d9980`. Cargo uses path dependencies —
+not remote PocketJS git pins. Ordinary decodes publish through the owned API.
+See `docs/integration/POCKETJS.md`.
+
+Campaign evidence for the migration era is archived at
+`docs/history/corrective/PICOVIEW-DIRECT-IMAGE-ADMISSION-MIGRATION-1-EVIDENCE.md`.
 
 Historical differential (for the record): at the locked PocketJS revision
 used during the architecture reset, the desktop/wgpu path expanded Core PSM
