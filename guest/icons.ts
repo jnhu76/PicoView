@@ -18,10 +18,11 @@ export const ICON_ASSETS = {
   zoomOut: "zoom-out-line.svg",
   zoomIn: "zoom-in-line.svg",
   fit: "aspect-ratio-line.svg",
-  // Product Rotate CW. Visual glyph is Remix circular refresh-line (user
-  // acceptance: "rotate as a circle"), not clockwise-line's square+arrow.
-  // Command semantics remain one CW 90° — this is not a Refresh command.
-  rotate: "refresh-line.svg",
+  // Product Rotate CW. Visual glyph is Remix loop-right-line (circular,
+  // rightward loop) — closest official match to rotate-right at this pin.
+  // Remix@9fb7967 has no rotate-right/rotate-left family. Command remains
+  // one CW 90° — not a Refresh command.
+  rotate: "loop-right-line.svg",
   flipH: "flip-horizontal-line.svg",
   flipV: "flip-vertical-line.svg",
   empty: "image-line.svg",

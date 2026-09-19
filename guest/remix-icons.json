@@ -31,9 +31,9 @@
       "upstream": "icons/Media/aspect-ratio-line.svg"
     },
     "rotate": {
-      "file": "refresh-line.svg",
-      "upstream": "icons/System/refresh-line.svg",
-      "note": "Circular line glyph for Product Rotate CW visual acceptance; not the Refresh command."
+      "file": "loop-right-line.svg",
+      "upstream": "icons/System/loop-right-line.svg",
+      "note": "Circular rightward loop — official Remix stand-in for rotate-right (no rotate-right at this pin). Product command remains Rotate CW."
     },
     "flipH": {
       "file": "flip-horizontal-line.svg",

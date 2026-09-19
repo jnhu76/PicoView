@@ -18,7 +18,7 @@ const ALL_CHROME_SVGS = [
   "zoom-out-line.svg",
   "zoom-in-line.svg",
   "aspect-ratio-line.svg",
-  "refresh-line.svg",
+  "loop-right-line.svg",
   "flip-horizontal-line.svg",
   "flip-vertical-line.svg",
   "image-line.svg",
@@ -43,6 +43,7 @@ const LEGACY_HAND_AUTHORED = [
   "icon-reset.svg",
   "icon-refresh.svg",
   "clockwise-line.svg",
+  "refresh-line.svg",
 ];
 
 function exists(name: string): boolean {
@@ -119,15 +120,14 @@ test("each Remix SVG bakes via PocketJS bakeSvg to a pow2 texture", () => {
   }
 });
 
-test("Rotate maps to circular refresh-line; Zoom In/Out map to zoom-*-line", () => {
-  expect(ICON_ASSETS.rotate).toBe("refresh-line.svg");
+test("Rotate maps to circular loop-right-line (rotate-right stand-in)", () => {
+  expect(ICON_ASSETS.rotate).toBe("loop-right-line.svg");
   expect(ICON_ASSETS.zoomIn).toBe("zoom-in-line.svg");
   expect(ICON_ASSETS.zoomOut).toBe("zoom-out-line.svg");
-  // Circular Remix glyph — not the old hand-drawn square+quarter-turn mock,
-  // and not clockwise-line's rectangular body.
-  const rotate = readSvg("refresh-line.svg");
+  const rotate = readSvg("loop-right-line.svg");
   expect(rotate).toContain('viewBox="0 0 24 24"');
   expect(rotate).not.toContain('rect x="2" y="7"');
+  // Remix pin has no rotate-right/rotate-left family — this is the stand-in.
   expect(rotate).not.toContain("clockwise-line");
 });
 
