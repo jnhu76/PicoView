@@ -6,9 +6,9 @@ Responsibility chain: **Open → View → Inspect → Browse → Handle**. It is
 
 ## Current phase
 
-**MVP feature-complete — stabilization / rendering-quality closure.**
+**PicoView v0.1.0 is released** (tag `v0.1.0`).
 
-PicoView MVP work, PocketJS subtree integration, R1 presentation consumption, and native authority cleanup are complete on `main` (includes PR #66). Remaining work is rendering quality (R2/R3), small visual corrections, live DPI acceptance, and release hardening. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Current work is post-release correctness and architecture normalization: closing the audited findings in [Issue #75](https://github.com/jnhu76/PicoView/issues/75) (refresh status visibility, svc command retention, legacy view-state retirement, guest derivation normalization, constant contracts, Windows-only containment, fatal-error observability, test architecture, decode-pressure evidence). See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## What the MVP does today
 

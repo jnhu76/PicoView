@@ -53,16 +53,9 @@ PicoView-specific dependency advancement freezes reviewed commits on this branch
 
 ## Current provenance
 
-Recorded in `POCKETJS.lock`:
+`POCKETJS.lock` is the machine provenance authority for the imported snapshot. This document intentionally does **not** duplicate the revision literal — active prose copies of exact SHAs are how provenance drifts. Read `revision` / `branch_hint` / `source_path` / `integration_method` from [`POCKETJS.lock`](../../POCKETJS.lock).
 
-```text
-revision = 24638737473cc7cd85202ba15adba511b79d9980
-branch_hint = integration/picoview-desktop
-source_path = third_party/pocketjs
-integration_method = git-subtree-squash
-```
-
-`POCKETJS.lock` `revision` is the exact upstream provenance authority for the imported snapshot. Do not advance it except through the update flow below.
+Do not advance the lock except through the update flow below.
 
 ---
 

@@ -27,6 +27,8 @@ Architecture GATE-A and Release GATE-B Windows measurements MUST execute as nati
 
 ## 2. PocketJS campaign baseline
 
+> Historical context only. The current PocketJS provenance authority is `POCKETJS.lock`; this section records the original Phase A starting point and does not describe current provenance.
+
 The initial Architecture Phase A baseline is:
 
 - repository: `https://github.com/pocket-stack/pocketjs`

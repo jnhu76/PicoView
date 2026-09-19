@@ -868,7 +868,7 @@ Codec-specific frame/disposal semantics remain in Image; committed generic resou
 
 These are migration targets, not accepted design.
 
-**Resolved (ordinary image path).** Direct Desktop image admission is in the current subtree snapshot (`POCKETJS.lock` revision `24638737473cc7cd85202ba15adba511b79d9980`): ordinary decodes MOVE the decoder's own RGBA plane into `Ui::upload_owned_rgba8` — no PSM-tagged seam on the PicoView path, no aligned CPU texture storage for image admission (`TexBacking::Owned`), and `pocket-ui-wgpu` borrows the Owned plane directly into `Queue::write_texture` (no second RGBA vector). The ordinary Desktop image path satisfies ADR-0002. Campaign closeouts for the earlier remote-pin era are archived under `docs/history/corrective/`.
+**Resolved (ordinary image path).** Direct Desktop image admission is in the current subtree snapshot (exact revision: see `POCKETJS.lock`, the machine provenance authority): ordinary decodes MOVE the decoder's own RGBA plane into `Ui::upload_owned_rgba8` — no PSM-tagged seam on the PicoView path, no aligned CPU texture storage for image admission (`TexBacking::Owned`), and `pocket-ui-wgpu` borrows the Owned plane directly into `Queue::write_texture` (no second RGBA vector). The ordinary Desktop image path satisfies ADR-0002. Campaign closeouts for the earlier remote-pin era are archived under `docs/history/corrective/`.
 
 Resolved 2026-09-17 (`PICOVIEW-LAST-GOOD-PUBLICATION-1`): refresh/last-good
 publication ordering — the candidate is admitted before the previous
