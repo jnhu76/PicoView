@@ -199,8 +199,15 @@ fn drive_tick(
 ) -> TickReport {
     pending.refill(incoming);
     let started = Instant::now();
+    // Mirror of the production C8B budget: split the drained batch so at
+    // most one expensive (decode-triggering) command runs this tick; the
+    // rest is retained at the front in FIFO order.
+    let batch = pending.take_batch(crate::svc_queue::MAX_SVC_LINES_PER_TICK);
+    let (process_now, retain) =
+        crate::svc_queue::split_expensive_budget(batch, crate::runtime::is_expensive_command_line);
+    pending.refill_front(retain);
     let mut commands_processed = 0;
-    for line in pending.take_batch(MAX_SVC_LINES_PER_TICK) {
+    for line in process_now {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line)
             && value.get("t").and_then(|v| v.as_str()) == Some("pv")
         {
@@ -339,7 +346,7 @@ fn decode_pressure_gate() -> anyhow::Result<()> {
             &mut pending,
             std::mem::take(&mut incoming),
         ));
-        if pending.len() == 0 || ticks.len() > 40 {
+        if pending.len() == 0 || ticks.len() > 80 {
             break;
         }
     }

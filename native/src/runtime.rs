@@ -147,6 +147,23 @@ fn parse_command(val: &serde_json::Value) -> Option<Command> {
     }
 }
 
+/// C8B budget classifier: a svc line is EXPENSIVE when it is a valid Product
+/// command — every one of them triggers the open/decode/publish path
+/// (Previous/Next navigate, Refresh re-opens, Open opens). `pick-file` is
+/// cheap host plumbing (a UI-thread wake, no decode); malformed and
+/// non-command lines are cheap. The classification parses the line and the
+/// tick loop parses the processed lines again — svc lines are bounded tiny
+/// JSON, never pixel data.
+pub(crate) fn is_expensive_command_line(line: &str) -> bool {
+    match serde_json::from_str::<serde_json::Value>(line) {
+        Ok(val) => {
+            val.get("t").and_then(|v| v.as_str()) == Some("pv")
+                && parse_command(&val).is_some()
+        }
+        Err(_) => false,
+    }
+}
+
 fn epoch_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -413,8 +430,8 @@ impl Runtime {
         // Process guest commands: the guest sends command JSON lines via
         // svcSend. svc_drain() empties the surface queue in one call, so the
         // host owns the tail it cannot process this tick: refill pending
-        // storage, process at most MAX_SVC_LINES_PER_TICK, and leave the
-        // rest queued for later ticks — FIFO, never silently dropped.
+        // storage, process at most MAX_SVC_LINES_PER_TICK lines, and leave
+        // the rest queued for later ticks — FIFO, never silently dropped.
         let pending_before = self.svc_pending.len();
         self.svc_pending.refill(self.surface.svc_drain());
         if crate::svc_queue::crossed_high_water(pending_before, self.svc_pending.len()) {
@@ -423,7 +440,19 @@ impl Runtime {
                 self.svc_pending.len()
             );
         }
-        for line in self.svc_pending.take_batch(crate::svc_queue::MAX_SVC_LINES_PER_TICK) {
+        // C8B decode-pressure budget (mechanism gate: C8A evidence): at most
+        // MAX_SVC_EXPENSIVE_COMMANDS_PER_TICK decode-triggering commands run
+        // per guest frame. Everything else is retained in FIFO order for
+        // later ticks, so a burst cannot serialize its decodes into one turn
+        // (measured 1.57s frame starvation / 2.48GB superseded residency)
+        // and cannot silently lose its tail either.
+        let batch = self.svc_pending.take_batch(crate::svc_queue::MAX_SVC_LINES_PER_TICK);
+        let (process_now, retain) = crate::svc_queue::split_expensive_budget(
+            batch,
+            is_expensive_command_line,
+        );
+        self.svc_pending.refill_front(retain);
+        for line in process_now {
             log::debug!("guest svc: {line}");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
                 if val.get("t").and_then(|v| v.as_str()) == Some("pv") {

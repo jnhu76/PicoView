@@ -110,7 +110,7 @@ open/decode per guest frame
 ```
 
 C8B implements exactly that budget in `Runtime::tick`, re-runs this probe
-against the changed mechanism, and records the before/after delta here.
+against the changed mechanism, and records the before/after delta in §5.
 
 Adversarial review notes (fresh context, post-measurement):
 - The probe mirrors `Runtime::tick` stage-by-stage; the mirror is kept in
@@ -131,3 +131,64 @@ Adversarial review notes (fresh context, post-measurement):
 - Navigation edge no-ops (Previous/Next stop at directory edges by released
   contract) were verified to be the reason a naive one-direction burst only
   produced 5 opens; the probe ping-pongs to keep every command live.
+
+## 5. Measured — after C8B (same machine, same fixtures, same probe)
+
+`Runtime::tick` now splits every drained batch with
+`svc_queue::split_expensive_budget`: cheap lines flow through, at most
+`MAX_SVC_EXPENSIVE_COMMANDS_PER_TICK` (1) decode-triggering command runs per
+guest frame, and the unprocessed tail is restored to the front of the
+pending queue in its original order. Oracles: `svc_queue` tests
+(one-expensive-from-a-burst split, cheap lines through the budget, retained
+tail front order, 65-line burst settling one-per-tick in order, no loss/no
+duplication); the probe end-to-end.
+
+```json
+{
+  "scenarios": [
+    {"scenario": "single_normal_open_us", "median_us": 3443},
+    {"scenario": "single_large_open_us", "median_us": 112684},
+    {"scenario": "burst64_mixed", "ticks": 64, "first_tick_cmds": 1,
+     "first_tick_command_us": 193090, "first_tick_frame_us": 11873,
+     "peak_superseded": 1, "peak_residency_bytes": 390070272,
+     "wall_us": 2547048}
+  ]
+}
+```
+
+### Before → after delta
+
+| Metric | Before (C0 only) | After (C8B budget) |
+| --- | --- | --- |
+| Commands per first tick | 64 | 1 |
+| Worst guest-turn command phase | 1568 ms | 193 ms (one cold 48.7 MP decode) |
+| Typical tick command phase | — | ~4 ms (normal image) |
+| Peak superseded handles per boundary | 39 | **1** |
+| Peak logical residency at a boundary | 2.48 GB | **0.37 GB** (live plane + 1 superseded) |
+| Ticks to settle on final item | 1 (frozen turn) | 64 (one open per frame) |
+| Total wall for the burst | 1.66 s | 2.55 s (same work, distributed; per-tick boundary frees add overhead) |
+| Commands lost / duplicated | 0 | 0 |
+
+Reading:
+
+- The measured starvation mechanism is gone: no turn carries more than one
+  decode; the worst observed turn is bounded by one cold large-image decode
+  (~0.2 s) instead of a 1.58 s frozen turn.
+- Superseded residency is bounded at one handle per observation boundary by
+  construction (one expensive command per boundary), which is what removes
+  the 2.48 GB transient stack — and on the real GPU path, the stacked
+  uploads for immediately-superseded admissions with it.
+- Total wall grew ~0.9 s because the same 40 decodes now pay per-tick
+  boundary frees and guest frames. That is the distributed-pacing cost; the
+  UI shows intermediate navigation frames exactly as released behavior does
+  for slower bursts (every tick renders its latest publication).
+- Final-selected-item correctness needs no new mechanism proof: the budget
+  only changes WHEN a command runs, never its order (the svc_queue 65-line
+  oracle proves strict FIFO settlement) or its effect (`handle_command`
+  semantics are untouched and covered by the current_item publication/nav
+  tests). No stale publication can win: publications commit in command
+  order, and the observation-boundary release protocol is unchanged.
+- No resource leak: working set before/after the burst run is unchanged
+  versus the pre-C8B run (598→786 MB vs 599→788 MB), and superseded queues
+  drain to empty every boundary (release_superseded unchanged).
+
