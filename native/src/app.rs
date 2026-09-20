@@ -214,7 +214,7 @@ pub(crate) struct Host {
     frame: Option<(u64, Arc<presentation::Target>)>,
     title: String,
     viewport: (u32, u32),
-    failure: Option<String>,
+    failure: Option<crate::fatal::FatalFailure>,
     modifiers: ModifiersState,
     /// Logical pointer position (window scale-normalized).
     pointer: (f64, f64),
@@ -263,7 +263,7 @@ impl Host {
         host
     }
 
-    pub(crate) fn take_failure(&mut self) -> Option<String> {
+    pub(crate) fn take_failure(&mut self) -> Option<crate::fatal::FatalFailure> {
         self.failure.take()
     }
 
@@ -292,7 +292,8 @@ impl Host {
                     measured_physical.0, measured_physical.1, os_scale
                 );
                 log::error!("{msg}");
-                self.failure = Some(msg);
+                self.failure =
+                    Some(crate::fatal::FatalFailure::new(crate::fatal::FatalSite::RuntimeChannel, msg));
             }
         }
     }
@@ -329,7 +330,10 @@ impl Host {
             FlushOutcome::Disconnected => {
                 let msg = "runtime input channel disconnected (presentation flush)";
                 log::error!("{msg}");
-                self.failure = Some(msg.into());
+                self.failure = Some(crate::fatal::FatalFailure::new(
+                    crate::fatal::FatalSite::RuntimeChannel,
+                    msg,
+                ));
                 false
             }
         }
@@ -373,8 +377,10 @@ impl Host {
                 Input::Quit => match self.tx.try_send(Input::Quit) {
                     Ok(()) => {}
                     Err(TrySendError::Disconnected(_)) => {
-                        self.failure =
-                            Some("runtime input channel disconnected (quit)".into());
+                        self.failure = Some(crate::fatal::FatalFailure::new(
+                            crate::fatal::FatalSite::RuntimeChannel,
+                            "runtime input channel disconnected (quit)",
+                        ));
                         if let Some(event_loop) = event_loop {
                             event_loop.exit();
                         }
@@ -396,7 +402,10 @@ impl Host {
                 tlog("input channel full: drop non-presentation");
             }
             Err(TrySendError::Disconnected(_)) => {
-                self.failure = Some("runtime input channel disconnected".into());
+                self.failure = Some(crate::fatal::FatalFailure::new(
+                    crate::fatal::FatalSite::RuntimeChannel,
+                    "runtime input channel disconnected",
+                ));
                 if let Some(event_loop) = event_loop {
                     event_loop.exit();
                 }
@@ -459,47 +468,72 @@ impl ApplicationHandler<Wake> for Host {
             return;
         }
         use winit::platform::windows::WindowAttributesExtWindows as _;
-        let window = Arc::new(
-            event_loop
-                .create_window(
-                    Window::default_attributes()
-                        .with_title(&self.title)
-                        // App identity, installed once from the EXE resource
-                        // table (winresource embeds assets/branding/
-                        // picoview-app.ico as icon resource 1). Titlebar and
-                        // taskbar read the same authority; nothing per frame.
-                        .with_window_icon(app_window_icon())
-                        .with_taskbar_icon(app_taskbar_icon())
-                        // Dark native caption — matches the dark product chrome;
-                        // avoids a light OS title bar sitting on a dark viewer.
-                        .with_theme(Some(Theme::Dark))
-                        .with_inner_size(LogicalSize::new(self.viewport.0, self.viewport.1))
-                        // Product min client — closes the toolbar width
-                        // contract. Do not silently allow host/pocketjs 240px
-                        // capability floor to undercut product chrome.
-                        .with_min_inner_size(LogicalSize::new(
-                            product_min_client().0,
-                            product_min_client().1,
-                        ))
-                        .with_resizable(true)
-                        // Stay hidden until the first presented frame so the
-                        // product never flashes an uninitialized white client.
-                        .with_visible(false),
-                )
-                .expect("create window"),
-        );
+        // Window creation is a recoverable startup failure, not a panic:
+        // in a GUI-subsystem binary a panic would be invisible. Record the
+        // classified failure and exit the loop; main() surfaces it.
+        let window_attributes = Window::default_attributes()
+            .with_title(&self.title)
+            // App identity, installed once from the EXE resource
+            // table (winresource embeds assets/branding/
+            // picoview-app.ico as icon resource 1). Titlebar and
+            // taskbar read the same authority; nothing per frame.
+            .with_window_icon(app_window_icon())
+            .with_taskbar_icon(app_taskbar_icon())
+            // Dark native caption — matches the dark product chrome;
+            // avoids a light OS title bar sitting on a dark viewer.
+            .with_theme(Some(Theme::Dark))
+            .with_inner_size(LogicalSize::new(self.viewport.0, self.viewport.1))
+            // Product min client — closes the toolbar width
+            // contract. Do not silently allow host/pocketjs 240px
+            // capability floor to undercut product chrome.
+            .with_min_inner_size(LogicalSize::new(
+                product_min_client().0,
+                product_min_client().1,
+            ))
+            .with_resizable(true)
+            // Stay hidden until the first presented frame so the
+            // product never flashes an uninitialized white client.
+            .with_visible(false);
+        let window = match event_loop.create_window(window_attributes) {
+            Ok(window) => Arc::new(window),
+            Err(error) => {
+                let failure = crate::fatal::FatalFailure::new(
+                    crate::fatal::FatalSite::WindowCreation,
+                    format!("{error}"),
+                );
+                log::error!("{failure}");
+                self.failure = Some(failure);
+                event_loop.exit();
+                return;
+            }
+        };
         tlog("window created (hidden until first frame)");
         let presentation = match presentation::Presentation::new(window.clone()) {
             Ok(presentation) => presentation,
             Err(error) => {
-                self.failure = Some(format!("GPU initialization: {error:#}"));
+                self.failure = Some(crate::fatal::FatalFailure::new(
+                    crate::fatal::FatalSite::GpuInit,
+                    format!("GPU initialization: {error:#}"),
+                ));
                 event_loop.exit();
                 return;
             }
         };
         let gpu = presentation.gpu.clone();
         self.surface = Some(presentation);
-        let mut startup = self.startup.take().expect("runtime startup");
+        // Internal invariant: resumed() runs exactly once per Host. If this
+        // state is missing the process is broken — record it as a classified
+        // internal failure instead of panicking invisibly in a GUI binary.
+        let Some(mut startup) = self.startup.take() else {
+            let failure = crate::fatal::FatalFailure::new(
+                crate::fatal::FatalSite::InternalState,
+                "resumed() ran twice: runtime startup state already consumed",
+            );
+            log::error!("{failure}");
+            self.failure = Some(failure);
+            event_loop.exit();
+            return;
+        };
         // A3 initial boot authority: measured physical client + live OS scale.
         // PicoView presentation policy is Dynamic (guest/pocket.json
         // viewport.dynamic). Host.viewport is initial/default requested
@@ -552,7 +586,10 @@ impl ApplicationHandler<Wake> for Host {
                 let _ = proxy.send_event(Wake::Exit(result.err().map(|e| format!("{e:#}"))));
             })
         {
-            self.failure = Some(format!("Runtime startup: {error}"));
+            self.failure = Some(crate::fatal::FatalFailure::new(
+                crate::fatal::FatalSite::ThreadSpawn,
+                format!("Runtime startup: {error}"),
+            ));
             event_loop.exit();
         }
         self.window = Some(window);
@@ -562,7 +599,10 @@ impl ApplicationHandler<Wake> for Host {
             Wake::Exit(error) => {
                 if let Some(error) = error {
                     log::error!("{error}");
-                    self.failure = Some(error);
+                    self.failure = Some(crate::fatal::FatalFailure::new(
+                        crate::fatal::FatalSite::RuntimeWorker,
+                        error,
+                    ));
                 }
                 event_loop.exit();
             }
@@ -603,7 +643,10 @@ impl ApplicationHandler<Wake> for Host {
                         if !self.shown {
                             if let Err(error) = self.present() {
                                 log::error!("{error}");
-                                self.failure = Some(error.to_string());
+                                self.failure = Some(crate::fatal::FatalFailure::new(
+                                    crate::fatal::FatalSite::Presentation,
+                                    error.to_string(),
+                                ));
                                 event_loop.exit();
                                 return;
                             }
@@ -778,7 +821,10 @@ impl ApplicationHandler<Wake> for Host {
                 tlog("RedrawRequested");
                 if let Err(error) = self.present() {
                     log::error!("{error}");
-                    self.failure = Some(error.to_string());
+                    self.failure = Some(crate::fatal::FatalFailure::new(
+                        crate::fatal::FatalSite::Presentation,
+                        error.to_string(),
+                    ));
                     event_loop.exit();
                 }
             }
