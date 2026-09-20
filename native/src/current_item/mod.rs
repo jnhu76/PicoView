@@ -28,6 +28,8 @@
 mod decode;
 mod publication;
 #[cfg(test)]
+mod pressure_probe;
+#[cfg(test)]
 mod tests;
 
 use pocket_ui_surface::UiSurface;

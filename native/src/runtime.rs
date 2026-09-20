@@ -25,8 +25,8 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use std::time::{Duration, Instant};
 use winit::event_loop::EventLoopProxy;
 
-const HOST_ID: &str = "windows-app";
-const HOST_ABI: u32 = 4;
+pub(crate) const HOST_ID: &str = "windows-app";
+pub(crate) const HOST_ABI: u32 = 4;
 
 /// Worker tick cadence: the guest frame/svc cadence the runtime keeps.
 /// Named budget (C5); presentation coalescing relies on this staying a
