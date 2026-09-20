@@ -4,7 +4,7 @@
 use super::decode::{
     DecodedImage, ImageAdmissionPolicy, MAX_ENCODED_FILE_BYTES, MAX_ERROR_CHARS, OpenError,
     admits_encoded_len, decode_alloc_len, metadata_error, open_decoded, prepare_for_admission,
-    proxy_resource_size, proxy_size_holds_policy, wic,
+    proxy_resource_size, proxy_size_holds_policy, read_encoded_bounded, take_bounded, wic,
 };
 use super::publication::{
     BrowseSnapshot, ObservationBoundary, OpenIntent, RequestPhase, error_event, loading_event,
@@ -1397,12 +1397,74 @@ fn encoded_length_admission_boundary_is_limit_inclusive() {
     // The predicate is testable without a 1 GiB fixture: it is pure over the
     // byte length. limit-1 and the limit itself are admitted; limit+1 is
     // rejected before any read/allocation happens.
-    assert!(admits_encoded_len(MAX_ENCODED_FILE_BYTES - 1));
-    assert!(admits_encoded_len(MAX_ENCODED_FILE_BYTES));
-    assert!(!admits_encoded_len(MAX_ENCODED_FILE_BYTES + 1));
+    assert!(admits_encoded_len(
+        MAX_ENCODED_FILE_BYTES - 1,
+        MAX_ENCODED_FILE_BYTES
+    ));
+    assert!(admits_encoded_len(
+        MAX_ENCODED_FILE_BYTES,
+        MAX_ENCODED_FILE_BYTES
+    ));
+    assert!(!admits_encoded_len(
+        MAX_ENCODED_FILE_BYTES + 1,
+        MAX_ENCODED_FILE_BYTES
+    ));
     // Far over the cap is rejected, and the two caps are independent: byte
     // size and decoded pixel dimensions never imply each other.
-    assert!(!admits_encoded_len(u64::MAX));
+    assert!(!admits_encoded_len(u64::MAX, MAX_ENCODED_FILE_BYTES));
+}
+
+// --- Same-handle bounded encoded read (corrective-2) -------------------------
+
+#[test]
+fn encoded_reader_admits_up_to_limit_and_rejects_above() {
+    // The read bound at tiny scale, through the real reader (probe → open →
+    // take → read → check), not just the pure predicate. limit-1 and limit
+    // pass; limit+1 is rejected. No cap-sized fixture is needed.
+    const LIMIT: u64 = 16;
+    let mut cases = Vec::new();
+    for len in [LIMIT - 1, LIMIT, LIMIT + 1] {
+        let path = std::env::temp_dir().join(format!("picoview-enc-bounded-{len}.bin"));
+        std::fs::write(&path, vec![0u8; len as usize]).unwrap();
+        cases.push((path, len));
+    }
+    for (path, len) in &cases {
+        let result = read_encoded_bounded(path, LIMIT);
+        if *len <= LIMIT {
+            let bytes = result.unwrap_or_else(|e| panic!("{len} bytes must be admitted: {e:?}"));
+            assert_eq!(bytes.len() as u64, *len);
+        } else {
+            assert!(
+                matches!(result, Err(OpenError::Open(_))),
+                "{len} bytes must be rejected over a {LIMIT}-byte limit"
+            );
+        }
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+#[test]
+fn encoded_reader_overread_is_capped_at_limit_plus_one() {
+    // Proof the reader itself is bounded — not only the length predicate:
+    // a file far larger than the limit yields at most limit + 1 bytes from
+    // the read, so the transient allocation cannot exceed cap + 1 no matter
+    // how large the file grows after the size probe.
+    const LIMIT: u64 = 16;
+    let path = std::env::temp_dir().join("picoview-enc-bounded-huge.bin");
+    std::fs::write(&path, vec![0xAB; (LIMIT + 1000) as usize]).unwrap();
+
+    let mut file = std::fs::File::open(&path).unwrap();
+    let taken = take_bounded(&mut file, LIMIT).unwrap();
+    assert_eq!(taken.len() as u64, LIMIT + 1);
+    assert_eq!(taken[0], 0xAB);
+
+    // And through the production entry point the same file is rejected, so
+    // growth between probe and read can never land over-cap bytes in memory.
+    assert!(matches!(
+        read_encoded_bounded(&path, LIMIT),
+        Err(OpenError::Open(_))
+    ));
+    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
