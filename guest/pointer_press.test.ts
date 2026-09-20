@@ -4,6 +4,7 @@ import {
   IDLE_GESTURE,
   classifyGestureOwner,
   nextHeldGesture,
+  pointerCoords,
   type HeldGesture,
 } from "./pointer_press.ts";
 
@@ -225,4 +226,30 @@ test("held packets never call classify again after down edge", () => {
   }
   expect(classifyCalls).toBe(1);
   expect(g.owner).toBe("toolbar");
+});
+
+// --- malformed pointer coordinates never fabricate truth (C4) ------------
+
+test("pointerCoords: well-formed coordinates pass through", () => {
+  expect(pointerCoords({ x: 12, y: 34 })).toEqual({ x: 12, y: 34 });
+  expect(pointerCoords({ x: 0, y: 0 })).toEqual({ x: 0, y: 0 });
+});
+
+test("pointerCoords: malformed packets yield null, never a (0,0) pointer", () => {
+  expect(pointerCoords({})).toBeNull();
+  expect(pointerCoords({ x: 5 })).toBeNull();
+  expect(pointerCoords({ y: 5 })).toBeNull();
+  expect(pointerCoords({ x: "5", y: 5 })).toBeNull();
+  expect(pointerCoords({ x: NaN, y: 5 })).toBeNull();
+  expect(pointerCoords({ x: Infinity, y: 5 })).toBeNull();
+  expect(pointerCoords({ x: null, y: null })).toBeNull();
+});
+
+test("a real (0,0) pointer stays distinguishable from a malformed packet", () => {
+  // The guard rejects MISSING/invalid data, not the origin: a host that
+  // genuinely reports (0,0) is still a known pointer.
+  const real = pointerCoords({ x: 0, y: 0 });
+  const malformed = pointerCoords({ y: 0 });
+  expect(real).not.toBeNull();
+  expect(malformed).toBeNull();
 });

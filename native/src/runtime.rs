@@ -25,8 +25,14 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use std::time::{Duration, Instant};
 use winit::event_loop::EventLoopProxy;
 
-const HOST_ID: &str = "windows-app";
-const HOST_ABI: u32 = 4;
+pub(crate) const HOST_ID: &str = "windows-app";
+pub(crate) const HOST_ABI: u32 = 4;
+
+/// Worker tick cadence: the guest frame/svc cadence the runtime keeps.
+/// Named budget (C5); presentation coalescing relies on this staying a
+/// 60 Hz-class cadence.
+const WORKER_TICK_HZ: u64 = 60;
+const WORKER_TICK_PERIOD: Duration = Duration::from_nanos(1_000_000_000 / WORKER_TICK_HZ);
 
 #[derive(Debug)]
 pub(crate) enum Wake {
@@ -52,7 +58,9 @@ pub(crate) fn parse_args() -> Result<Args> {
     let mut js: Option<PathBuf> = None;
     let mut pak: Option<PathBuf> = None;
     let mut title = "PicoView".to_string();
-    let mut viewport = (960u32, 640u32);
+    // Product default viewport derives from guest/pocket.json (build.rs);
+    // Host.viewport is only the initial/default requested logical size.
+    let mut viewport = crate::product_facts::default_viewport();
     let mut density = 2u32;
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
@@ -139,6 +147,23 @@ fn parse_command(val: &serde_json::Value) -> Option<Command> {
     }
 }
 
+/// C8B budget classifier: a svc line is EXPENSIVE when it is a valid Product
+/// command — every one of them triggers the open/decode/publish path
+/// (Previous/Next navigate, Refresh re-opens, Open opens). `pick-file` is
+/// cheap host plumbing (a UI-thread wake, no decode); malformed and
+/// non-command lines are cheap. The classification parses the line and the
+/// tick loop parses the processed lines again — svc lines are bounded tiny
+/// JSON, never pixel data.
+pub(crate) fn is_expensive_command_line(line: &str) -> bool {
+    match serde_json::from_str::<serde_json::Value>(line) {
+        Ok(val) => {
+            val.get("t").and_then(|v| v.as_str()) == Some("pv")
+                && parse_command(&val).is_some()
+        }
+        Err(_) => false,
+    }
+}
+
 fn epoch_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -199,6 +224,9 @@ struct Runtime {
     ticks: u64,
     /// Native Current Item truth.
     current: CurrentItem,
+    /// Host-owned guest→host service lines awaiting their processing tick
+    /// (retention after the surface's drain-all handoff).
+    svc_pending: crate::svc_queue::SvcPending,
     /// Used to ask the window thread for UI-thread-only work (file dialog).
     proxy: EventLoopProxy<Wake>,
 }
@@ -332,6 +360,7 @@ impl Runtime {
             geometry: initial_geometry,
             ticks: 0,
             current,
+            svc_pending: crate::svc_queue::SvcPending::new(),
             proxy,
         })
     }
@@ -381,6 +410,9 @@ impl Runtime {
                         "scale":self.geometry.effective_render_scale(),
                         "physical_w":self.geometry.physical_w,
                         "physical_h":self.geometry.physical_h,
+                        // Single owner of the notches→logical-units factor:
+                        // the guest consumes host truth instead of a copy.
+                        "notch":crate::app::WHEEL_NOTCH_LOGICAL,
                     })
                     .to_string(),
                 );
@@ -396,9 +428,31 @@ impl Runtime {
     fn tick(&mut self) -> Result<()> {
         self.offload.begin_frame();
         // Process guest commands: the guest sends command JSON lines via
-        // svcSend. Drain and process them before the guest frame. Each
-        // command gets its own RequestPhase token (consumed by open).
-        for line in self.surface.svc_drain().into_iter().take(64) {
+        // svcSend. svc_drain() empties the surface queue in one call, so the
+        // host owns the tail it cannot process this tick: refill pending
+        // storage, process at most MAX_SVC_LINES_PER_TICK lines, and leave
+        // the rest queued for later ticks — FIFO, never silently dropped.
+        let pending_before = self.svc_pending.len();
+        self.svc_pending.refill(self.surface.svc_drain());
+        if crate::svc_queue::crossed_high_water(pending_before, self.svc_pending.len()) {
+            log::warn!(
+                "svc pending queue crossed high-water mark: {} lines",
+                self.svc_pending.len()
+            );
+        }
+        // C8B decode-pressure budget (mechanism gate: C8A evidence): at most
+        // MAX_SVC_EXPENSIVE_COMMANDS_PER_TICK decode-triggering commands run
+        // per guest frame. Everything else is retained in FIFO order for
+        // later ticks, so a burst cannot serialize its decodes into one turn
+        // (measured 1.57s frame starvation / 2.48GB superseded residency)
+        // and cannot silently lose its tail either.
+        let batch = self.svc_pending.take_batch(crate::svc_queue::MAX_SVC_LINES_PER_TICK);
+        let (process_now, retain) = crate::svc_queue::split_expensive_budget(
+            batch,
+            is_expensive_command_line,
+        );
+        self.svc_pending.refill_front(retain);
+        for line in process_now {
             log::debug!("guest svc: {line}");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
                 if val.get("t").and_then(|v| v.as_str()) == Some("pv") {
@@ -570,7 +624,7 @@ pub(crate) fn run_runtime(
                 Err(_) => return Ok(()),
             }
         }
-        deadline += Duration::from_nanos(1_000_000_000 / 60);
+        deadline += WORKER_TICK_PERIOD;
         if let Some(wait) = deadline.checked_duration_since(Instant::now()) {
             std::thread::sleep(wait);
         } else {

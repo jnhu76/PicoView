@@ -28,6 +28,8 @@
 mod decode;
 mod publication;
 #[cfg(test)]
+mod pressure_probe;
+#[cfg(test)]
 mod tests;
 
 use pocket_ui_surface::UiSurface;
@@ -148,6 +150,7 @@ impl CurrentItem {
     }
 
     /// Source dimensions of the live resource, if any.
+    #[allow(dead_code)]
     pub fn live_source_dimensions(&self) -> Option<(u32, u32)> {
         self.live
             .as_ref()
@@ -423,7 +426,6 @@ impl CurrentItem {
                 count: b.count() as u32,
                 can_previous: b.can_previous(),
                 can_next: b.can_next(),
-                current_name: b.current_name().map(|s| s.to_string()),
             },
             None => BrowseSnapshot::none(),
         }

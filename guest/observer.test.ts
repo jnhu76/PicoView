@@ -7,40 +7,15 @@
 // the observer's preserve-vs-replace policy only.
 import { expect, test } from "bun:test";
 import {
+  DEFAULT_WHEEL_NOTCH,
   displayVerdict,
   initialObserverState,
   reduceObserver,
   type ObserverState,
 } from "./observer.ts";
-
-function ready(g: number, handle: number, sw: number, sh: number, rw?: number, rh?: number, name = "a.jpg") {
-  const resourceW = rw ?? sw;
-  const resourceH = rh ?? sh;
-  return {
-    t: "current-item",
-    status: "ready",
-    g,
-    handle,
-    sourceWidth: sw,
-    sourceHeight: sh,
-    resourceWidth: resourceW,
-    resourceHeight: resourceH,
-    fullResolution: sw === resourceW && sh === resourceH,
-    name,
-  };
-}
-function loading(g: number, intent: "new-item" | "refresh", name = "b.jpg") {
-  return { t: "current-item", status: "loading", g, intent, name };
-}
-function error(g: number, intent: "new-item" | "refresh", errorMsg = "could not decode image") {
-  return { t: "current-item", status: "error", g, intent, error: errorMsg };
-}
-
-function fold(...events: ReturnType<typeof ready | typeof loading | typeof error>[]): ObserverState {
-  let state = initialObserverState();
-  for (const v of events) state = reduceObserver(state, v);
-  return state;
-}
+// Shared svc-line builders live in test_support.ts (C7 fixture dedup);
+// they are imported under the original local names below.
+import { fold, svcError as error, svcLoading as loading, svcReady as ready } from "./test_support.ts";
 
 test("initial open success publishes and clears the request", () => {
   const s = fold(loading(1, "new-item", "a.jpg"), ready(1, 11, 1920, 1080));
@@ -151,11 +126,11 @@ test("several ready events in one turn collapse to the final publication", () =>
 
 test("viewport events update fit input without touching publication", () => {
   let s = reduceObserver(initialObserverState(), { t: "hello", w: 960, h: 640 });
-  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1 });
+  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1, notch: DEFAULT_WHEEL_NOTCH });
   s = reduceObserver(s, ready(1, 11, 1920, 1080));
-  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1 });
+  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1, notch: DEFAULT_WHEEL_NOTCH });
   s = reduceObserver(s, { t: "resize", w: 1280, h: 720, scale: 1.5 });
-  expect(s.viewport).toEqual({ w: 1280, h: 720, dpi: 1.5 });
+  expect(s.viewport).toEqual({ w: 1280, h: 720, dpi: 1.5, notch: DEFAULT_WHEEL_NOTCH });
   expect(s.publication).toMatchObject({ handle: 11 });
 });
 
@@ -262,4 +237,76 @@ test("browse state updates when navigation changes it", () => {
     canNext: true,
   });
   expect(s.browse).toMatchObject({ index: 1, count: 5, canPrevious: true, canNext: true });
+});
+
+// --- Refresh status facet (post-release normalization C1) -----------------
+// PRD §2.10 keeps the last-good publication in the main content during a
+// refresh, so the request state must surface in the status area instead.
+// These tests pin the pure facet selector the status bar renders.
+
+import { refreshStatus } from "./observer.ts";
+
+test("refresh loading surfaces a visible status facet beside the publication", () => {
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"));
+  expect(displayVerdict(s)).toBe("image"); // main content stays the image
+  const facet = refreshStatus(s);
+  expect(facet).not.toBeNull();
+  expect(facet!.kind).toBe("loading");
+  expect(facet!.text).toContain("Refreshing");
+  expect(facet!.text.length).toBeLessThanOrEqual(64);
+});
+
+test("refresh error surfaces a visible, meaningful, bounded failure facet", () => {
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), error(2, "refresh"));
+  expect(displayVerdict(s)).toBe("image");
+  const facet = refreshStatus(s);
+  expect(facet).not.toBeNull();
+  expect(facet!.kind).toBe("error");
+  expect(facet!.text).toContain("Refresh failed");
+  expect(facet!.text).toContain("could not decode image");
+  expect(facet!.text.length).toBeLessThanOrEqual(64);
+});
+
+test("refresh facet is bounded even for an oversized multiline host error", () => {
+  const long = "x".repeat(500) + "\nsecond line must not leak into the status row";
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), error(2, "refresh", long));
+  const facet = refreshStatus(s);
+  expect(facet).not.toBeNull();
+  expect(facet!.text.length).toBeLessThanOrEqual(64);
+  expect(facet!.text).not.toContain("second line");
+  expect(facet!.text.endsWith("…")).toBe(true);
+});
+
+test("last-good publication identity survives refresh loading and error", () => {
+  // One reduction chain: the publication object must be the SAME reference
+  // through refresh loading and refresh error (binding stays active).
+  let s = initialObserverState();
+  s = reduceObserver(s, ready(1, 11, 1920, 1080));
+  const published = s.publication;
+  expect(published).not.toBeNull();
+  s = reduceObserver(s, loading(2, "refresh"));
+  expect(s.publication).toBe(published);
+  s = reduceObserver(s, error(2, "refresh"));
+  expect(s.publication).toBe(published);
+});
+
+test("refresh facet clears when the refresh completes (ready)", () => {
+  const s = fold(ready(1, 11, 1920, 1080), loading(2, "refresh"), ready(2, 22, 640, 480, 640, 480, "b.jpg"));
+  expect(s.request).toBeNull();
+  expect(refreshStatus(s)).toBeNull();
+});
+
+test("new-item requests never produce a refresh facet (behavior unchanged)", () => {
+  const loadingState = fold(loading(2, "new-item", "c.jpg"));
+  expect(displayVerdict(loadingState)).toBe("loading");
+  expect(refreshStatus(loadingState)).toBeNull();
+  const errorState = fold(ready(1, 11, 1920, 1080), loading(2, "new-item"), error(2, "new-item"));
+  expect(displayVerdict(errorState)).toBe("error");
+  expect(refreshStatus(errorState)).toBeNull();
+});
+
+test("no request at all produces no facet", () => {
+  expect(refreshStatus(initialObserverState())).toBeNull();
+  const settled = fold(ready(1, 11, 1920, 1080));
+  expect(refreshStatus(settled)).toBeNull();
 });

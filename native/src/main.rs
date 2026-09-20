@@ -15,7 +15,26 @@
 // must not spawn a black console. Debug builds keep a console for logging.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use anyhow::{Context as _, Result, anyhow};
+// PRODUCT PLATFORM BOUNDARY (post-release normalization C6A).
+//
+// PicoView is a Windows 11 product. The native host is intentionally,
+// explicitly Windows-only: WIC decode, HKCU associations, Win32 resources,
+// and the Windows release packaging are product identity, not conditional
+// features. There is no non-Windows product path to maintain, so there are
+// no non-Windows stubs; a non-Windows build fails here, by declaration,
+// rather than with random missing-dependency errors.
+//
+// This does NOT reduce PocketJS portability: the shared
+// hosts/desktop + pocket-ui-wgpu desktop family stays upstream, and PicoView
+// Windows joins it as a consumer. See docs/RELEASE-WINDOWS.md and
+// docs/ARCHITECTURE.md ("Product platform boundary").
+#[cfg(not(windows))]
+compile_error!(
+    "PicoView native is a Windows-only product (release authority v0.1.0); \
+     the portable desktop host family lives in PocketJS itself."
+);
+
+use anyhow::{Context as _, Result};
 use std::time::Instant;
 use winit::event_loop::EventLoop;
 
@@ -24,8 +43,11 @@ mod assets;
 mod associations;
 mod browse_session;
 mod current_item;
+mod fatal;
 mod presentation;
+mod product_facts;
 mod runtime;
+mod svc_queue;
 
 use app::Host;
 use runtime::{Wake, parse_args};
@@ -82,13 +104,50 @@ fn main() -> Result<()> {
         }
     }
 
-    let args = parse_args()?;
-    let event_loop = EventLoop::<Wake>::with_user_event().build()?;
+    match run_product() {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            // GUI-subsystem observability (C6B): a fatal error must reach the
+            // user even with no console. The dialog is bounded; the log
+            // (stderr in debug/dev runs) keeps the full chain.
+            fatal::report_error(&error);
+            Err(error)
+        }
+    }
+}
+
+fn run_product() -> Result<()> {
+    let args = match parse_args() {
+        Ok(args) => args,
+        Err(error) => {
+            return Err(fatal::failure_to_anyhow(fatal::FatalFailure::new(
+                fatal::FatalSite::Configuration,
+                format!("{error:#}"),
+            )));
+        }
+    };
+    let event_loop = match EventLoop::<Wake>::with_user_event().build() {
+        Ok(loop_) => loop_,
+        Err(error) => {
+            return Err(fatal::failure_to_anyhow(fatal::FatalFailure::new(
+                fatal::FatalSite::Windowing,
+                format!("{error}"),
+            )));
+        }
+    };
     let proxy = event_loop.create_proxy();
     let mut host = Host::new(args, proxy);
-    event_loop.run_app(&mut host)?;
-    if let Some(error) = host.take_failure() {
-        return Err(anyhow!(error));
+    let run_result = event_loop.run_app(&mut host);
+    // Failure authority: the Host records classified fatal failures from the
+    // window thread / runtime worker. A winit run error without a Host
+    // failure is itself fatal (windowing subsystem).
+    let failure = host.take_failure();
+    match (failure, run_result) {
+        (Some(failure), _) => Err(fatal::failure_to_anyhow(failure)),
+        (None, Err(error)) => Err(fatal::failure_to_anyhow(fatal::FatalFailure::new(
+            fatal::FatalSite::Windowing,
+            format!("{error}"),
+        ))),
+        (None, Ok(())) => Ok(()),
     }
-    Ok(())
 }

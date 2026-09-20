@@ -16,6 +16,100 @@
 /// CPU safety policy even when the GPU device can create larger textures.
 /// Do not delete this merely because adapter/device dimensions rise.
 pub(super) const MAX_DECODE_PIXELS: u64 = 80_000_000;
+/// Hard cap on encoded file size read into memory before decode. Bounds the
+/// transient CPU allocation of holding the whole encoded file; it is
+/// INDEPENDENT of [`MAX_DECODE_PIXELS`], which bounds the decoded image
+/// plane. Enforced at READ time by [`read_encoded_bounded`]: at most
+/// `MAX_ENCODED_FILE_BYTES + 1` bytes can ever be placed in memory, so a
+/// file that grows after a size probe is rejected rather than over-read.
+/// Two policies, two resources:
+/// - encoded-byte cap (this): bounds pre-decode file allocation (a small
+///   highly-compressed file is admitted even though it decodes large, and a
+///   huge barely-compressible file is rejected even though it would decode
+///   small);
+/// - decoded-pixel cap ([`MAX_DECODE_PIXELS`] / [`ImageAdmissionPolicy`]):
+///   bounds decoded image-plane allocation and decode work after WIC reports
+///   real frame dimensions.
+/// Neither limit implies the other; a file above the byte cap is rejected
+/// before decode regardless of its (unknown) pixel dimensions.
+pub(super) const MAX_ENCODED_FILE_BYTES: u64 = 1 << 30; // 1 GiB
+
+/// Pure encoded-length admission predicate: true when a file of `len` bytes
+/// may be read into memory under `limit`. Extracted so the admission boundary
+/// is testable without materializing a cap-sized fixture; [`read_encoded_bounded`]
+/// consumes it for both the size probe and the authoritative post-read check,
+/// so production and tests compare with the same code.
+pub(super) fn admits_encoded_len(len: u64, limit: u64) -> bool {
+    len <= limit
+}
+
+/// Same-handle bounded read of one encoded file — the ONLY path encoded
+/// bytes enter memory. A metadata probe classifies the path first
+/// (NotFound → MissingPath, non-files → NotAFile): on Windows opening a
+/// directory fails as a permission error, so classification cannot come from
+/// the open result. The open handle then serves the size probe and the read;
+/// [`take_bounded`] makes the read length structurally impossible to exceed,
+/// so the bytes placed in memory are bounded by `limit + 1` EVEN IF the file
+/// grows or is replaced after either probe (a metadata → `fs::read` pattern
+/// would race into an unbounded second open). The authoritative rejection
+/// uses the bytes actually read: an over-cap file is rejected, never
+/// silently truncated.
+pub(super) fn read_encoded_bounded(
+    path: &std::path::Path,
+    limit: u64,
+) -> Result<Vec<u8>, OpenError> {
+    let probe = std::fs::metadata(path).map_err(|e| metadata_error(&e))?;
+    if !probe.is_file() {
+        return Err(OpenError::NotAFile);
+    }
+    let mut file = std::fs::File::open(path).map_err(|e| metadata_error(&e))?;
+    // Same-handle early exit when the file already declares itself over the
+    // cap. Not authoritative — the file may still grow before the read.
+    let handle_meta = file.metadata().map_err(|e| metadata_error(&e))?;
+    if !admits_encoded_len(handle_meta.len(), limit) {
+        return Err(encoded_too_large(handle_meta.len(), limit));
+    }
+    let bytes = take_bounded(&mut file, limit).map_err(|e| OpenError::Open(e.to_string()))?;
+    // Authoritative bound: the bytes actually in memory.
+    if !admits_encoded_len(bytes.len() as u64, limit) {
+        return Err(encoded_too_large(bytes.len() as u64, limit));
+    }
+    Ok(bytes)
+}
+
+/// Read at most `limit + 1` bytes from an open handle. The one-byte
+/// over-read margin is the detection device: a file that grew past `limit`
+/// yields exactly `limit + 1` bytes here (rejected by the caller) instead of
+/// an unbounded read or a silent truncation down to `limit`.
+pub(super) fn take_bounded(file: &mut std::fs::File, limit: u64) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    file.take(limit.saturating_add(1)).read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
+/// The bounded rejection for over-cap encoded input, shared by the
+/// same-handle size probe and the post-read check so both name the same
+/// policy in user-visible text.
+fn encoded_too_large(len: u64, limit: u64) -> OpenError {
+    OpenError::Open(format!(
+        "encoded file too large ({} MiB, limit {} MiB)",
+        len / (1024 * 1024),
+        limit / (1024 * 1024),
+    ))
+}
+
+/// Pure mapping of a metadata-read failure to its Product error category.
+/// Only a genuine not-found result means "the path does not exist"; any other
+/// I/O failure (permission denied, device error, ...) keeps its message under
+/// the readable-error category instead of masquerading as a missing file.
+pub(super) fn metadata_error(error: &std::io::Error) -> OpenError {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        OpenError::MissingPath
+    } else {
+        OpenError::Open(error.to_string())
+    }
+}
 /// svc is a bounded-semantic channel; error strings are capped.
 pub(super) const MAX_ERROR_CHARS: usize = 200;
 
@@ -180,6 +274,7 @@ pub(super) fn proxy_resource_size(
 }
 
 /// Assert the policy output-size invariant (tests + debug oracle).
+#[allow(dead_code)]
 pub(super) fn proxy_size_holds_policy(
     cw: u32,
     ch: u32,
@@ -245,13 +340,10 @@ impl OpenError {
 }
 
 pub(super) fn open_decoded(path: &std::path::Path) -> Result<DecodedImage, OpenError> {
-    let meta = std::fs::metadata(path).map_err(|_| OpenError::MissingPath)?;
-    if !meta.is_file() {
-        return Err(OpenError::NotAFile);
-    }
-    // The source file handle closes as soon as read() returns; decode runs on
-    // our own in-memory copy so no exclusive handle is held afterwards.
-    let bytes = std::fs::read(path).map_err(|e| OpenError::Open(e.to_string()))?;
+    let bytes = read_encoded_bounded(path, MAX_ENCODED_FILE_BYTES)?;
+    // The source file handle closes as soon as read_encoded_bounded returns;
+    // decode runs on our own in-memory copy so no exclusive handle is held
+    // afterwards.
     decode_wic(&bytes)
 }
 
@@ -319,7 +411,6 @@ pub(super) fn prepare_for_admission(
     }
 }
 
-#[cfg(windows)]
 pub(super) mod wic {
     use super::{DecodedImage, OpenError, bounded, decode_alloc_len};
     use windows::Win32::Graphics::Imaging::{
@@ -338,7 +429,7 @@ pub(super) mod wic {
     /// System.Photo.Orientation during a plain format conversion; without
     /// materializing O here, Product would conflate intrinsic orientation
     /// with user Rotate/Flip.
-    pub fn decode_jpeg(bytes: &[u8]) -> Result<DecodedImage, OpenError> {
+    pub fn decode_wic(bytes: &[u8]) -> Result<DecodedImage, OpenError> {
         unsafe {
             // OK / S_FALSE both mean a usable apartment on this thread.
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED).ok();
@@ -528,15 +619,7 @@ pub(super) mod wic {
     }
 }
 
-#[cfg(windows)]
-use wic::decode_jpeg as decode_wic;
-
-#[cfg(not(windows))]
-fn decode_wic(_bytes: &[u8]) -> Result<DecodedImage, OpenError> {
-    Err(OpenError::Decode(
-        "WIC decode requires the Windows host".into(),
-    ))
-}
+use wic::decode_wic;
 
 /// Shared bounded-string helper used by decode error paths and publication
 /// svc event constructors. Lives here because OpenError.message already owns

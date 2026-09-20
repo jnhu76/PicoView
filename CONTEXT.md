@@ -8,9 +8,9 @@ Current operational state only. Campaign chronology and evidence live under `doc
 
 PicoView is a Windows 11 local image viewer on PocketJS.
 
-**MVP is feature-complete.** The viewer can open a local image, browse previous/next, apply Fit / 1:1 / zoom / pan, rotate/flip, open via native dialog, and register file associations. Product use is local-only.
+**PicoView v0.1.0 is released** (tag `v0.1.0`, BASE `main` = `f7b08ca`). The viewer opens a local image (native dialog, CLI path, or Windows file association), browses previous/next in the containing folder, applies Fit / 1:1 / zoom / pan / rotate / flip, and installs conservative HKCU OpenWith associations. Product use is local-only.
 
-Current phase: **release hardening** (R2/R3 quality closure and live DPI acceptance complete on `main`). Windows release packaging — app icon authority, EXE resources, Inno Setup installer, portable artifact, release script — is authored on `release/windows-release-hardening-1` (authority: [`docs/RELEASE-WINDOWS.md`](docs/RELEASE-WINDOWS.md)).
+Current phase: **post-release correctness / architecture normalization** ([Issue #75](https://github.com/jnhu76/PicoView/issues/75)). Released Windows packaging — app icon authority, EXE resources, Inno Setup installer, portable artifact, release script — is shipped and is release evidence (authority: [`docs/RELEASE-WINDOWS.md`](docs/RELEASE-WINDOWS.md)).
 
 Release **build topology** (corrective: PICOVIEW-WINDOWS-RELEASE-BUILD-CORRECTIVE-1): the guest compiles as a PocketJS *external project* from the repository root — `tsconfig.json` carries the project's module resolution, `scripts/build-guest.ps1` is the canonical guest build, and the release script is orchestration only. No junction/symlink scaffolding and no `node_modules` surgery anywhere in the build path: the only dependency install in it is `bun install --frozen-lockfile --cwd third_party/pocketjs`, which restores PocketJS's own pinned dependencies into the framework's own gitignored `node_modules` and creates nothing on the PicoView side; evidence: [`docs/history/windows-release-build-corrective-1/EVIDENCE.md`](docs/history/windows-release-build-corrective-1/EVIDENCE.md).
 
@@ -18,14 +18,9 @@ Release **build topology** (corrective: PICOVIEW-WINDOWS-RELEASE-BUILD-CORRECTIV
 
 ## Current source baseline
 
-- Stage C campaign branch: `docs/mvp-authority-cleanup-1` (docs-only)
-- **Code baseline before Stage C** = PR #66 merge `6eb578ef7215642ca7852113f9987f004a8c36bb`
-  (`refactor/native-structure-cleanup-1` — Stage B native structure)
-- Stage C (this documentation authority cleanup) changes **docs only**.
-  `native/`, `guest/`, and `third_party/pocketjs/` are unchanged relative to that baseline.
-- Stage A R1 presentation consume is already in that code baseline (Dynamic viewport from measured physical + live OS scale)
-- Do not treat Stage C docs commits as a new runtime/code baseline
-- Historical Stage A/B campaign worktrees may still exist; do not reuse them for new work
+- Code baseline: `main` @ `f7b08ca9107d91144de3aac2e428d0f85f9314c8` (= tag `v0.1.0`)
+- Current work happens on normalization branches; `native/`, `guest/`, and `third_party/pocketjs/` are the released runtime surface
+- Do not treat documentation-only commits as runtime/code baselines
 
 ---
 
@@ -36,10 +31,9 @@ Release **build topology** (corrective: PICOVIEW-WINDOWS-RELEASE-BUILD-CORRECTIV
 | Source path | `third_party/pocketjs` |
 | Upstream | `jnhu76/pocketjs` |
 | Integration branch | `integration/picoview-desktop` |
-| Provenance revision | `4cf84b8d0124ae2e67681f279e6f5427917b4aff` |
+| Provenance revision | see [`POCKETJS.lock`](POCKETJS.lock) — machine provenance authority; docs do not duplicate the revision literal |
 | Mechanism | `git subtree` (`--squash`) — not a submodule, not a Cargo git dependency |
 | Human contract | [`docs/integration/POCKETJS.md`](docs/integration/POCKETJS.md) |
-| Machine provenance | [`POCKETJS.lock`](POCKETJS.lock) |
 
 Cargo PocketJS crates resolve as path dependencies into `third_party/pocketjs`. A normal clone contains the required PocketJS source.
 
@@ -59,7 +53,7 @@ Cargo PocketJS crates resolve as path dependencies into `third_party/pocketjs`. 
 
 Historical/non-normative: `docs/history/**`. Superseded pre-reset authority is under `docs/history/authority-reset-20260915/`.
 
-### Native source authority (post Stage B)
+### Native source authority
 
 | Module | Authority |
 | --- | --- |
@@ -71,18 +65,16 @@ Historical/non-normative: `docs/history/**`. Superseded pre-reset authority is u
 | `native/src/current_item/decode.rs` | decode / Image (WIC, EXIF O, RGBA) |
 | `native/src/current_item/publication.rs` | publication / lifetime protocol |
 
-There is no `gpu.rs` and no monolithic `current_item.rs`. Host presentation plumbing is product-owned; generic R1 geometry/signature/filter identity is consumed from shared PocketJS (`pocket-desktop-host` + `pocket-ui-wgpu`).
+There is no `gpu.rs` and no monolithic `current_item.rs`. Host presentation plumbing is product-owned; generic presentation geometry/signature/filter identity is consumed from shared PocketJS (`pocket-desktop-host` + `pocket-ui-wgpu`).
 
 ---
 
 ## Open work / known debt
 
-Architecture-authority work for MVP is closed. Known implementation debt (not authority redesign):
+v0.1.0 release gates are closed. Current work is the post-release normalization campaign ([Issue #75](https://github.com/jnhu76/PicoView/issues/75)); its finding list is the authoritative debt inventory.
 
-- R2 image minification — **implemented** via PocketJS `4cf84b8` GPU mip chain for linear images (PICOVIEW-63 PR #68; pending review)
-- R3 resize scheduling — **implemented** via PicoView presentation-input latest-wins coalescing + Host producer-side pending-presentation slot (Full channel retains/retries final Presentation; Disconnected ≠ success) (same PR corrective; pending review)
-- Small visual corrective: toolbar icons, 12/14px fonts
-- Live DPI acceptance at 125/150/200%
+Standing architecture notes that survive the release (not campaign findings):
+
 - Sampling partly stored as texture state rather than pure draw policy
 - Desktop image admission follows created-device capability (`Ui::image_max_texture_dim` /
   PicoView `ImageAdmissionPolicy`); `NATIVE_TEX_MAX_DIM` remains the portable default
@@ -91,10 +83,9 @@ Architecture-authority work for MVP is closed. Known implementation debt (not au
   product pixel budget; full-resolution is derived (`resource == source`)
 - Color/alpha admission remains RGBA8-oriented rather than the generic Architecture contract
 - Windows path has no proved software renderer fallback
-- Packaging / file-association regression / clean-machine build not closed
 
 ---
 
 ## Next tasks
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md). Immediate sequencing is stabilization (R2/R3 + visual corrective + live DPI), then release hardening. Do not reopen closed architecture campaigns without new evidence that disproves an accepted ADR/SPEC assumption.
+See [`docs/ROADMAP.md`](docs/ROADMAP.md). Immediate sequencing is the post-release normalization campaign order from Issue #75. Do not reopen closed architecture campaigns without new evidence that disproves an accepted ADR/SPEC assumption.

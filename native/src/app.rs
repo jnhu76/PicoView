@@ -36,7 +36,6 @@ use winit::window::{Theme, Window, WindowId};
 /// resource 1 = `assets/branding/picoview-app.ico`, embedded by build.rs),
 /// sized to the system small-icon metric so 100/125/150% DPI each get a
 /// crisp native size instead of an upscaled 16px bitmap.
-#[cfg(windows)]
 fn app_window_icon() -> Option<winit::window::Icon> {
     use winit::dpi::PhysicalSize;
     use winit::platform::windows::IconExtWindows;
@@ -47,21 +46,10 @@ fn app_window_icon() -> Option<winit::window::Icon> {
 }
 
 /// Taskbar / Alt-Tab identity icon: same resource, system large default.
-#[cfg(windows)]
 fn app_taskbar_icon() -> Option<winit::window::Icon> {
     use winit::platform::windows::IconExtWindows;
 
     winit::window::Icon::from_resource(1, None).ok()
-}
-
-#[cfg(not(windows))]
-fn app_window_icon() -> Option<winit::window::Icon> {
-    None
-}
-
-#[cfg(not(windows))]
-fn app_taskbar_icon() -> Option<winit::window::Icon> {
-    None
 }
 
 /// PicoView product minimum logical client size.
@@ -70,11 +58,31 @@ fn app_taskbar_icon() -> Option<winit::window::Icon> {
 /// (`DESKTOP_DYNAMIC_MIN`). That is a platform capability floor used by the
 /// shared Dynamic resolver, not a PicoView product usability promise. The
 /// fixed 8-command toolbar needs ≈356 logical px width (8×36 + group gaps +
-/// padding); product closes the contract at 384×240. Keep in sync with
-/// `guest/shell_layout.ts` `PRODUCT_MIN_CLIENT` and `guest/pocket.json`
-/// `viewport.min`. Do **not** replace these with PocketJS 240×180.
-pub(crate) const PRODUCT_MIN_CLIENT_W: f64 = 384.0;
-pub(crate) const PRODUCT_MIN_CLIENT_H: f64 = 240.0;
+/// padding); product closes the contract at 384×240. Derived at build time
+/// from the product manifest authority (`guest/pocket.json`
+/// `viewport.dynamic.min`) via `build.rs` — see `product_facts.rs`.
+/// Do **not** replace these with PocketJS 240×180.
+pub(crate) fn product_min_client() -> (f64, f64) {
+    crate::product_facts::product_min_client()
+}
+
+/// Named budgets (post-release normalization C5): the cross-thread input
+/// queue capacity and the producer-side pending-presentation slot. The
+/// input bound keeps a burst of OS events bounded; the output slot is
+/// latest-wins by design (a superseded Presentation is never queued).
+pub(crate) const INPUT_CHANNEL_BOUND: usize = 256;
+pub(crate) const OUTPUT_SLOT_BOUND: usize = 1;
+
+/// R3 corrective: how long the event loop waits before retrying a pending
+/// (Full) Presentation flush — bounded, not busy-spin.
+pub(crate) const PRESENT_RETRY_DELAY: Duration = Duration::from_millis(16);
+
+/// Logical units per mouse-wheel notch. Host family convention: the shared
+/// PocketJS `hosts/desktop` host converts winit LineDelta with the same
+/// factor. This is the single owner of the notches→logical-units conversion;
+/// the guest receives the value on the resize svc line instead of carrying
+/// its own copy.
+pub(crate) const WHEEL_NOTCH_LOGICAL: f64 = 24.0;
 
 /// R3 corrective: live presentation facts captured on the window thread.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -206,7 +214,7 @@ pub(crate) struct Host {
     frame: Option<(u64, Arc<presentation::Target>)>,
     title: String,
     viewport: (u32, u32),
-    failure: Option<String>,
+    failure: Option<crate::fatal::FatalFailure>,
     modifiers: ModifiersState,
     /// Logical pointer position (window scale-normalized).
     pointer: (f64, f64),
@@ -223,8 +231,8 @@ impl Host {
     pub(crate) fn new(args: Args, proxy: EventLoopProxy<Wake>) -> Self {
         let title = args.title.clone();
         let viewport = args.viewport;
-        let (tx, inputs) = sync_channel(256);
-        let (outputs, rx) = sync_channel(1);
+        let (tx, inputs) = sync_channel(INPUT_CHANNEL_BOUND);
+        let (outputs, rx) = sync_channel(OUTPUT_SLOT_BOUND);
         let mut host = Self {
             window: None,
             surface: None,
@@ -255,7 +263,7 @@ impl Host {
         host
     }
 
-    pub(crate) fn take_failure(&mut self) -> Option<String> {
+    pub(crate) fn take_failure(&mut self) -> Option<crate::fatal::FatalFailure> {
         self.failure.take()
     }
 
@@ -284,7 +292,8 @@ impl Host {
                     measured_physical.0, measured_physical.1, os_scale
                 );
                 log::error!("{msg}");
-                self.failure = Some(msg);
+                self.failure =
+                    Some(crate::fatal::FatalFailure::new(crate::fatal::FatalSite::RuntimeChannel, msg));
             }
         }
     }
@@ -303,7 +312,7 @@ impl Host {
                         facts.os_scale
                     ));
                 } else {
-                    tlog("R3 pending presentation flushed into runtime channel");
+                    log::debug!("pending presentation flushed into runtime channel");
                 }
                 true
             }
@@ -321,7 +330,10 @@ impl Host {
             FlushOutcome::Disconnected => {
                 let msg = "runtime input channel disconnected (presentation flush)";
                 log::error!("{msg}");
-                self.failure = Some(msg.into());
+                self.failure = Some(crate::fatal::FatalFailure::new(
+                    crate::fatal::FatalSite::RuntimeChannel,
+                    msg,
+                ));
                 false
             }
         }
@@ -365,18 +377,20 @@ impl Host {
                 Input::Quit => match self.tx.try_send(Input::Quit) {
                     Ok(()) => {}
                     Err(TrySendError::Disconnected(_)) => {
-                        self.failure =
-                            Some("runtime input channel disconnected (quit)".into());
+                        self.failure = Some(crate::fatal::FatalFailure::new(
+                            crate::fatal::FatalSite::RuntimeChannel,
+                            "runtime input channel disconnected (quit)",
+                        ));
                         if let Some(event_loop) = event_loop {
                             event_loop.exit();
                         }
                     }
                     Err(TrySendError::Full(_)) => {
-                        tlog("R3 quit deferred: presentation pending / channel full");
+                        log::debug!("quit deferred: presentation pending / channel full");
                     }
                 },
                 _ => {
-                    tlog("R3 non-presentation deferred: pending presentation not delivered");
+                    log::debug!("non-presentation deferred: pending presentation not delivered");
                 }
             }
             return;
@@ -388,7 +402,10 @@ impl Host {
                 tlog("input channel full: drop non-presentation");
             }
             Err(TrySendError::Disconnected(_)) => {
-                self.failure = Some("runtime input channel disconnected".into());
+                self.failure = Some(crate::fatal::FatalFailure::new(
+                    crate::fatal::FatalSite::RuntimeChannel,
+                    "runtime input channel disconnected",
+                ));
                 if let Some(event_loop) = event_loop {
                     event_loop.exit();
                 }
@@ -403,11 +420,11 @@ impl Host {
             return Ok(());
         };
         let (tick, target) = frame;
-        tlog(&format!("present begin (frame tick {tick})"));
+        log::debug!("present begin (frame tick {tick})");
         let presented = surface.present(window, target)?;
-        tlog(&format!(
+        log::debug!(
             "present end (frame tick {tick}, submitted {presented})"
-        ));
+        );
         if presented && !self.shown {
             self.shown = true;
             window.set_visible(true);
@@ -450,49 +467,73 @@ impl ApplicationHandler<Wake> for Host {
         if self.window.is_some() {
             return;
         }
-        #[cfg(windows)]
         use winit::platform::windows::WindowAttributesExtWindows as _;
-        let window = Arc::new(
-            event_loop
-                .create_window(
-                    Window::default_attributes()
-                        .with_title(&self.title)
-                        // App identity, installed once from the EXE resource
-                        // table (winresource embeds assets/branding/
-                        // picoview-app.ico as icon resource 1). Titlebar and
-                        // taskbar read the same authority; nothing per frame.
-                        .with_window_icon(app_window_icon())
-                        .with_taskbar_icon(app_taskbar_icon())
-                        // Dark native caption — matches the dark product chrome;
-                        // avoids a light OS title bar sitting on a dark viewer.
-                        .with_theme(Some(Theme::Dark))
-                        .with_inner_size(LogicalSize::new(self.viewport.0, self.viewport.1))
-                        // Product min client — closes the toolbar width
-                        // contract. Do not silently allow host/pocketjs 240px
-                        // capability floor to undercut product chrome.
-                        .with_min_inner_size(LogicalSize::new(
-                            PRODUCT_MIN_CLIENT_W,
-                            PRODUCT_MIN_CLIENT_H,
-                        ))
-                        .with_resizable(true)
-                        // Stay hidden until the first presented frame so the
-                        // product never flashes an uninitialized white client.
-                        .with_visible(false),
-                )
-                .expect("create window"),
-        );
+        // Window creation is a recoverable startup failure, not a panic:
+        // in a GUI-subsystem binary a panic would be invisible. Record the
+        // classified failure and exit the loop; main() surfaces it.
+        let window_attributes = Window::default_attributes()
+            .with_title(&self.title)
+            // App identity, installed once from the EXE resource
+            // table (winresource embeds assets/branding/
+            // picoview-app.ico as icon resource 1). Titlebar and
+            // taskbar read the same authority; nothing per frame.
+            .with_window_icon(app_window_icon())
+            .with_taskbar_icon(app_taskbar_icon())
+            // Dark native caption — matches the dark product chrome;
+            // avoids a light OS title bar sitting on a dark viewer.
+            .with_theme(Some(Theme::Dark))
+            .with_inner_size(LogicalSize::new(self.viewport.0, self.viewport.1))
+            // Product min client — closes the toolbar width
+            // contract. Do not silently allow host/pocketjs 240px
+            // capability floor to undercut product chrome.
+            .with_min_inner_size(LogicalSize::new(
+                product_min_client().0,
+                product_min_client().1,
+            ))
+            .with_resizable(true)
+            // Stay hidden until the first presented frame so the
+            // product never flashes an uninitialized white client.
+            .with_visible(false);
+        let window = match event_loop.create_window(window_attributes) {
+            Ok(window) => Arc::new(window),
+            Err(error) => {
+                let failure = crate::fatal::FatalFailure::new(
+                    crate::fatal::FatalSite::WindowCreation,
+                    format!("{error}"),
+                );
+                log::error!("{failure}");
+                self.failure = Some(failure);
+                event_loop.exit();
+                return;
+            }
+        };
         tlog("window created (hidden until first frame)");
         let presentation = match presentation::Presentation::new(window.clone()) {
             Ok(presentation) => presentation,
             Err(error) => {
-                self.failure = Some(format!("GPU initialization: {error:#}"));
+                self.failure = Some(crate::fatal::FatalFailure::new(
+                    crate::fatal::FatalSite::GpuInit,
+                    format!("GPU initialization: {error:#}"),
+                ));
                 event_loop.exit();
                 return;
             }
         };
         let gpu = presentation.gpu.clone();
         self.surface = Some(presentation);
-        let mut startup = self.startup.take().expect("runtime startup");
+        // Internal invariant: resumed() runs exactly once per Host. If this
+        // state is missing the process is broken — record it as a classified
+        // internal failure instead of panicking invisibly in a GUI binary.
+        let Some(mut startup) = self.startup.take() else {
+            let failure = crate::fatal::FatalFailure::new(
+                crate::fatal::FatalSite::InternalState,
+                "resumed() ran twice: runtime startup state already consumed",
+            );
+            log::error!("{failure}");
+            self.failure = Some(failure);
+            event_loop.exit();
+            return;
+        };
         // A3 initial boot authority: measured physical client + live OS scale.
         // PicoView presentation policy is Dynamic (guest/pocket.json
         // viewport.dynamic). Host.viewport is initial/default requested
@@ -545,7 +586,10 @@ impl ApplicationHandler<Wake> for Host {
                 let _ = proxy.send_event(Wake::Exit(result.err().map(|e| format!("{e:#}"))));
             })
         {
-            self.failure = Some(format!("Runtime startup: {error}"));
+            self.failure = Some(crate::fatal::FatalFailure::new(
+                crate::fatal::FatalSite::ThreadSpawn,
+                format!("Runtime startup: {error}"),
+            ));
             event_loop.exit();
         }
         self.window = Some(window);
@@ -555,16 +599,25 @@ impl ApplicationHandler<Wake> for Host {
             Wake::Exit(error) => {
                 if let Some(error) = error {
                     log::error!("{error}");
-                    self.failure = Some(error);
+                    self.failure = Some(crate::fatal::FatalFailure::new(
+                        crate::fatal::FatalSite::RuntimeWorker,
+                        error,
+                    ));
                 }
                 event_loop.exit();
             }
             Wake::PickFile => {
-                // Modal native dialog on the UI thread. Filter is the
-                // conservative product association set (not every WIC type).
+                // Modal native dialog on the UI thread. Filter DERIVES from
+                // the conservative product association set (one semantic
+                // fact: formats PicoView claims to open), never a separate
+                // literal extension list.
+                let claimed_formats: Vec<&str> = crate::associations::ASSOCIATED_EXTENSIONS
+                    .iter()
+                    .map(|ext| ext.trim_start_matches('.'))
+                    .collect();
                 let picked = rfd::FileDialog::new()
                     .set_title("Open image")
-                    .add_filter("Images", &["jpg", "jpeg", "png", "bmp"])
+                    .add_filter("Images", &claimed_formats)
                     .pick_file();
                 if let Some(path) = picked {
                     log::info!("open file dialog picked {}", path.display());
@@ -590,7 +643,10 @@ impl ApplicationHandler<Wake> for Host {
                         if !self.shown {
                             if let Err(error) = self.present() {
                                 log::error!("{error}");
-                                self.failure = Some(error.to_string());
+                                self.failure = Some(crate::fatal::FatalFailure::new(
+                                    crate::fatal::FatalSite::Presentation,
+                                    error.to_string(),
+                                ));
                                 event_loop.exit();
                                 return;
                             }
@@ -623,7 +679,7 @@ impl ApplicationHandler<Wake> for Host {
             }
             if self.pending_presentation.is_pending() {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
-                    Instant::now() + Duration::from_millis(16),
+                    Instant::now() + PRESENT_RETRY_DELAY,
                 ));
                 return;
             }
@@ -693,7 +749,9 @@ impl ApplicationHandler<Wake> for Host {
             }
             winit::event::WindowEvent::MouseWheel { delta, .. } => {
                 let dy = match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, y) => -(y as f64) * 24.0,
+                    winit::event::MouseScrollDelta::LineDelta(_, y) => {
+                        -(y as f64) * WHEEL_NOTCH_LOGICAL
+                    }
                     winit::event::MouseScrollDelta::PixelDelta(p) => -p.y,
                 };
                 // Coalesce nothing here; guest accumulates high-res deltas.
@@ -763,7 +821,10 @@ impl ApplicationHandler<Wake> for Host {
                 tlog("RedrawRequested");
                 if let Err(error) = self.present() {
                     log::error!("{error}");
-                    self.failure = Some(error.to_string());
+                    self.failure = Some(crate::fatal::FatalFailure::new(
+                        crate::fatal::FatalSite::Presentation,
+                        error.to_string(),
+                    ));
                     event_loop.exit();
                 }
             }
@@ -792,23 +853,21 @@ impl ApplicationHandler<Wake> for Host {
 /// plus R3 producer-side pending presentation delivery (CORRECTIVE-2).
 #[cfg(test)]
 mod tests {
-    use super::{
-        FlushOutcome, PRODUCT_MIN_CLIENT_H, PRODUCT_MIN_CLIENT_W, PendingPresentation,
-        PresentationFacts, QueueOutcome,
-    };
+    use super::{FlushOutcome, PendingPresentation, PresentationFacts, QueueOutcome, product_min_client};
     use crate::runtime::{Input, coalesce_presentation_batch};
     use pocket_desktop_host::{DESKTOP_DYNAMIC_MIN, PresentationGeometry, ViewportPolicy, resolve_geometry};
     use std::sync::mpsc::sync_channel;
 
     /// D. Product minimum remains 384×240 through PicoView window/product
     /// contract. PocketJS Dynamic floor 240×180 is platform capability only
-    /// and must not replace product min.
+    /// and must not replace product min. The values derive from
+    /// guest/pocket.json (build.rs); this pins the shipped product contract.
     #[test]
     fn product_minimum_remains_384x240_through_product_contract() {
-        assert_eq!(PRODUCT_MIN_CLIENT_W, 384.0);
-        assert_eq!(PRODUCT_MIN_CLIENT_H, 240.0);
+        let (min_w, min_h) = product_min_client();
+        assert_eq!((min_w, min_h), (384.0, 240.0));
         assert_ne!(
-            (PRODUCT_MIN_CLIENT_W as u32, PRODUCT_MIN_CLIENT_H as u32),
+            (min_w as u32, min_h as u32),
             DESKTOP_DYNAMIC_MIN
         );
         assert_eq!(DESKTOP_DYNAMIC_MIN, (240, 180));

@@ -2,8 +2,9 @@
 //! `current_item.rs` module; only the import surface differs.
 
 use super::decode::{
-    DecodedImage, ImageAdmissionPolicy, MAX_ERROR_CHARS, OpenError, decode_alloc_len,
-    open_decoded, prepare_for_admission, proxy_resource_size, proxy_size_holds_policy, wic,
+    DecodedImage, ImageAdmissionPolicy, MAX_ENCODED_FILE_BYTES, MAX_ERROR_CHARS, OpenError,
+    admits_encoded_len, decode_alloc_len, metadata_error, open_decoded, prepare_for_admission,
+    proxy_resource_size, proxy_size_holds_policy, read_encoded_bounded, take_bounded, wic,
 };
 use super::publication::{
     BrowseSnapshot, ObservationBoundary, OpenIntent, RequestPhase, error_event, loading_event,
@@ -33,7 +34,6 @@ fn svc_events_are_bounded_scalars() {
         count: 5,
         can_previous: true,
         can_next: true,
-        current_name: Some("test".into()),
     };
     event_values(&loading_event(1, OpenIntent::Refresh, "a.jpg", &browse));
     event_values(&ready_event(
@@ -1286,39 +1286,43 @@ fn decode_dimensions_are_capped_before_allocation() {
 }
 
 #[test]
-fn guest_texture_key_matches_host_hint() {
-    // The host hint and the guest's registerTexture key are one wire
-    // contract kept as literals on both sides; this locks them together.
-    // The guest OWNS the key derivation (guest/binding.ts) so exactly one
-    // module can produce binding keys — app.octane.tsx must consume it
-    // rather than hand-rolling a key string.
-    let guest_binding =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../guest/binding.ts"))
-            .expect("guest binding module readable from the workspace");
-    assert!(guest_binding.contains(&format!("const TEXTURE_KEY = \"{TEXTURE_KEY_HINT}\";")));
-    let guest_app = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../guest/app.octane.tsx"
-    ))
-    .expect("guest source readable from the workspace");
-    // The single Image render site must resolve the RECONCILED binding,
-    // not a publication field or a hand-rolled key.
-    assert!(guest_app.contains("src={textureKeyFor(bound.slot)}"));
+fn texture_key_hint_is_the_shared_wire_literal() {
+    // The guest binding module OWNS key derivation (guest/binding.ts
+    // `TEXTURE_KEY`); native carries the same literal as a hint. Each side
+    // pins its own constant (machine-readable, no cross-language
+    // source-text matching): this is the native half, guest/binding.test.ts
+    // holds the guest half.
+    assert_eq!(TEXTURE_KEY_HINT, "picoview-current");
 }
 
 #[cfg(windows)]
 #[test]
-fn live_c_img_corpus_follows_installed_device_capability() {
-    // Phase 9 local evidence path: real Windows decode of the campaign
-    // corpus under (1) portable default policy and (2) raised device
-    // capability. Does not claim interactive 1:1 button clicks; those fall
-    // out of publication.fullResolution via the unchanged guest gate.
+fn live_corpus_follows_installed_device_capability() {
+    // OPT-IN live corpus evidence (post-release normalization C7): real
+    // Windows decode of a giant + control fixture under (1) portable default
+    // policy and (2) raised device capability. Explicit env contract —
+    // point PICOVIEW_LIVE_CORPUS at a directory containing the two fixture
+    // files below. A fresh clone without the variable runs NO corpus test
+    // and reports the skip loudly; it never silently pretends the corpus
+    // ran. Does not claim interactive 1:1 button clicks; those fall out of
+    // publication.fullResolution via the unchanged guest gate.
     use crate::current_item::decode_policy_for_device;
-    let giant = Path::new(r"C:\img\001R0E0aly1i50ph1thhjj66dc48w1l102.jpg");
-    let control = Path::new(r"C:\img\153fcfe9-d06a-411e-98b5-3fb62a77afc3.png");
-    if !giant.is_file() || !control.is_file() {
-        eprintln!("C:\\img corpus missing; skipping live corpus test");
+    let Some(corpus) = std::env::var_os("PICOVIEW_LIVE_CORPUS") else {
+        eprintln!(
+            "SKIP live corpus test: opt-in by setting PICOVIEW_LIVE_CORPUS to a \
+             directory containing the giant JPEG and control PNG fixtures"
+        );
         return;
+    };
+    let corpus = PathBuf::from(corpus);
+    let giant = corpus.join("001R0E0aly1i50ph1thhjj66dc48w1l102.jpg");
+    let control = corpus.join("153fcfe9-d06a-411e-98b5-3fb62a77afc3.png");
+    if !giant.is_file() || !control.is_file() {
+        panic!(
+            "PICOVIEW_LIVE_CORPUS={} is set but fixture files are missing \
+             (expected the 8256x5504 JPEG and the control PNG)",
+            corpus.display()
+        );
     }
     let surface = UiSurface::new((96.0, 64.0));
 
@@ -1326,7 +1330,7 @@ fn live_c_img_corpus_follows_installed_device_capability() {
     let mut portable = CurrentItem::new();
     portable.set_admission_policy(decode_policy_for_device(8192));
     surface.with_ui(|ui| ui.set_image_max_texture_dim(8192));
-    portable.open(&surface, request_phase(), giant, OpenIntent::NewItem);
+    portable.open(&surface, request_phase(), giant.as_path(), OpenIntent::NewItem);
     let handle = portable.live_handle().expect("giant open publishes under portable policy");
     surface.with_ui(|ui| {
         let view = ui.texture(handle).expect("portable giant resource");
@@ -1347,7 +1351,7 @@ fn live_c_img_corpus_follows_installed_device_capability() {
     });
     let mut capable = CurrentItem::new();
     capable.set_admission_policy(decode_policy_for_device(16384));
-    capable.open(&surface2, request_phase(), giant, OpenIntent::NewItem);
+    capable.open(&surface2, request_phase(), giant.as_path(), OpenIntent::NewItem);
     let ghandle = capable.live_handle().expect("giant open publishes under device capability");
     let (sw, sh) = capable
         .live_source_dimensions()
@@ -1371,7 +1375,7 @@ fn live_c_img_corpus_follows_installed_device_capability() {
         s.with_ui(|ui| ui.set_image_max_texture_dim(dim));
         let mut item = CurrentItem::new();
         item.set_admission_policy(decode_policy_for_device(dim));
-        item.open(&s, request_phase(), control, OpenIntent::NewItem);
+        item.open(&s, request_phase(), control.as_path(), OpenIntent::NewItem);
         let h = item.live_handle().expect("control open publishes");
         let (cw, ch) = item.live_source_dimensions().unwrap();
         s.with_ui(|ui| {
@@ -1382,6 +1386,98 @@ fn live_c_img_corpus_follows_installed_device_capability() {
     }
 }
 
-// decode_wic is cfg-gated; provide the symbol name used by tests above.
+// decode_wic is cfg-gated; re-export for tests.
 #[cfg(windows)]
-use super::decode::wic::decode_jpeg as decode_wic;
+use super::decode::wic::decode_wic;
+
+// --- Encoded-length admission boundary (corrective-1) ------------------------
+
+#[test]
+fn encoded_length_admission_boundary_is_limit_inclusive() {
+    // The predicate is testable without a 1 GiB fixture: it is pure over the
+    // byte length. limit-1 and the limit itself are admitted; limit+1 is
+    // rejected before any read/allocation happens.
+    assert!(admits_encoded_len(
+        MAX_ENCODED_FILE_BYTES - 1,
+        MAX_ENCODED_FILE_BYTES
+    ));
+    assert!(admits_encoded_len(
+        MAX_ENCODED_FILE_BYTES,
+        MAX_ENCODED_FILE_BYTES
+    ));
+    assert!(!admits_encoded_len(
+        MAX_ENCODED_FILE_BYTES + 1,
+        MAX_ENCODED_FILE_BYTES
+    ));
+    // Far over the cap is rejected, and the two caps are independent: byte
+    // size and decoded pixel dimensions never imply each other.
+    assert!(!admits_encoded_len(u64::MAX, MAX_ENCODED_FILE_BYTES));
+}
+
+// --- Same-handle bounded encoded read (corrective-2) -------------------------
+
+#[test]
+fn encoded_reader_admits_up_to_limit_and_rejects_above() {
+    // The read bound at tiny scale, through the real reader (probe → open →
+    // take → read → check), not just the pure predicate. limit-1 and limit
+    // pass; limit+1 is rejected. No cap-sized fixture is needed.
+    const LIMIT: u64 = 16;
+    let mut cases = Vec::new();
+    for len in [LIMIT - 1, LIMIT, LIMIT + 1] {
+        let path = std::env::temp_dir().join(format!("picoview-enc-bounded-{len}.bin"));
+        std::fs::write(&path, vec![0u8; len as usize]).unwrap();
+        cases.push((path, len));
+    }
+    for (path, len) in &cases {
+        let result = read_encoded_bounded(path, LIMIT);
+        if *len <= LIMIT {
+            let bytes = result.unwrap_or_else(|e| panic!("{len} bytes must be admitted: {e:?}"));
+            assert_eq!(bytes.len() as u64, *len);
+        } else {
+            assert!(
+                matches!(result, Err(OpenError::Open(_))),
+                "{len} bytes must be rejected over a {LIMIT}-byte limit"
+            );
+        }
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+#[test]
+fn encoded_reader_overread_is_capped_at_limit_plus_one() {
+    // Proof the reader itself is bounded — not only the length predicate:
+    // a file far larger than the limit yields at most limit + 1 bytes from
+    // the read, so the transient allocation cannot exceed cap + 1 no matter
+    // how large the file grows after the size probe.
+    const LIMIT: u64 = 16;
+    let path = std::env::temp_dir().join("picoview-enc-bounded-huge.bin");
+    std::fs::write(&path, vec![0xAB; (LIMIT + 1000) as usize]).unwrap();
+
+    let mut file = std::fs::File::open(&path).unwrap();
+    let taken = take_bounded(&mut file, LIMIT).unwrap();
+    assert_eq!(taken.len() as u64, LIMIT + 1);
+    assert_eq!(taken[0], 0xAB);
+
+    // And through the production entry point the same file is rejected, so
+    // growth between probe and read can never land over-cap bytes in memory.
+    assert!(matches!(
+        read_encoded_bounded(&path, LIMIT),
+        Err(OpenError::Open(_))
+    ));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn metadata_error_maps_only_not_found_to_missing_path() {
+    use std::io::ErrorKind;
+    // A genuine not-found is the "path does not exist" category.
+    assert_eq!(
+        metadata_error(&std::io::Error::from(ErrorKind::NotFound)),
+        OpenError::MissingPath
+    );
+    // Any other I/O failure keeps its message under the readable-error
+    // category instead of masquerading as a missing file.
+    let denied = metadata_error(&std::io::Error::from(ErrorKind::PermissionDenied));
+    assert!(matches!(denied, OpenError::Open(_)));
+    assert!(!denied.message().is_empty());
+}

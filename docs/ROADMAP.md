@@ -1,15 +1,15 @@
 # PicoView Roadmap
 
 Status: **CURRENT OPERATIONAL SEQUENCING**  
-Date: **2026-09-18**
+Date: **2026-09-20**
 
-This roadmap sequences work under current Product, Architecture, and SPEC authority. It does not redefine those semantics. Closed architecture campaigns are history, not future work — see `docs/history/`.
+This roadmap sequences work under current Product, Architecture, and SPEC authority. It does not redefine those semantics. Closed campaigns are history, not future work — see `docs/history/`.
 
 ---
 
-## Completed MVP
+## Released: v0.1.0
 
-The following are **done on `main`** and must not be restated as open roadmap items:
+The following are **released** (tag `v0.1.0`, `main` @ `f7b08ca`) and must not be restated as open roadmap items:
 
 - Local image open (native dialog, CLI path, Windows associations)
 - Browse Previous / Next
@@ -19,52 +19,35 @@ The following are **done on `main`** and must not be restated as open roadmap it
 - Direct Desktop/wgpu image admission on the ordinary path (ADR-0002)
 - PocketJS git-subtree under `third_party/pocketjs` + `POCKETJS.lock` provenance
 - R1 presentation geometry consumed from shared PocketJS (Dynamic logical from measured physical + live OS scale)
-- Stage B native structure cleanup (`main.rs` / `app.rs` / `runtime.rs` / `presentation.rs` / `current_item/*`)
-- Documentation authority surface cleanup (this campaign)
+- R2 image minification quality (GPU mip chain, generic in PocketJS)
+- R3 resize scheduling / presentation-input latest-wins coalescing
+- Small visual corrective (toolbar icons, 12/14px UI fonts)
+- Live DPI acceptance at 125% / 150% / 200% on native Windows
+- Windows release hardening: packaging, Inno Setup installer, portable artifact, release script, association regression, clean-machine build verification, release smoke
+- Stage B native structure cleanup and documentation authority surface cleanup
 
 ---
 
-## Stabilization
+## Current: post-release normalization
 
-Active near-term work. Goal: rendering quality and DPI truth, not new product surface.
+Active work. Authoritative finding list: [Issue #75](https://github.com/jnhu76/PicoView/issues/75) — post-v0.1.0 whole-repository architecture/code audit.
 
-### R2 — Image minification quality
+Campaign order (each campaign keeps its own boundary, oracle, and checkpoint commit):
 
-- Improve downscale quality when the full-resolution admitted image is fit to window or zoomed out
-- Prefer mip / better minification over destructive pre-shrink
-- Do not invent a PicoView-local GPU path; generic quality belongs in PocketJS first if it is backend-generic
+1. **C2** — post-release authority reset (docs describe released truth; `POCKETJS.lock` is the only machine provenance)
+2. **C0** — guest→host svc command-loss repair (bounded work per tick, FIFO, no silent tail loss)
+3. **C1** — refresh loading/error status visibility (last-good image stays published)
+4. **C3** — retire legacy `guest/view_state.ts` semantics (keep only publication reconcile contract)
+5. **C4** — guest composition-root normalization (one display-derivation authority)
+6. **C5** — cross-boundary constant contracts (version/extension/geometry mirrors get owners or oracles)
+7. **C6A** — make Windows-only product truth explicit in native sources
+8. **C6B** — fatal-error observability in the GUI-subsystem binary
+9. **C7** — test architecture repair (presentation/associations oracles, corpus gating, fixture dedup)
+10. **C8A** — decode/navigation pressure mechanism gate (measurements; no mechanism pre-selected)
+11. **C8B** — conditional: implement only the mechanism C8A evidence selects
+12. **C9** — remaining MINOR/NIT normalization and naming
 
-### R3 — Resize scheduling / presentation quality
-
-- Window resize / DPI-change scheduling that keeps presentation stable
-- Avoid redundant full re-upload while valid residency exists
-- Keep Fit/center/pan geometry correct after chrome and scale changes
-
-### Small visual corrective
-
-- Toolbar icons
-- 12/14px UI fonts (readable desktop chrome)
-- No product-semantics changes
-
-### Live DPI acceptance
-
-- Acceptance runs at 125% / 150% / 200% on native Windows
-- Confirm Fit, 1:1 Actual Size, and zoom% readout stay truthful
-- Evidence follows `docs/BENCHMARK.md` identity rules where physical claims are made
-
----
-
-## Release hardening
-
-After stabilization gates pass:
-
-- Packaging (distributionable Windows build)
-- File association regression checks
-- Clean-machine build verification
-- Release smoke (open/browse/view/associate/uninstall path)
-- Version / tag / release notes
-
-Do not start packaging as a substitute for unfinished R2/R3 quality work.
+Rules: campaign order is fixed; a new MAJOR discovered mid-campaign stops execution; `third_party/pocketjs` is not patched for upstream findings (upstream issues only); CJK glyph fallback (#74) stays separate.
 
 ---
 

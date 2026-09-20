@@ -78,6 +78,18 @@ export function nextHeldGesture(
   return prev;
 }
 
+/** Accept a mouse packet's coordinates only when BOTH are finite numbers.
+ *  Malformed packets must never fabricate a known pointer at (0,0): the
+ *  persistent wheel anchor and the press hit-test would otherwise trust a
+ *  position the host never sent. Returns null for a malformed packet. */
+export function pointerCoords(
+  e: { x?: unknown; y?: unknown },
+): { x: number; y: number } | null {
+  if (typeof e.x !== "number" || !Number.isFinite(e.x)) return null;
+  if (typeof e.y !== "number" || !Number.isFinite(e.y)) return null;
+  return { x: e.x, y: e.y };
+}
+
 export function createPointerPress(
   authority: PointerPressAuthority,
 ): PointerPressController {

@@ -7,6 +7,18 @@ import {
   pointInImageViewport,
   wheelFocusPoint,
 } from "./shell_layout.ts";
+import { DEFAULT_WHEEL_NOTCH, initialObserverState, reduceObserver } from "./observer.ts";
+import manifest from "./pocket.json";
+
+test("PRODUCT_MIN_CLIENT equals the product manifest viewport min (C5 oracle)", () => {
+  // guest/pocket.json is the single authority for the product minimum
+  // client; the native build derives its window min from the same manifest
+  // (build.rs → product_facts.rs). This equality is the machine-readable
+  // contract — not a source-text grep.
+  const min = manifest.app.viewport.dynamic.min;
+  expect(PRODUCT_MIN_CLIENT.width).toBe(min[0]);
+  expect(PRODUCT_MIN_CLIENT.height).toBe(min[1]);
+});
 
 test("chrome height is sum of frozen parts", () => {
   expect(chromeHeight()).toBe(
@@ -86,4 +98,25 @@ test("B3b unknown pointer uses viewport center", () => {
   const focus = wheelFocusPoint(v, { x: 0, y: 0, known: false });
   expect(focus.x).toBe(v.x + v.width / 2);
   expect(focus.y).toBe(v.y + v.height / 2);
+});
+
+// --- host-owned wheel notch factor (C5) ----------------------------------
+
+test("observer carries the host notch factor from resize lines", () => {
+  let s = initialObserverState();
+  s = reduceObserver(s, { t: "resize", w: 960, h: 640, scale: 1.25, notch: 24 });
+  expect(s.viewport?.notch).toBe(24);
+  // A later resize without notch preserves the host factor already known.
+  const before = s;
+  s = reduceObserver(s, { t: "resize", w: 1200, h: 800, scale: 1.25 });
+  expect(s.viewport?.notch).toBe(before.viewport?.notch);
+  // A changed host factor wins (host truth is the owner).
+  s = reduceObserver(s, { t: "resize", w: 1200, h: 800, scale: 1.25, notch: 32 });
+  expect(s.viewport?.notch).toBe(32);
+});
+
+test("observer falls back to the shipped notch when the host sends none", () => {
+  let s = initialObserverState();
+  s = reduceObserver(s, { t: "resize", w: 960, h: 640, scale: 1.0 });
+  expect(s.viewport?.notch).toBe(DEFAULT_WHEEL_NOTCH);
 });

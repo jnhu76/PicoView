@@ -191,8 +191,9 @@ plane into the existing logical texture record (`TexBacking::Owned`), and
 with no conversion or staging plane.
 
 **Current consume:** PicoView imports that capability via the in-tree git
-subtree at `third_party/pocketjs`. `POCKETJS.lock` `revision` is
-`24638737473cc7cd85202ba15adba511b79d9980`. Cargo uses path dependencies —
+subtree at `third_party/pocketjs`. The exact imported revision is recorded by
+`POCKETJS.lock` `revision` — the machine provenance authority; this ADR does
+not copy revision literals. Cargo uses path dependencies —
 not remote PocketJS git pins. Ordinary decodes publish through the owned API.
 See `docs/integration/POCKETJS.md`.
 

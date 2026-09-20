@@ -31,6 +31,22 @@ Human-facing integration rules: `docs/integration/POCKETJS.md`.
 
 Code reality after Stage B native structure cleanup (PR #66) and R1 presentation consume.
 
+## Product platform boundary
+
+PicoView is a **Windows 11 product**. The native host (`native/`) is
+intentionally, explicitly Windows-only: WIC decode, HKCU OpenWith
+associations, Win32 EXE resources, and the Windows release packaging are
+product identity, not conditional features. The declaration is compile-time
+(`#[cfg(not(windows))] compile_error!` in `native/src/main.rs`); there are no
+non-Windows product stubs to maintain and a non-Windows build fails by
+declaration rather than with random missing-dependency errors.
+
+This is a PicoView Product boundary, not a PocketJS one: the shared PocketJS
+`hosts/desktop` + `pocket-ui-wgpu` macOS/Linux/Windows desktop family remains
+portable upstream, and the PicoView Windows host joins it as a consumer.
+Windows-only product specialization is valid; PocketJS portability is not
+reduced by it. Release packaging authority: `docs/RELEASE-WINDOWS.md`.
+
 ## PocketJS dependency model
 
 ```text
@@ -868,7 +884,7 @@ Codec-specific frame/disposal semantics remain in Image; committed generic resou
 
 These are migration targets, not accepted design.
 
-**Resolved (ordinary image path).** Direct Desktop image admission is in the current subtree snapshot (`POCKETJS.lock` revision `24638737473cc7cd85202ba15adba511b79d9980`): ordinary decodes MOVE the decoder's own RGBA plane into `Ui::upload_owned_rgba8` — no PSM-tagged seam on the PicoView path, no aligned CPU texture storage for image admission (`TexBacking::Owned`), and `pocket-ui-wgpu` borrows the Owned plane directly into `Queue::write_texture` (no second RGBA vector). The ordinary Desktop image path satisfies ADR-0002. Campaign closeouts for the earlier remote-pin era are archived under `docs/history/corrective/`.
+**Resolved (ordinary image path).** Direct Desktop image admission is in the current subtree snapshot (exact revision: see `POCKETJS.lock`, the machine provenance authority): ordinary decodes MOVE the decoder's own RGBA plane into `Ui::upload_owned_rgba8` — no PSM-tagged seam on the PicoView path, no aligned CPU texture storage for image admission (`TexBacking::Owned`), and `pocket-ui-wgpu` borrows the Owned plane directly into `Queue::write_texture` (no second RGBA vector). The ordinary Desktop image path satisfies ADR-0002. Campaign closeouts for the earlier remote-pin era are archived under `docs/history/corrective/`.
 
 Resolved 2026-09-17 (`PICOVIEW-LAST-GOOD-PUBLICATION-1`): refresh/last-good
 publication ordering — the candidate is admitted before the previous

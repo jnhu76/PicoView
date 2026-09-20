@@ -68,7 +68,7 @@ export interface ObserverState {
   /** True once a terminal event (ready/error) closed seenGeneration; a
    *  same-generation event after the terminal is stale and never wins. */
   seenClosed: boolean;
-  viewport?: { w: number; h: number; dpi?: number };
+  viewport?: { w: number; h: number; dpi?: number; notch?: number };
   /** Browse state (directory navigation). */
   browse: BrowseState;
 }
@@ -107,12 +107,12 @@ export interface SvcLine {
   h?: unknown;
   /** Output scale: physical pixels per UI logical unit. */
   scale?: unknown;
+  /** Logical units per wheel notch (host-owned conversion factor, C5). */
+  notch?: unknown;
   /** Pointer / mouse events (desktop host parity). */
   x?: unknown;
   y?: unknown;
   d?: unknown;
-  b?: unknown;
-  sh?: unknown;
   /** Host gesture cancel (focus-loss). Not a release — must not press. */
   cancel?: unknown;
   /** Wheel / scroll events. */
@@ -148,13 +148,21 @@ function extractBrowse(v: SvcLine): Partial<BrowseState> {
   return browse;
 }
 
+/** Fallback logical units per wheel notch, used only while the host has not
+ *  delivered its own notch factor on a resize line. The host owns the
+ *  notches→logical-units conversion (native WHEEL_NOTCH_LOGICAL, C5); this
+ *  fallback exists so guest tests and pre-notch hosts keep the shipped
+ *  behavior. */
+export const DEFAULT_WHEEL_NOTCH = 24;
+
 /** Apply one svc event; returns the SAME state reference when nothing
  *  applies. Stale events — older than the highest seen generation, or
  *  trailing a terminal event of the same generation — never win. */
 export function reduceObserver(state: ObserverState, v: SvcLine): ObserverState {
   if ((v.t === "hello" || v.t === "resize") && typeof v.w === "number" && typeof v.h === "number") {
     const dpi = isNumber(v.scale) && v.scale > 0 ? v.scale : (state.viewport?.dpi ?? 1);
-    return { ...state, viewport: { w: v.w, h: v.h, dpi } };
+    const notch = isNumber(v.notch) && v.notch > 0 ? v.notch : (state.viewport?.notch ?? DEFAULT_WHEEL_NOTCH);
+    return { ...state, viewport: { w: v.w, h: v.h, dpi, notch } };
   }
   if (v.t !== "current-item") return state;
   if (!isGeneration(v.g)) return state;
@@ -243,4 +251,51 @@ export function displayVerdict(s: ObserverState): DisplayVerdict {
   if (r?.status === "loading") return "loading";
   if (r?.status === "error") return "error";
   return "empty";
+}
+
+// --- Refresh status facet (post-release normalization C1) -----------------
+//
+// PRD §2.10: a refresh keeps the last-good publication in the main content,
+// so its request state must surface in the status area instead — otherwise a
+// loading or failed refresh is visually indistinguishable from no action.
+// This is a pure selector over ObserverState: the status bar renders exactly
+// what it returns, and it clears by returning null once the request facet is
+// gone (terminal ready/error consumed, or a new request replaced it).
+
+export interface RefreshStatusFacet {
+  kind: "loading" | "error";
+  /** Fully composed, layout-bounded status text for one status row. */
+  text: string;
+}
+
+/** Layout bound for the facet: the status row height is a frozen product
+ *  constant, so composed text is capped no matter how long the file name or
+ *  host error detail is. */
+const FACET_TEXT_MAX = 64;
+
+function capFacetText(s: string, max = FACET_TEXT_MAX): string {
+  const oneLine = s.split(/\r?\n/, 1)[0] ?? "";
+  if (oneLine.length <= max) return oneLine;
+  return oneLine.slice(0, max - 1) + "…";
+}
+
+/** The status-area facet for a refresh request, or null when nothing should
+ *  show. A new-item request never produces this facet — it owns the main
+ *  content itself (displayVerdict). */
+export function refreshStatus(s: ObserverState): RefreshStatusFacet | null {
+  const r = s.request;
+  if (!r || r.intent !== "refresh") return null;
+  if (r.status === "loading") {
+    const name = typeof r.name === "string" ? r.name.trim() : "";
+    return {
+      kind: "loading",
+      text: name ? capFacetText(`Refreshing ${name}…`) : "Refreshing…",
+    };
+  }
+  if (r.status === "error") {
+    const detail = typeof r.error === "string" ? r.error.trim() : "";
+    const composed = detail ? `Refresh failed: ${detail}` : "Refresh failed";
+    return { kind: "error", text: capFacetText(composed) };
+  }
+  return null;
 }
