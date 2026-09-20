@@ -350,18 +350,19 @@ impl Presentation {
             self.surface.configure(&self.gpu.device, &self.config);
         }
         let swapchain = (self.config.width, self.config.height);
-        // Shared R1 policy: Exact/Nearest when retained target equals live
+        // Shared blit policy: Exact/Nearest when retained target equals live
         // swapchain; Transient/Linear only as a size bridge. No easing.
         let policy = BlitFilter::select(target.size, swapchain);
-        crate::tlog(&format!(
-            "R1 present: retained={}x{} swapchain={}x{} policy={:?} filter={:?}",
+        // Per-present facts are diagnostics, not lifecycle evidence: debug
+        // level keeps the default info log free of 60Hz churn.
+        log::debug!(
+            "present: retained={}x{} swapchain={}x{} filter={:?}",
             target.size.0,
             target.size.1,
             swapchain.0,
             swapchain.1,
-            policy,
             policy.wgpu_filter()
-        ));
+        );
         let output = match self.surface.get_current_texture() {
             Ok(output) => output,
             Err(error @ (wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated)) => {
@@ -429,7 +430,7 @@ impl Presentation {
         self.gpu.queue.submit([encoder.finish()]);
         window.pre_present_notify();
         output.present();
-        crate::tlog("swapchain present submitted");
+        log::debug!("swapchain present submitted");
         Ok(true)
     }
 }

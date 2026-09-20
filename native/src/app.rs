@@ -312,7 +312,7 @@ impl Host {
                         facts.os_scale
                     ));
                 } else {
-                    tlog("R3 pending presentation flushed into runtime channel");
+                    log::debug!("pending presentation flushed into runtime channel");
                 }
                 true
             }
@@ -386,11 +386,11 @@ impl Host {
                         }
                     }
                     Err(TrySendError::Full(_)) => {
-                        tlog("R3 quit deferred: presentation pending / channel full");
+                        log::debug!("quit deferred: presentation pending / channel full");
                     }
                 },
                 _ => {
-                    tlog("R3 non-presentation deferred: pending presentation not delivered");
+                    log::debug!("non-presentation deferred: pending presentation not delivered");
                 }
             }
             return;
@@ -420,11 +420,11 @@ impl Host {
             return Ok(());
         };
         let (tick, target) = frame;
-        tlog(&format!("present begin (frame tick {tick})"));
+        log::debug!("present begin (frame tick {tick})");
         let presented = surface.present(window, target)?;
-        tlog(&format!(
+        log::debug!(
             "present end (frame tick {tick}, submitted {presented})"
-        ));
+        );
         if presented && !self.shown {
             self.shown = true;
             window.set_visible(true);

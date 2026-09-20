@@ -74,6 +74,7 @@ fn icon_value_for(exe: &str) -> String {
 /// cleared when it currently IS our ProgID. Another program's default (or a
 /// missing value) is never touched — clearing a foreign default would be a
 /// takeover in reverse.
+#[cfg(test)]
 fn may_clear_extension_default(current: Option<&str>) -> bool {
     current == Some(PROG_ID)
 }
@@ -181,7 +182,10 @@ pub fn unregister_associations() -> anyhow::Result<()> {
 
     unsafe {
         for ext in ASSOCIATED_EXTENSIONS {
-            delete_value(&extension_default_path(ext), "");
+            // Ownership guard: only clear the extension default when it is
+            // ours (may_clear_extension_default); a foreign program's
+            // default is never touched.
+            delete_value_if_ours(&extension_default_path(ext));
             delete_value(&open_with_progids_path(ext), PROG_ID);
         }
         let prog = HSTRING::from(prog_id_path());

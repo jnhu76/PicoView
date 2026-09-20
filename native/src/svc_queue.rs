@@ -70,6 +70,7 @@ pub(crate) fn crossed_high_water(before: usize, after: usize) -> bool {
 /// command per tick bounds the guest-frame delay at one decode and the
 /// superseded residency at one handle per observation boundary, while the
 /// retained FIFO (this module) preserves order and loses nothing.
+#[allow(dead_code)]
 pub(crate) const MAX_SVC_EXPENSIVE_COMMANDS_PER_TICK: usize = 1;
 
 /// Split one drained batch by the per-tick expensive-command budget

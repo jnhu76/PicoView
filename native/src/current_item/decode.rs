@@ -16,6 +16,10 @@
 /// CPU safety policy even when the GPU device can create larger textures.
 /// Do not delete this merely because adapter/device dimensions rise.
 pub(super) const MAX_DECODE_PIXELS: u64 = 80_000_000;
+/// Hard cap on encoded file size read into memory before decode. This bounds
+/// the transient CPU allocation when opening a file; actual pixel limits are
+/// enforced separately by MAX_DECODE_PIXELS after WIC reports dimensions.
+pub(super) const MAX_ENCODED_FILE_BYTES: u64 = 1 << 30; // 1 GiB
 /// svc is a bounded-semantic channel; error strings are capped.
 pub(super) const MAX_ERROR_CHARS: usize = 200;
 
@@ -180,6 +184,7 @@ pub(super) fn proxy_resource_size(
 }
 
 /// Assert the policy output-size invariant (tests + debug oracle).
+#[allow(dead_code)]
 pub(super) fn proxy_size_holds_policy(
     cw: u32,
     ch: u32,
@@ -248,6 +253,13 @@ pub(super) fn open_decoded(path: &std::path::Path) -> Result<DecodedImage, OpenE
     let meta = std::fs::metadata(path).map_err(|_| OpenError::MissingPath)?;
     if !meta.is_file() {
         return Err(OpenError::NotAFile);
+    }
+    if meta.len() > MAX_ENCODED_FILE_BYTES {
+        return Err(OpenError::Open(format!(
+            "encoded file too large ({} MiB, limit {} MiB)",
+            meta.len() / (1024 * 1024),
+            MAX_ENCODED_FILE_BYTES / (1024 * 1024),
+        )));
     }
     // The source file handle closes as soon as read() returns; decode runs on
     // our own in-memory copy so no exclusive handle is held afterwards.
@@ -337,7 +349,7 @@ pub(super) mod wic {
     /// System.Photo.Orientation during a plain format conversion; without
     /// materializing O here, Product would conflate intrinsic orientation
     /// with user Rotate/Flip.
-    pub fn decode_jpeg(bytes: &[u8]) -> Result<DecodedImage, OpenError> {
+    pub fn decode_wic(bytes: &[u8]) -> Result<DecodedImage, OpenError> {
         unsafe {
             // OK / S_FALSE both mean a usable apartment on this thread.
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED).ok();
@@ -527,7 +539,7 @@ pub(super) mod wic {
     }
 }
 
-use wic::decode_jpeg as decode_wic;
+use wic::decode_wic;
 
 /// Shared bounded-string helper used by decode error paths and publication
 /// svc event constructors. Lives here because OpenError.message already owns

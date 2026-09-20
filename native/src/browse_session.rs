@@ -29,6 +29,7 @@ pub struct Candidate {
     /// Absolute path to the image file.
     pub path: PathBuf,
     /// Display name (file name without extension).
+    #[allow(dead_code)]
     pub name: String,
 }
 
@@ -112,15 +113,6 @@ impl BrowseSession {
         false
     }
 
-    /// Set the current index directly. Clamps to valid range.
-    pub fn goto(&mut self, idx: usize) {
-        if self.candidates.is_empty() {
-            self.index = None;
-        } else {
-            self.index = Some(idx.min(self.candidates.len() - 1));
-        }
-    }
-
     /// Current path, if any.
     pub fn current_path(&self) -> Option<&Path> {
         self.index
@@ -150,6 +142,7 @@ impl BrowseSession {
     }
 
     /// Current item display name.
+    #[allow(dead_code)]
     pub fn current_name(&self) -> Option<&str> {
         self.index
             .and_then(|idx| self.candidates.get(idx))
@@ -159,12 +152,6 @@ impl BrowseSession {
     /// Directory path.
     pub fn dir(&self) -> &Path {
         &self.dir
-    }
-
-    fn index_path(&self) -> Option<&PathBuf> {
-        self.index
-            .and_then(|idx| self.candidates.get(idx))
-            .map(|c| &c.path)
     }
 }
 

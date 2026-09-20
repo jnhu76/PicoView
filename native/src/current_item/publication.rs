@@ -57,7 +57,11 @@ impl OpenIntent {
 pub(super) struct LiveResource {
     pub handle: i32,
     /// Source dimensions (before any resource-level downsampling).
+    /// Read through `CurrentItem::live_source_dimensions`; stored for the
+    /// guest svc `ready` event payload.
+    #[allow(dead_code)]
     pub source_width: u32,
+    #[allow(dead_code)]
     pub source_height: u32,
 }
 
@@ -112,7 +116,6 @@ pub(super) struct BrowseSnapshot {
     pub count: u32,
     pub can_previous: bool,
     pub can_next: bool,
-    pub current_name: Option<String>,
 }
 
 impl BrowseSnapshot {
@@ -122,7 +125,6 @@ impl BrowseSnapshot {
             count: 0,
             can_previous: false,
             can_next: false,
-            current_name: None,
         }
     }
 

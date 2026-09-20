@@ -33,7 +33,6 @@ fn svc_events_are_bounded_scalars() {
         count: 5,
         can_previous: true,
         can_next: true,
-        current_name: Some("test".into()),
     };
     event_values(&loading_event(1, OpenIntent::Refresh, "a.jpg", &browse));
     event_values(&ready_event(
@@ -1386,6 +1385,6 @@ fn live_corpus_follows_installed_device_capability() {
     }
 }
 
-// decode_wic is cfg-gated; provide the symbol name used by tests above.
+// decode_wic is cfg-gated; re-export for tests.
 #[cfg(windows)]
-use super::decode::wic::decode_jpeg as decode_wic;
+use super::decode::wic::decode_wic;

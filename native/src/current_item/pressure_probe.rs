@@ -41,7 +41,7 @@ use std::time::{Duration, Instant};
 use super::CurrentItem;
 use crate::current_item::{Command, OpenIntent, decode_policy_for_device};
 use crate::current_item::publication::RequestPhase;
-use crate::svc_queue::{MAX_SVC_LINES_PER_TICK, SvcPending};
+use crate::svc_queue::SvcPending;
 
 const NORMAL_W: u32 = 1280;
 const NORMAL_H: u32 = 960;
@@ -173,7 +173,6 @@ struct TickReport {
     command_us: u128,
     frame_us: u128,
     release_us: u128,
-    pending_after: usize,
     superseded_before_release: usize,
     logical_residency_bytes: u64,
 }
@@ -242,7 +241,6 @@ fn drive_tick(
         command_us,
         frame_us,
         release_us,
-        pending_after: pending.len(),
         superseded_before_release,
         logical_residency_bytes: residency,
     }
@@ -272,7 +270,6 @@ fn report_marker(name: &str) {
 
 fn decode_pressure_gate() -> anyhow::Result<()> {
     let mut report = String::from("{\n  \"scenarios\": [\n");
-    let mut first_section = true;
 
     // --- S1: single normal-image open latency ---------------------------
     report_marker("S1 single normal-image open latency");
@@ -290,12 +287,8 @@ fn decode_pressure_gate() -> anyhow::Result<()> {
     }
     let single_normal_us = median_us(&mut samples);
     eprintln!("probe: single normal open median {} (n=5)", fmt_ms(single_normal_us));
-    if !first_section {
-        report.push_str(",\n");
-    }
-    first_section = false;
     report.push_str(&format!(
-        "    {{\"scenario\": \"single_normal_open_us\", \"median_us\": {single_normal_us}}}"
+        "{{\"scenario\": \"single_normal_open_us\", \"median_us\": {single_normal_us}}}"
     ));
     drop(item);
 
@@ -364,12 +357,13 @@ fn decode_pressure_gate() -> anyhow::Result<()> {
     let first_tick = ticks.first().copied().expect("at least one tick");
     let memory_after = process_memory();
     eprintln!(
-        "probe: burst ticks={} wall={} first_tick: cmds={} cmd={} frame={}",
+        "probe: burst ticks={} wall={} first_tick: cmds={} cmd={} frame={} release={}",
         ticks.len(),
         fmt_dur(burst_wall),
         first_tick.commands_processed,
         fmt_ms(first_tick.command_us),
         fmt_ms(first_tick.frame_us),
+        fmt_ms(first_tick.release_us),
     );
     eprintln!(
         "probe: superseded_peak={peak_superseded} residency_peak={} pending_settled_in={} ticks",
