@@ -31,6 +31,22 @@ Human-facing integration rules: `docs/integration/POCKETJS.md`.
 
 Code reality after Stage B native structure cleanup (PR #66) and R1 presentation consume.
 
+## Product platform boundary
+
+PicoView is a **Windows 11 product**. The native host (`native/`) is
+intentionally, explicitly Windows-only: WIC decode, HKCU OpenWith
+associations, Win32 EXE resources, and the Windows release packaging are
+product identity, not conditional features. The declaration is compile-time
+(`#[cfg(not(windows))] compile_error!` in `native/src/main.rs`); there are no
+non-Windows product stubs to maintain and a non-Windows build fails by
+declaration rather than with random missing-dependency errors.
+
+This is a PicoView Product boundary, not a PocketJS one: the shared PocketJS
+`hosts/desktop` + `pocket-ui-wgpu` macOS/Linux/Windows desktop family remains
+portable upstream, and the PicoView Windows host joins it as a consumer.
+Windows-only product specialization is valid; PocketJS portability is not
+reduced by it. Release packaging authority: `docs/RELEASE-WINDOWS.md`.
+
 ## PocketJS dependency model
 
 ```text

@@ -36,7 +36,6 @@ use winit::window::{Theme, Window, WindowId};
 /// resource 1 = `assets/branding/picoview-app.ico`, embedded by build.rs),
 /// sized to the system small-icon metric so 100/125/150% DPI each get a
 /// crisp native size instead of an upscaled 16px bitmap.
-#[cfg(windows)]
 fn app_window_icon() -> Option<winit::window::Icon> {
     use winit::dpi::PhysicalSize;
     use winit::platform::windows::IconExtWindows;
@@ -47,21 +46,10 @@ fn app_window_icon() -> Option<winit::window::Icon> {
 }
 
 /// Taskbar / Alt-Tab identity icon: same resource, system large default.
-#[cfg(windows)]
 fn app_taskbar_icon() -> Option<winit::window::Icon> {
     use winit::platform::windows::IconExtWindows;
 
     winit::window::Icon::from_resource(1, None).ok()
-}
-
-#[cfg(not(windows))]
-fn app_window_icon() -> Option<winit::window::Icon> {
-    None
-}
-
-#[cfg(not(windows))]
-fn app_taskbar_icon() -> Option<winit::window::Icon> {
-    None
 }
 
 /// PicoView product minimum logical client size.
@@ -470,7 +458,6 @@ impl ApplicationHandler<Wake> for Host {
         if self.window.is_some() {
             return;
         }
-        #[cfg(windows)]
         use winit::platform::windows::WindowAttributesExtWindows as _;
         let window = Arc::new(
             event_loop

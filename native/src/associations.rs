@@ -7,8 +7,9 @@
 //! click launch are registered. BrowseSession may still enumerate additional
 //! WIC-decodable extensions as directory candidates; those are not claimed
 //! here. Application-side HKCU registration only — no installer, no HKLM.
-
-#![cfg(windows)]
+//!
+//! Windows-only product code by the crate-level platform declaration
+//! (native/src/main.rs); no per-module portability gate.
 
 use std::path::Path;
 

@@ -46,10 +46,6 @@ impl SvcPending {
     pub(crate) fn len(&self) -> usize {
         self.pending.len()
     }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.pending.is_empty()
-    }
 }
 
 /// True only on the tick where the pending queue crosses the high-water
@@ -81,7 +77,7 @@ mod tests {
         let batch = q.take_batch(MAX_SVC_LINES_PER_TICK);
         assert_eq!(batch.len(), 1);
         assert_eq!(batch[0], "{\"n\":0}");
-        assert!(q.is_empty());
+        assert_eq!(q.len(), 0);
     }
 
     #[test]
@@ -90,7 +86,7 @@ mod tests {
         q.refill(lines(MAX_SVC_LINES_PER_TICK));
         let batch = q.take_batch(MAX_SVC_LINES_PER_TICK);
         assert_eq!(batch.len(), MAX_SVC_LINES_PER_TICK);
-        assert!(q.is_empty());
+        assert_eq!(q.len(), 0);
     }
 
     #[test]
@@ -104,7 +100,7 @@ mod tests {
         let second = q.take_batch(MAX_SVC_LINES_PER_TICK);
         assert_eq!(second.len(), 1);
         assert_eq!(second[0], "{\"n\":64}");
-        assert!(q.is_empty());
+        assert_eq!(q.len(), 0);
     }
 
     #[test]
@@ -123,7 +119,7 @@ mod tests {
             assert_eq!(*line, format!("{{\"n\":{i}}}"));
         }
         assert_eq!(seen.iter().collect::<std::collections::HashSet<_>>().len(), 129);
-        assert!(q.is_empty());
+        assert_eq!(q.len(), 0);
     }
 
     #[test]
@@ -137,7 +133,7 @@ mod tests {
         let rest = q.take_batch(MAX_SVC_LINES_PER_TICK);
         let joined: Vec<String> = rest.into_iter().collect();
         assert_eq!(joined, vec!["{\"n\":2}", "{\"n\":0}-late", "{\"n\":1}-late"]);
-        assert!(q.is_empty());
+        assert_eq!(q.len(), 0);
     }
 
     #[test]
@@ -146,7 +142,7 @@ mod tests {
         q.refill(lines(5));
         let batch = q.take_batch(MAX_SVC_LINES_PER_TICK);
         assert_eq!(batch.len(), 5);
-        assert!(q.is_empty());
+        assert_eq!(q.len(), 0);
     }
 
     #[test]

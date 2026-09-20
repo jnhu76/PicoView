@@ -15,6 +15,25 @@
 // must not spawn a black console. Debug builds keep a console for logging.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+// PRODUCT PLATFORM BOUNDARY (post-release normalization C6A).
+//
+// PicoView is a Windows 11 product. The native host is intentionally,
+// explicitly Windows-only: WIC decode, HKCU associations, Win32 resources,
+// and the Windows release packaging are product identity, not conditional
+// features. There is no non-Windows product path to maintain, so there are
+// no non-Windows stubs; a non-Windows build fails here, by declaration,
+// rather than with random missing-dependency errors.
+//
+// This does NOT reduce PocketJS portability: the shared
+// hosts/desktop + pocket-ui-wgpu desktop family stays upstream, and PicoView
+// Windows joins it as a consumer. See docs/RELEASE-WINDOWS.md and
+// docs/ARCHITECTURE.md ("Product platform boundary").
+#[cfg(not(windows))]
+compile_error!(
+    "PicoView native is a Windows-only product (release authority v0.1.0); \
+     the portable desktop host family lives in PocketJS itself."
+);
+
 use anyhow::{Context as _, Result, anyhow};
 use std::time::Instant;
 use winit::event_loop::EventLoop;

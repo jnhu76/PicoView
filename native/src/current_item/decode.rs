@@ -319,7 +319,6 @@ pub(super) fn prepare_for_admission(
     }
 }
 
-#[cfg(windows)]
 pub(super) mod wic {
     use super::{DecodedImage, OpenError, bounded, decode_alloc_len};
     use windows::Win32::Graphics::Imaging::{
@@ -528,15 +527,7 @@ pub(super) mod wic {
     }
 }
 
-#[cfg(windows)]
 use wic::decode_jpeg as decode_wic;
-
-#[cfg(not(windows))]
-fn decode_wic(_bytes: &[u8]) -> Result<DecodedImage, OpenError> {
-    Err(OpenError::Decode(
-        "WIC decode requires the Windows host".into(),
-    ))
-}
 
 /// Shared bounded-string helper used by decode error paths and publication
 /// svc event constructors. Lives here because OpenError.message already owns
