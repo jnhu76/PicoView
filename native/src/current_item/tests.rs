@@ -2,8 +2,9 @@
 //! `current_item.rs` module; only the import surface differs.
 
 use super::decode::{
-    DecodedImage, ImageAdmissionPolicy, MAX_ERROR_CHARS, OpenError, decode_alloc_len,
-    open_decoded, prepare_for_admission, proxy_resource_size, proxy_size_holds_policy, wic,
+    DecodedImage, ImageAdmissionPolicy, MAX_ENCODED_FILE_BYTES, MAX_ERROR_CHARS, OpenError,
+    admits_encoded_len, decode_alloc_len, metadata_error, open_decoded, prepare_for_admission,
+    proxy_resource_size, proxy_size_holds_policy, wic,
 };
 use super::publication::{
     BrowseSnapshot, ObservationBoundary, OpenIntent, RequestPhase, error_event, loading_event,
@@ -1388,3 +1389,33 @@ fn live_corpus_follows_installed_device_capability() {
 // decode_wic is cfg-gated; re-export for tests.
 #[cfg(windows)]
 use super::decode::wic::decode_wic;
+
+// --- Encoded-length admission boundary (corrective-1) ------------------------
+
+#[test]
+fn encoded_length_admission_boundary_is_limit_inclusive() {
+    // The predicate is testable without a 1 GiB fixture: it is pure over the
+    // byte length. limit-1 and the limit itself are admitted; limit+1 is
+    // rejected before any read/allocation happens.
+    assert!(admits_encoded_len(MAX_ENCODED_FILE_BYTES - 1));
+    assert!(admits_encoded_len(MAX_ENCODED_FILE_BYTES));
+    assert!(!admits_encoded_len(MAX_ENCODED_FILE_BYTES + 1));
+    // Far over the cap is rejected, and the two caps are independent: byte
+    // size and decoded pixel dimensions never imply each other.
+    assert!(!admits_encoded_len(u64::MAX));
+}
+
+#[test]
+fn metadata_error_maps_only_not_found_to_missing_path() {
+    use std::io::ErrorKind;
+    // A genuine not-found is the "path does not exist" category.
+    assert_eq!(
+        metadata_error(&std::io::Error::from(ErrorKind::NotFound)),
+        OpenError::MissingPath
+    );
+    // Any other I/O failure keeps its message under the readable-error
+    // category instead of masquerading as a missing file.
+    let denied = metadata_error(&std::io::Error::from(ErrorKind::PermissionDenied));
+    assert!(matches!(denied, OpenError::Open(_)));
+    assert!(!denied.message().is_empty());
+}

@@ -16,10 +16,39 @@
 /// CPU safety policy even when the GPU device can create larger textures.
 /// Do not delete this merely because adapter/device dimensions rise.
 pub(super) const MAX_DECODE_PIXELS: u64 = 80_000_000;
-/// Hard cap on encoded file size read into memory before decode. This bounds
-/// the transient CPU allocation when opening a file; actual pixel limits are
-/// enforced separately by MAX_DECODE_PIXELS after WIC reports dimensions.
+/// Hard cap on encoded file size read into memory before decode. Bounds the
+/// transient CPU allocation of holding the whole encoded file; it is
+/// INDEPENDENT of [`MAX_DECODE_PIXELS`], which bounds the decoded image
+/// plane. Two policies, two resources:
+/// - encoded-byte cap (this): bounds pre-decode file allocation (a small
+///   highly-compressed file is admitted even though it decodes large, and a
+///   huge barely-compressible file is rejected even though it would decode
+///   small);
+/// - decoded-pixel cap ([`MAX_DECODE_PIXELS`] / [`ImageAdmissionPolicy`]):
+///   bounds decoded image-plane allocation and decode work after WIC reports
+///   real frame dimensions.
+/// Neither limit implies the other; a file above the byte cap is rejected
+/// before decode regardless of its (unknown) pixel dimensions.
 pub(super) const MAX_ENCODED_FILE_BYTES: u64 = 1 << 30; // 1 GiB
+
+/// Pure encoded-length admission predicate: true when a file of `len` bytes
+/// may be read into memory for decode. Extracted so the admission boundary is
+/// testable without materializing a cap-sized fixture.
+pub(super) fn admits_encoded_len(len: u64) -> bool {
+    len <= MAX_ENCODED_FILE_BYTES
+}
+
+/// Pure mapping of a metadata-read failure to its Product error category.
+/// Only a genuine not-found result means "the path does not exist"; any other
+/// I/O failure (permission denied, device error, ...) keeps its message under
+/// the readable-error category instead of masquerading as a missing file.
+pub(super) fn metadata_error(error: &std::io::Error) -> OpenError {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        OpenError::MissingPath
+    } else {
+        OpenError::Open(error.to_string())
+    }
+}
 /// svc is a bounded-semantic channel; error strings are capped.
 pub(super) const MAX_ERROR_CHARS: usize = 200;
 
@@ -250,11 +279,11 @@ impl OpenError {
 }
 
 pub(super) fn open_decoded(path: &std::path::Path) -> Result<DecodedImage, OpenError> {
-    let meta = std::fs::metadata(path).map_err(|_| OpenError::MissingPath)?;
+    let meta = std::fs::metadata(path).map_err(|e| metadata_error(&e))?;
     if !meta.is_file() {
         return Err(OpenError::NotAFile);
     }
-    if meta.len() > MAX_ENCODED_FILE_BYTES {
+    if !admits_encoded_len(meta.len()) {
         return Err(OpenError::Open(format!(
             "encoded file too large ({} MiB, limit {} MiB)",
             meta.len() / (1024 * 1024),

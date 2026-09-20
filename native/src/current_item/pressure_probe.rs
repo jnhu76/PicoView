@@ -150,7 +150,7 @@ fn boot() -> anyhow::Result<Boot> {
     let guest = Guest::new()?;
     surface.feed_pak(&crate::assets::EMBEDDED_PAK);
     surface.mount(&guest)?;
-    let pak = crate::assets::EMBEDDED_PAK.clone();
+    let pak = crate::assets::EMBEDDED_PAK.to_vec();
     let offload = OffloadWorker::spawn(move || {
         let mut engine = pocket_text::Engine::new();
         engine.load_pak(&pak);

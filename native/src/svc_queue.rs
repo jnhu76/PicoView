@@ -12,10 +12,22 @@ use std::collections::VecDeque;
 /// storage and are processed on later ticks, in arrival order.
 pub(crate) const MAX_SVC_LINES_PER_TICK: usize = 64;
 
-/// Diagnostic high-water mark for the pending queue. Crossing it never
-/// drops anything; it only surfaces sustained queue growth in logs.
-/// True backpressure against a producer that outruns the budget is a
-/// decode-scheduling question, tracked separately from this retention fix.
+/// Diagnostic high-water mark for the pending queue. SvcPending storage is
+/// STRUCTURALLY UNBOUNDED: `refill` extends a `VecDeque` with no capacity
+/// limit, so this mark is not a hard capacity, not backpressure, and not a
+/// memory bound — crossing it never drops anything and never blocks the
+/// producer; it only surfaces sustained queue growth once per crossing.
+///
+/// Why unbounded retention is the accepted design: the only producer is the
+/// product's own guest, which emits at most one bounded-scalar command line
+/// per user input event (`guest/commands.ts` — `send()` is one `svcSend` per
+/// command; no loops emit svc), while this side consumes up to
+/// [`MAX_SVC_LINES_PER_TICK`] lines every 60 Hz tick. Sustained growth would
+/// require the trusted guest to systematically out-emit that budget, which
+/// its event-driven one-line-per-command protocol cannot do. Any drop or
+/// truncate policy would be worse: losing a user command is a correctness
+/// failure, while queue growth is only a memory symptom with a real product
+/// bound on its producer rate.
 pub(crate) const SVC_PENDING_HIGH_WATER: usize = 4096;
 
 /// Host-owned storage for guest→host service lines between the surface's

@@ -109,6 +109,12 @@ impl std::fmt::Display for FatalFailure {
     }
 }
 
+/// `FatalFailure` is a real error type, not a formatted string: implementing
+/// `Error` lets `anyhow` carry it as a downcast-able value, so the classified
+/// SITE survives the whole `Result`/`anyhow` path and `report_error` recovers
+/// the original classification by type — never by parsing strings.
+impl std::error::Error for FatalFailure {}
+
 /// The user-facing dialog content built from a failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FatalReport {
@@ -132,10 +138,13 @@ pub(crate) fn build_report(failure: &FatalFailure) -> FatalReport {
     }
 }
 
-/// Convert a classified failure into an `anyhow` error carrying the site tag
-/// and detail, so the process exit path keeps the same observable content.
+/// Convert a classified failure into an `anyhow` error that still IS the
+/// failure: `Error::new` keeps the concrete `FatalFailure` value, so the
+/// process exit path can recover the classified site by downcast — the
+/// classification made at the failure site is authoritative end-to-end and
+/// is never re-derived from a formatted string.
 pub(crate) fn failure_to_anyhow(failure: FatalFailure) -> anyhow::Error {
-    anyhow::anyhow!("{failure}")
+    anyhow::Error::new(failure)
 }
 
 /// Report a fatal error to the user (and the log). Called once from `main`
@@ -249,5 +258,78 @@ mod tests {
     fn display_carries_site_tag_for_logs() {
         let failure = FatalFailure::new(FatalSite::WindowCreation, "access denied");
         assert_eq!(failure.to_string(), "[window-creation] access denied");
+    }
+
+    // --- Typed error round-trip (corrective-1) ------------------------------
+    //
+    // These tests exercise the ACTUAL error conversion path used by
+    // `report_error` — `failure_to_anyhow` → (downcast in)
+    // `fatal_failure_from_error` → `build_report` — not `build_report` alone.
+    // `show_dialog` is the only step excluded (a blocking native message box).
+
+    /// The classification half of `report_error` with the dialog removed.
+    fn report_from_error(error: &anyhow::Error) -> FatalReport {
+        build_report(&fatal_failure_from_error(error))
+    }
+
+    #[test]
+    fn gpu_failure_survives_the_anyhow_round_trip() {
+        let failure = FatalFailure::new(FatalSite::GpuInit, "adapter request failed");
+        let error = failure_to_anyhow(failure.clone());
+        let recovered = fatal_failure_from_error(&error);
+        assert_eq!(recovered, failure);
+        assert_eq!(recovered.site, FatalSite::GpuInit);
+    }
+
+    #[test]
+    fn every_site_survives_the_anyhow_round_trip() {
+        for site in [
+            FatalSite::WindowCreation,
+            FatalSite::GpuInit,
+            FatalSite::RuntimeWorker,
+            FatalSite::RuntimeChannel,
+            FatalSite::Presentation,
+            FatalSite::ThreadSpawn,
+            FatalSite::Configuration,
+            FatalSite::Windowing,
+            FatalSite::InternalState,
+        ] {
+            let failure = FatalFailure::new(site, format!("detail for {site:?}"));
+            let error = failure_to_anyhow(failure.clone());
+            let recovered = fatal_failure_from_error(&error);
+            assert_eq!(recovered.site, site, "site {site:?} lost its classification");
+            assert_eq!(recovered.detail, failure.detail);
+        }
+    }
+
+    #[test]
+    fn unknown_error_falls_back_to_runtime_worker() {
+        let error = anyhow::anyhow!("ordinary non-fatal failure: no such file");
+        let recovered = fatal_failure_from_error(&error);
+        assert_eq!(recovered.site, FatalSite::RuntimeWorker);
+        assert!(recovered.detail.contains("no such file"));
+    }
+
+    #[test]
+    fn gpu_round_trip_report_keeps_driver_recovery_text() {
+        let error = failure_to_anyhow(FatalFailure::new(
+            FatalSite::GpuInit,
+            "adapter request failed",
+        ));
+        let report = report_from_error(&error);
+        assert!(report.summary.contains("GPU"));
+        assert!(report.summary.to_lowercase().contains("driver"));
+    }
+
+    #[test]
+    fn configuration_round_trip_keeps_configuration_site() {
+        let error = failure_to_anyhow(FatalFailure::new(
+            FatalSite::Configuration,
+            "unknown flag --bogus",
+        ));
+        let recovered = fatal_failure_from_error(&error);
+        assert_eq!(recovered.site, FatalSite::Configuration);
+        let report = report_from_error(&error);
+        assert!(report.summary.contains("invalid option"));
     }
 }

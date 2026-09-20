@@ -73,8 +73,8 @@ fn icon_value_for(exe: &str) -> String {
 /// Ownership guard for unregister: the extension DEFAULT value may only be
 /// cleared when it currently IS our ProgID. Another program's default (or a
 /// missing value) is never touched — clearing a foreign default would be a
-/// takeover in reverse.
-#[cfg(test)]
+/// takeover in reverse. This is the single source of the ownership rule: the
+/// production delete path evaluates the same predicate the tests pin.
 fn may_clear_extension_default(current: Option<&str>) -> bool {
     current == Some(PROG_ID)
 }
@@ -257,7 +257,10 @@ unsafe fn delete_value_if_ours(path: &str) {
         if q == ERROR_SUCCESS && ty == REG_SZ {
             let units = (len as usize / 2).saturating_sub(1);
             let value = String::from_utf16_lossy(&buf[..units]);
-            if value == PROG_ID {
+            // Same predicate the unit tests pin (may_clear_extension_default):
+            // a query failure, a non-string value, or a foreign ProgID all
+            // read as "not ours" and are left untouched.
+            if may_clear_extension_default(Some(&value)) {
                 let _ = RegSetValueExW(key, PCWSTR::null(), Some(0), REG_SZ, Some(&[]));
             }
         }
@@ -323,7 +326,9 @@ mod tests {
 
     #[test]
     fn ownership_guard_never_clears_a_foreign_default() {
-        // Ours: clear. Foreign/absent: leave untouched.
+        // This pins the exact predicate the production delete path consumes
+        // (delete_value_if_ours calls may_clear_extension_default): ours ->
+        // clear; foreign/absent -> leave untouched. No registry is touched.
         assert!(may_clear_extension_default(Some("PicoView.Image")));
         assert!(!may_clear_extension_default(Some("OtherApp.Image")));
         assert!(!may_clear_extension_default(None));
