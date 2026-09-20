@@ -16,8 +16,16 @@
 // framework in framework-binding.test.ts).
 import { expect, test } from "bun:test";
 import { displayVerdict, initialObserverState, type SvcLine } from "./observer.ts";
-import { textureKeyFor, reconcileBinding, type BoundPublication } from "./binding.ts";
+import { TEXTURE_KEY, textureKeyFor, reconcileBinding, type BoundPublication } from "./binding.ts";
 import { runGuestTurn, type GuestTurnState } from "./turn.ts";
+
+test("TEXTURE_KEY stays the shared wire literal (native pins the same constant)", () => {
+  // Native carries TEXTURE_KEY_HINT = "picoview-current"
+  // (native/src/current_item/mod.rs + its own test). The two constants are
+  // one wire contract; each language pins its own literal instead of a
+  // cross-language source-text grep.
+  expect(TEXTURE_KEY).toBe("picoview-current");
+});
 
 function ready(g: number, handle: number, w = 100, h = 100, name = "a.jpg"): SvcLine {
   return { t: "current-item", status: "ready", g, handle, width: w, height: h, name };

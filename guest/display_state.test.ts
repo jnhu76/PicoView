@@ -10,23 +10,7 @@ import { expect, test } from "bun:test";
 import { initialObserverState, reduceObserver, type SvcLine } from "./observer.ts";
 import { initialViewTransform } from "./view_transform.ts";
 import { deriveDisplayState } from "./display_state.ts";
-
-function ready(g: number, handle: number, sw: number, sh: number, rw?: number, rh?: number, name = "a.jpg") {
-  const resourceW = rw ?? sw;
-  const resourceH = rh ?? sh;
-  return {
-    t: "current-item",
-    status: "ready",
-    g,
-    handle,
-    sourceWidth: sw,
-    sourceHeight: sh,
-    resourceWidth: resourceW,
-    resourceHeight: resourceH,
-    fullResolution: sw === resourceW && sh === resourceH,
-    name,
-  };
-}
+import { svcReady as ready } from "./test_support.ts";
 
 function reduce(state: ReturnType<typeof initialObserverState>, line: SvcLine) {
   return reduceObserver(state, line);

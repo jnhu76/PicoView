@@ -13,35 +13,9 @@ import {
   reduceObserver,
   type ObserverState,
 } from "./observer.ts";
-
-function ready(g: number, handle: number, sw: number, sh: number, rw?: number, rh?: number, name = "a.jpg") {
-  const resourceW = rw ?? sw;
-  const resourceH = rh ?? sh;
-  return {
-    t: "current-item",
-    status: "ready",
-    g,
-    handle,
-    sourceWidth: sw,
-    sourceHeight: sh,
-    resourceWidth: resourceW,
-    resourceHeight: resourceH,
-    fullResolution: sw === resourceW && sh === resourceH,
-    name,
-  };
-}
-function loading(g: number, intent: "new-item" | "refresh", name = "b.jpg") {
-  return { t: "current-item", status: "loading", g, intent, name };
-}
-function error(g: number, intent: "new-item" | "refresh", errorMsg = "could not decode image") {
-  return { t: "current-item", status: "error", g, intent, error: errorMsg };
-}
-
-function fold(...events: ReturnType<typeof ready | typeof loading | typeof error>[]): ObserverState {
-  let state = initialObserverState();
-  for (const v of events) state = reduceObserver(state, v);
-  return state;
-}
+// Shared svc-line builders live in test_support.ts (C7 fixture dedup);
+// they are imported under the original local names below.
+import { fold, svcError as error, svcLoading as loading, svcReady as ready } from "./test_support.ts";
 
 test("initial open success publishes and clears the request", () => {
   const s = fold(loading(1, "new-item", "a.jpg"), ready(1, 11, 1920, 1080));

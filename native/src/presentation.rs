@@ -26,6 +26,127 @@ use std::sync::Arc;
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const FRAME_TARGETS: usize = 3;
 
+// --- PicoView-owned present-path policy (pure, unit-testable, C7) ---------
+//
+// These helpers carry the decisions PicoView owns on the present path. They
+// are extracted as pure functions so the policy is directly testable without
+// a GPU; production `present()` / `acquire_target()` call them.
+
+/// Retained-target pool decision for one acquire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PoolDecision {
+    /// The pool's generation differs from the requested size: clear first.
+    Reset,
+    /// Reuse the free target at this index (no live lease holds it).
+    Reuse(usize),
+    /// Allocate one more target (pool is under its bounded cap).
+    Create,
+    /// Every target is leased and the pool is at cap: bounded backpressure.
+    Backpressure,
+}
+
+/// True when the retained pool was built for a different size generation.
+fn pool_needs_reset(frame_sizes: &[(u32, u32)], size: (u32, u32)) -> bool {
+    frame_sizes.first().is_some_and(|first| *first != size)
+}
+
+/// Which free (strong_count == 1) slot to reuse, scanning FIFO order.
+fn free_slot(strong_counts: &[usize]) -> Option<usize> {
+    strong_counts.iter().position(|count| *count == 1)
+}
+
+fn acquire_decision(
+    frame_sizes: &[(u32, u32)],
+    strong_counts: &[usize],
+    size: (u32, u32),
+    cap: usize,
+) -> PoolDecision {
+    if pool_needs_reset(frame_sizes, size) {
+        return PoolDecision::Reset;
+    }
+    match free_slot(strong_counts) {
+        Some(index) => PoolDecision::Reuse(index),
+        None if strong_counts.len() < cap => PoolDecision::Create,
+        None => PoolDecision::Backpressure,
+    }
+}
+
+/// Acquire-error recovery: Lost/Outdated means the swapchain no longer
+/// matches (reconfigure + redraw); Timeout means this frame is late (redraw,
+/// no reconfigure); anything else is fatal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcquireRecovery {
+    ReconfigureRedraw,
+    Redraw,
+    Fatal,
+}
+
+fn acquire_recovery(error: &wgpu::SurfaceError) -> AcquireRecovery {
+    match error {
+        wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated => AcquireRecovery::ReconfigureRedraw,
+        wgpu::SurfaceError::Timeout => AcquireRecovery::Redraw,
+        _ => AcquireRecovery::Fatal,
+    }
+}
+
+/// Present-path reconfigure policy state.
+///
+/// The AMD first-present workaround is a BOUNDED ONE-SHOT: AMD Vulkan driver
+/// 25.8.1 (evidence machine) has a state-dependent defect where the first
+/// swapchain created on a freshly shown window reports presents as submitted
+/// while DWM never composites them — the window stays blank and nothing
+/// (present result, OUT_OF_DATE, SUBOPTIMAL) reports the failure. Recreating
+/// the swapchain recovers. One-shot reconfigure immediately before the first
+/// present; event-shaped, no timers. Product/platform workaround — not a
+/// generic PocketJS rule. See
+/// docs/history/mvp-2026-09/PICOVIEW-V1-OPEN-ONE-IMAGE-1-EVIDENCE.md §7.
+/// The flag is consumed exactly once, on the first present, and never
+/// re-arms; afterwards the only reconfigure trigger is a measured
+/// client-size change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PresentPolicy {
+    first_present_reconfigure: bool,
+    configured_size: (u32, u32),
+}
+
+impl PresentPolicy {
+    fn new(initial_size: (u32, u32)) -> Self {
+        Self {
+            first_present_reconfigure: true,
+            configured_size: initial_size,
+        }
+    }
+
+    /// One-shot consumption on the first present; live-size change
+    /// afterwards. Returns true when the swapchain must reconfigure.
+    fn begin_present(&mut self, live: (u32, u32)) -> bool {
+        if self.first_present_reconfigure {
+            self.first_present_reconfigure = false;
+            return true;
+        }
+        if self.configured_size != live {
+            self.configured_size = live;
+            return true;
+        }
+        false
+    }
+}
+
+/// Blit-cache identity policy: entries keyed by Weak target identity; dead
+/// targets are pruned before lookup; a live identity match reuses its entry;
+/// no match ⇒ the caller inserts. Generic over the entry payload so tests
+/// can drive the exact identity semantics without a GPU.
+fn blit_cache_position<K, E>(
+    entries: &mut Vec<(std::sync::Weak<K>, E)>,
+    key: &std::sync::Weak<K>,
+    alive: impl Fn(&std::sync::Weak<K>) -> bool,
+) -> Option<usize> {
+    entries.retain(|(entry_key, _)| alive(entry_key));
+    entries
+        .iter()
+        .position(|(entry_key, _)| std::sync::Weak::ptr_eq(entry_key, key))
+}
+
 pub struct Target {
     pub _texture: wgpu::Texture,
     pub view: wgpu::TextureView,
@@ -77,22 +198,32 @@ impl Renderer {
         }
     }
     fn acquire_target(&mut self, size: (u32, u32)) -> Result<Option<Arc<Target>>> {
-        if self.frames.first().is_some_and(|frame| frame.size != size) {
-            self.frames.clear();
+        let decision = acquire_decision(
+            &self.frames.iter().map(|frame| frame.size).collect::<Vec<_>>(),
+            &self
+                .frames
+                .iter()
+                .map(|frame| Arc::strong_count(frame))
+                .collect::<Vec<_>>(),
+            size,
+            FRAME_TARGETS,
+        );
+        match decision {
+            PoolDecision::Reset => {
+                self.frames.clear();
+                self.frames.push(Arc::new(Target::new(&self.gpu, size)?));
+                let index = self.frames.len() - 1;
+                Ok(Some(self.frames[index].clone()))
+            }
+            PoolDecision::Reuse(index) => Ok(Some(self.frames[index].clone())),
+            PoolDecision::Create => {
+                self.frames.push(Arc::new(Target::new(&self.gpu, size)?));
+                let index = self.frames.len() - 1;
+                Ok(Some(self.frames[index].clone()))
+            }
+            // Bounded backpressure; the next tick supplies the latest state.
+            PoolDecision::Backpressure => Ok(None),
         }
-        let index = if let Some(i) = self
-            .frames
-            .iter()
-            .position(|frame| Arc::strong_count(frame) == 1)
-        {
-            i
-        } else if self.frames.len() < FRAME_TARGETS {
-            self.frames.push(Arc::new(Target::new(&self.gpu, size)?));
-            self.frames.len() - 1
-        } else {
-            return Ok(None); // bounded backpressure; the next tick supplies the latest state
-        };
-        Ok(Some(self.frames[index].clone()))
     }
     /// A target remains leased until presentation has submitted its sampling
     /// commands. Shared queue ordering then makes reuse safe without readback
@@ -144,15 +275,8 @@ pub struct Presentation {
     config: wgpu::SurfaceConfiguration,
     /// Cached Exact+Transient blit pair per retained Target (R1 Corrective B).
     blits: Vec<(std::sync::Weak<Target>, BlitSet)>,
-    /// AMD Vulkan driver 25.8.1 (this machine) has a state-dependent defect
-    /// where the first swapchain created on a freshly shown window reports
-    /// presents as submitted while DWM never composites them — the window
-    /// stays blank and nothing (present result, OUT_OF_DATE, SUBOPTIMAL)
-    /// reports the failure. Recreating the swapchain recovers. One-shot
-    /// reconfigure immediately before the first present; event-shaped, no
-    /// timers. Product/platform workaround — not a generic PocketJS rule.
-    /// See docs/PICOVIEW-V1-OPEN-ONE-IMAGE-1-EVIDENCE.md §7.
-    reconfigure_before_first_present: bool,
+    /// Present-path reconfigure policy (AMD one-shot + live-size tracking).
+    policy: PresentPolicy,
 }
 impl Presentation {
     pub fn new(window: Arc<winit::window::Window>) -> Result<Self> {
@@ -197,12 +321,13 @@ impl Presentation {
             "surface created+configured {}x{} ({info:?}, present Fifo, latency 1)",
             config.width, config.height
         ));
+        let policy = PresentPolicy::new((config.width, config.height));
         Ok(Self {
             gpu,
             surface,
             config,
             blits: Vec::new(),
-            reconfigure_before_first_present: true,
+            policy,
         })
     }
     pub fn present(
@@ -215,18 +340,13 @@ impl Presentation {
         if size.width == 0 || size.height == 0 {
             return Ok(false);
         }
-        if self.reconfigure_before_first_present {
-            self.reconfigure_before_first_present = false;
-            crate::tlog("first-present recovery: reconfigure swapchain");
-            self.surface.configure(&self.gpu.device, &self.config);
-        }
-        if (self.config.width, self.config.height) != (size.width, size.height) {
-            crate::tlog(&format!(
-                "surface reconfigure {}x{} -> {}x{}",
-                self.config.width, self.config.height, size.width, size.height
-            ));
-            self.config.width = size.width;
-            self.config.height = size.height;
+        let live = (size.width, size.height);
+        // One-shot AMD first-present recovery, then live-size reconfigures
+        // (see PresentPolicy and the struct Presentation docs above).
+        if self.policy.begin_present(live) {
+            crate::tlog("present reconfigure: policy requested it (first-present one-shot or size change)");
+            self.config.width = live.0;
+            self.config.height = live.1;
             self.surface.configure(&self.gpu.device, &self.config);
         }
         let swapchain = (self.config.width, self.config.height);
@@ -244,29 +364,37 @@ impl Presentation {
         ));
         let output = match self.surface.get_current_texture() {
             Ok(output) => output,
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+            Err(error @ (wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated)) => {
                 crate::tlog("acquire failed (Lost/Outdated) -> reconfigure + redraw");
+                debug_assert_eq!(
+                    acquire_recovery(&error),
+                    AcquireRecovery::ReconfigureRedraw
+                );
                 self.surface.configure(&self.gpu.device, &self.config);
                 window.request_redraw();
                 return Ok(false);
             }
-            Err(wgpu::SurfaceError::Timeout) => {
+            Err(error @ wgpu::SurfaceError::Timeout) => {
                 crate::tlog("acquire failed (Timeout) -> redraw");
+                debug_assert_eq!(acquire_recovery(&error), AcquireRecovery::Redraw);
                 window.request_redraw();
                 return Ok(false);
             }
-            Err(error) => return Err(error.into()),
+            Err(error) => {
+                debug_assert_eq!(acquire_recovery(&error), AcquireRecovery::Fatal);
+                return Err(error.into());
+            }
         };
         // Weak identities retain bind groups without leasing a frame from the
-        // worker's bounded pool. Rebuild only when the pool changes on resize.
-        // Filter policy is selected per present from live sizes — not frozen.
-        self.blits.retain(|(frame, _)| frame.strong_count() > 0);
-        let key = Arc::downgrade(target);
-        let index = match self
-            .blits
-            .iter()
-            .position(|(frame, _)| std::sync::Weak::ptr_eq(frame, &key))
-        {
+        // worker's bounded pool. Prune dead targets, reuse the entry for this
+        // target identity, insert only for a new identity (see
+        // blit_cache_position). Filter policy is selected per present from
+        // live sizes — not frozen.
+        let key = std::sync::Arc::downgrade(target);
+        let index = blit_cache_position(&mut self.blits, &key, |entry| {
+            entry.strong_count() > 0
+        });
+        let index = match index {
             Some(index) => index,
             None => {
                 let blits = BlitSet::new(&self.gpu, &target.view, self.config.format, false);
@@ -414,5 +542,133 @@ mod tests {
         assert_eq!(a, b);
         let resized = PresentationGeometry::from_live((1200, 800), (1200, 800), 1.0);
         assert_ne!(a, RenderSignature::from_geometry(1, 2, resized));
+    }
+
+    // --- PicoView-owned present-path policy (C7) --------------------------
+
+    use super::{
+        AcquireRecovery, PoolDecision, PresentPolicy, acquire_decision, acquire_recovery,
+        blit_cache_position, free_slot, pool_needs_reset,
+    };
+
+    #[test]
+    fn pool_resets_only_on_size_generation_change() {
+        assert!(pool_needs_reset(&[(960, 640)], (1200, 800)));
+        assert!(!pool_needs_reset(&[(960, 640), (960, 640)], (960, 640)));
+        assert!(!pool_needs_reset(&[], (960, 640)));
+    }
+
+    #[test]
+    fn pool_reuses_a_free_slot_and_never_a_leased_one() {
+        let counts = [1, 2, 1];
+        assert_eq!(free_slot(&counts), Some(0));
+        assert_eq!(free_slot(&[2, 2]), None);
+        // Strong count 1 means the pool is the only owner (unleased);
+        // count 2 means presentation still holds the lease.
+        assert_eq!(
+            acquire_decision(&[(960, 640); 3], &[2, 2, 1], (960, 640), 3),
+            PoolDecision::Reuse(2)
+        );
+    }
+
+    #[test]
+    fn pool_creates_under_cap_and_applies_backpressure_at_cap() {
+        assert_eq!(
+            acquire_decision(&[(960, 640)], &[2], (960, 640), 3),
+            PoolDecision::Create
+        );
+        assert_eq!(
+            acquire_decision(&[(960, 640); 3], &[2, 2, 2], (960, 640), 3),
+            PoolDecision::Backpressure
+        );
+    }
+
+    #[test]
+    fn pool_reset_decision_wins_over_reuse_and_create() {
+        assert_eq!(
+            acquire_decision(&[(960, 640); 3], &[1, 1, 1], (1200, 800), 3),
+            PoolDecision::Reset
+        );
+    }
+
+    #[test]
+    fn acquire_error_recovery_classes() {
+        assert_eq!(
+            acquire_recovery(&wgpu::SurfaceError::Lost),
+            AcquireRecovery::ReconfigureRedraw
+        );
+        assert_eq!(
+            acquire_recovery(&wgpu::SurfaceError::Outdated),
+            AcquireRecovery::ReconfigureRedraw
+        );
+        assert_eq!(
+            acquire_recovery(&wgpu::SurfaceError::Timeout),
+            AcquireRecovery::Redraw
+        );
+        assert_eq!(
+            acquire_recovery(&wgpu::SurfaceError::OutOfMemory),
+            AcquireRecovery::Fatal
+        );
+        assert_eq!(
+            acquire_recovery(&wgpu::SurfaceError::Other),
+            AcquireRecovery::Fatal
+        );
+    }
+
+    #[test]
+    fn amd_first_present_reconfigure_is_a_bounded_one_shot() {
+        let mut policy = PresentPolicy::new((960, 640));
+        // First present: one-shot consumed exactly once.
+        assert!(policy.begin_present((960, 640)));
+        assert!(!policy.begin_present((960, 640)));
+        assert!(!policy.begin_present((960, 640)));
+        // Never re-arms, even after size changes (those reconfigure through
+        // the live-size path instead).
+        assert!(policy.begin_present((1200, 800)));
+        assert!(!policy.begin_present((1200, 800)));
+        assert!(!policy.begin_present((1200, 800)));
+    }
+
+    #[test]
+    fn reconfigure_tracks_measured_client_size_after_the_one_shot() {
+        let mut policy = PresentPolicy::new((960, 640));
+        assert!(policy.begin_present((960, 640)));
+        assert!(policy.begin_present((1920, 1080)));
+        assert!(!policy.begin_present((1920, 1080)));
+        assert!(policy.begin_present((1280, 720)));
+        assert!(!policy.begin_present((1280, 720)));
+    }
+
+    #[test]
+    fn blit_cache_prunes_dead_identities_and_reuses_live_ones() {
+        use std::sync::{Arc, Weak};
+        let a = Arc::new(());
+        let b = Arc::new(());
+        let mut entries: Vec<(Weak<()>, u32)> = vec![
+            (Arc::downgrade(&a), 10),
+            (Arc::downgrade(&b), 20),
+        ];
+        drop(a); // first identity is dead now
+
+        let lookup_dead_only = Arc::new(());
+        // Prune removes the dead entry; a foreign live key does not match.
+        let key = Arc::downgrade(&b);
+        assert_eq!(
+            blit_cache_position(&mut entries, &key, |k| k.strong_count() > 0),
+            Some(0)
+        );
+        assert_eq!(entries.len(), 1, "dead identity pruned before lookup");
+        let foreign = Arc::downgrade(&lookup_dead_only);
+        assert_eq!(
+            blit_cache_position(&mut entries, &foreign, |k| k.strong_count() > 0),
+            None,
+            "no match ⇒ caller inserts a new entry"
+        );
+        // Pointer identity, not value equality: the unit payload (10/20) is
+        // irrelevant to identity.
+        assert_eq!(
+            blit_cache_position(&mut entries, &key, |k| k.strong_count() > 0),
+            Some(0)
+        );
     }
 }

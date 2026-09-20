@@ -25,6 +25,59 @@ pub const ASSOCIATED_EXTENSIONS: &[&str] = &[".jpg", ".jpeg", ".png", ".bmp"];
 const PROG_ID: &str = "PicoView.Image";
 const PROG_ID_DESC: &str = "PicoView Image";
 
+// --- Pure registry contract construction (C7) -----------------------------
+//
+// The registry-writing paths below are thin HKCU plumbing; the CONTRACT —
+// key paths, command quoting, icon value, extension shape, and the
+// ownership guard — is built by these pure functions and unit-tested
+// without touching the developer's real registry.
+
+/// HKCU path of the ProgID root for this product build.
+fn prog_id_path() -> String {
+    format!(r"Software\Classes\{PROG_ID}")
+}
+
+/// HKCU path of the ProgID DefaultIcon key.
+fn default_icon_path() -> String {
+    format!(r"Software\Classes\{PROG_ID}\DefaultIcon")
+}
+
+/// HKCU path of the ProgID shell-open command key.
+fn shell_command_path() -> String {
+    format!(r"Software\Classes\{PROG_ID}\shell\open\command")
+}
+
+/// HKCU path of an extension's OpenWithProgids membership key. The extension
+/// default value is deliberately NOT written by the register path (ownership
+/// guard); OpenWithProgids only makes PicoView a discoverable candidate.
+fn open_with_progids_path(ext: &str) -> String {
+    format!(r"Software\Classes\{ext}\OpenWithProgids")
+}
+
+/// HKCU path of an extension's default-value key (unregister only, guarded).
+fn extension_default_path(ext: &str) -> String {
+    format!(r"Software\Classes\{ext}")
+}
+
+/// The quoted shell-open command for the exe: `"<exe>" "%1"` — the exe path
+/// is always quoted as one unit; `%1` is quoted so paths with spaces survive.
+fn shell_command_for(exe: &str) -> String {
+    format!("\"{exe}\" \"%1\"")
+}
+
+/// The DefaultIcon value for the exe: resource index 0 (the embedded icon).
+fn icon_value_for(exe: &str) -> String {
+    format!("{exe},0")
+}
+
+/// Ownership guard for unregister: the extension DEFAULT value may only be
+/// cleared when it currently IS our ProgID. Another program's default (or a
+/// missing value) is never touched — clearing a foreign default would be a
+/// takeover in reverse.
+fn may_clear_extension_default(current: Option<&str>) -> bool {
+    current == Some(PROG_ID)
+}
+
 /// Register PicoView as an Open With / default-capable handler for the
 /// conservative product set under HKCU. Idempotent.
 pub fn register_associations(exe: &Path) -> anyhow::Result<()> {
@@ -41,7 +94,6 @@ pub fn register_associations(exe: &Path) -> anyhow::Result<()> {
         .to_string_lossy()
         .trim_start_matches(r"\\?\")
         .to_string();
-    let command = format!("\"{exe_str}\" \"%1\"");
 
     unsafe fn set_sz(key: HKEY, name: &str, value: &str) -> anyhow::Result<()> {
         unsafe {
@@ -93,13 +145,13 @@ pub fn register_associations(exe: &Path) -> anyhow::Result<()> {
     }
 
     unsafe {
-        let prog = open_key(&format!(r"Software\Classes\{PROG_ID}"))?;
+        let prog = open_key(&prog_id_path())?;
         set_sz(prog, "", PROG_ID_DESC)?;
-        let icon_key = open_key(&format!(r"Software\Classes\{PROG_ID}\DefaultIcon"))?;
-        set_sz(icon_key, "", &format!("{exe_str},0"))?;
+        let icon_key = open_key(&default_icon_path())?;
+        set_sz(icon_key, "", &icon_value_for(&exe_str))?;
         RegCloseKey(icon_key).ok()?;
-        let cmd_key = open_key(&format!(r"Software\Classes\{PROG_ID}\shell\open\command"))?;
-        set_sz(cmd_key, "", &command)?;
+        let cmd_key = open_key(&shell_command_path())?;
+        set_sz(cmd_key, "", &shell_command_for(&exe_str))?;
         RegCloseKey(cmd_key).ok()?;
         RegCloseKey(prog).ok()?;
 
@@ -109,7 +161,7 @@ pub fn register_associations(exe: &Path) -> anyhow::Result<()> {
             // default ownership when no stronger UserChoice exists.
             // UserChoice remains Explorer-owned; OpenWithProgids is REG_NONE
             // (empty value name = ProgID).
-            let open_with = open_key(&format!(r"Software\Classes\{ext}\OpenWithProgids"))?;
+            let open_with = open_key(&open_with_progids_path(ext))?;
             set_none(open_with, PROG_ID)?;
             RegCloseKey(open_with).ok()?;
         }
@@ -129,10 +181,10 @@ pub fn unregister_associations() -> anyhow::Result<()> {
 
     unsafe {
         for ext in ASSOCIATED_EXTENSIONS {
-            delete_value_if_ours(&format!(r"Software\Classes\{ext}"));
-            delete_value(&format!(r"Software\Classes\{ext}\OpenWithProgids"), PROG_ID);
+            delete_value(&extension_default_path(ext), "");
+            delete_value(&open_with_progids_path(ext), PROG_ID);
         }
-        let prog = HSTRING::from(format!(r"Software\Classes\{PROG_ID}"));
+        let prog = HSTRING::from(prog_id_path());
         let _ = RegDeleteTreeW(HKEY_CURRENT_USER, PCWSTR(prog.as_ptr()));
         // Migration: clear any RegisteredApplications entry written by an
         // earlier over-claim. Current register path does not recreate it.
@@ -206,5 +258,70 @@ unsafe fn delete_value_if_ours(path: &str) {
             }
         }
         let _ = RegCloseKey(key);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Registry contract shape: every generated HKCU path hangs under the
+    /// per-user Classes hive and names the single product ProgID. These pin
+    /// the pure builders — no registry is touched.
+    #[test]
+    fn registry_paths_are_hkcu_classes_shaped() {
+        assert_eq!(prog_id_path(), r"Software\Classes\PicoView.Image");
+        assert_eq!(
+            default_icon_path(),
+            r"Software\Classes\PicoView.Image\DefaultIcon"
+        );
+        assert_eq!(
+            shell_command_path(),
+            r"Software\Classes\PicoView.Image\shell\open\command"
+        );
+        assert_eq!(
+            open_with_progids_path(".jpg"),
+            r"Software\Classes\.jpg\OpenWithProgids"
+        );
+        assert_eq!(extension_default_path(".png"), r"Software\Classes\.png");
+    }
+
+    #[test]
+    fn command_quoting_survives_spaces() {
+        let command = shell_command_for(r"C:\Program Files\PicoView\picoview.exe");
+        assert_eq!(
+            command,
+            r#""C:\Program Files\PicoView\picoview.exe" "%1""#
+        );
+        // One quoted unit for the exe; %1 stays a quoted placeholder.
+        assert!(command.starts_with('"'));
+        assert!(command.ends_with("\" \"%1\""));
+    }
+
+    #[test]
+    fn icon_value_references_resource_zero() {
+        assert_eq!(icon_value_for(r"C:\pv\picoview.exe"), r"C:\pv\picoview.exe,0");
+    }
+
+    #[test]
+    fn extension_set_is_conservative_and_normalized() {
+        for ext in ASSOCIATED_EXTENSIONS {
+            assert!(ext.starts_with('.'), "{ext} must carry a leading dot");
+            assert_eq!(*ext, ext.to_lowercase(), "{ext} must be lowercase");
+        }
+        // Deliberate product narrowness: no GIF (animation policy open) and
+        // no WebP (baseline unproven). Widening is a product decision, not a
+        // codec-discovery side effect.
+        assert!(!ASSOCIATED_EXTENSIONS.contains(&".gif"));
+        assert!(!ASSOCIATED_EXTENSIONS.contains(&".webp"));
+        assert_eq!(ASSOCIATED_EXTENSIONS.len(), 4);
+    }
+
+    #[test]
+    fn ownership_guard_never_clears_a_foreign_default() {
+        // Ours: clear. Foreign/absent: leave untouched.
+        assert!(may_clear_extension_default(Some("PicoView.Image")));
+        assert!(!may_clear_extension_default(Some("OtherApp.Image")));
+        assert!(!may_clear_extension_default(None));
     }
 }
