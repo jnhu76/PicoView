@@ -28,6 +28,12 @@ use winit::event_loop::EventLoopProxy;
 const HOST_ID: &str = "windows-app";
 const HOST_ABI: u32 = 4;
 
+/// Worker tick cadence: the guest frame/svc cadence the runtime keeps.
+/// Named budget (C5); presentation coalescing relies on this staying a
+/// 60 Hz-class cadence.
+const WORKER_TICK_HZ: u64 = 60;
+const WORKER_TICK_PERIOD: Duration = Duration::from_nanos(1_000_000_000 / WORKER_TICK_HZ);
+
 #[derive(Debug)]
 pub(crate) enum Wake {
     Output,
@@ -52,7 +58,9 @@ pub(crate) fn parse_args() -> Result<Args> {
     let mut js: Option<PathBuf> = None;
     let mut pak: Option<PathBuf> = None;
     let mut title = "PicoView".to_string();
-    let mut viewport = (960u32, 640u32);
+    // Product default viewport derives from guest/pocket.json (build.rs);
+    // Host.viewport is only the initial/default requested logical size.
+    let mut viewport = crate::product_facts::default_viewport();
     let mut density = 2u32;
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
@@ -385,6 +393,9 @@ impl Runtime {
                         "scale":self.geometry.effective_render_scale(),
                         "physical_w":self.geometry.physical_w,
                         "physical_h":self.geometry.physical_h,
+                        // Single owner of the notches→logical-units factor:
+                        // the guest consumes host truth instead of a copy.
+                        "notch":crate::app::WHEEL_NOTCH_LOGICAL,
                     })
                     .to_string(),
                 );
@@ -584,7 +595,7 @@ pub(crate) fn run_runtime(
                 Err(_) => return Ok(()),
             }
         }
-        deadline += Duration::from_nanos(1_000_000_000 / 60);
+        deadline += WORKER_TICK_PERIOD;
         if let Some(wait) = deadline.checked_duration_since(Instant::now()) {
             std::thread::sleep(wait);
         } else {

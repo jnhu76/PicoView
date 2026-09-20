@@ -10,6 +10,7 @@ import {
   setActiveNode,
 } from "@pocketjs/framework/input";
 import {
+  DEFAULT_WHEEL_NOTCH,
   initialObserverState,
   type ObserverState,
 } from "./observer.ts";
@@ -297,13 +298,14 @@ export default function App() {
 
     // --- wheel zoom (coalesce high-res deltas; MAJOR-B anchor) ---
     if (canImage) {
+      // Host-owned notch conversion (C5): the resize line carries the
+      // host's notches→logical-units factor; the guest never hardcodes it.
+      const NOTCH = item.current.viewport?.notch ?? DEFAULT_WHEEL_NOTCH;
       let acc = wheelAcc.current;
       for (const e of outcome.scrollEvents) {
         const dy = typeof e.dy === "number" ? e.dy : 0;
         acc += dy;
       }
-      // 24 logical units ≈ one notch (host LineDelta * 24).
-      const NOTCH = 24;
       if (Math.abs(acc) >= NOTCH) {
         const steps = Math.trunc(acc / NOTCH);
         acc -= steps * NOTCH;

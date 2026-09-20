@@ -70,11 +70,31 @@ fn app_taskbar_icon() -> Option<winit::window::Icon> {
 /// (`DESKTOP_DYNAMIC_MIN`). That is a platform capability floor used by the
 /// shared Dynamic resolver, not a PicoView product usability promise. The
 /// fixed 8-command toolbar needs ≈356 logical px width (8×36 + group gaps +
-/// padding); product closes the contract at 384×240. Keep in sync with
-/// `guest/shell_layout.ts` `PRODUCT_MIN_CLIENT` and `guest/pocket.json`
-/// `viewport.min`. Do **not** replace these with PocketJS 240×180.
-pub(crate) const PRODUCT_MIN_CLIENT_W: f64 = 384.0;
-pub(crate) const PRODUCT_MIN_CLIENT_H: f64 = 240.0;
+/// padding); product closes the contract at 384×240. Derived at build time
+/// from the product manifest authority (`guest/pocket.json`
+/// `viewport.dynamic.min`) via `build.rs` — see `product_facts.rs`.
+/// Do **not** replace these with PocketJS 240×180.
+pub(crate) fn product_min_client() -> (f64, f64) {
+    crate::product_facts::product_min_client()
+}
+
+/// Named budgets (post-release normalization C5): the cross-thread input
+/// queue capacity and the producer-side pending-presentation slot. The
+/// input bound keeps a burst of OS events bounded; the output slot is
+/// latest-wins by design (a superseded Presentation is never queued).
+pub(crate) const INPUT_CHANNEL_BOUND: usize = 256;
+pub(crate) const OUTPUT_SLOT_BOUND: usize = 1;
+
+/// R3 corrective: how long the event loop waits before retrying a pending
+/// (Full) Presentation flush — bounded, not busy-spin.
+pub(crate) const PRESENT_RETRY_DELAY: Duration = Duration::from_millis(16);
+
+/// Logical units per mouse-wheel notch. Host family convention: the shared
+/// PocketJS `hosts/desktop` host converts winit LineDelta with the same
+/// factor. This is the single owner of the notches→logical-units conversion;
+/// the guest receives the value on the resize svc line instead of carrying
+/// its own copy.
+pub(crate) const WHEEL_NOTCH_LOGICAL: f64 = 24.0;
 
 /// R3 corrective: live presentation facts captured on the window thread.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -223,8 +243,8 @@ impl Host {
     pub(crate) fn new(args: Args, proxy: EventLoopProxy<Wake>) -> Self {
         let title = args.title.clone();
         let viewport = args.viewport;
-        let (tx, inputs) = sync_channel(256);
-        let (outputs, rx) = sync_channel(1);
+        let (tx, inputs) = sync_channel(INPUT_CHANNEL_BOUND);
+        let (outputs, rx) = sync_channel(OUTPUT_SLOT_BOUND);
         let mut host = Self {
             window: None,
             surface: None,
@@ -471,8 +491,8 @@ impl ApplicationHandler<Wake> for Host {
                         // contract. Do not silently allow host/pocketjs 240px
                         // capability floor to undercut product chrome.
                         .with_min_inner_size(LogicalSize::new(
-                            PRODUCT_MIN_CLIENT_W,
-                            PRODUCT_MIN_CLIENT_H,
+                            product_min_client().0,
+                            product_min_client().1,
                         ))
                         .with_resizable(true)
                         // Stay hidden until the first presented frame so the
@@ -560,11 +580,17 @@ impl ApplicationHandler<Wake> for Host {
                 event_loop.exit();
             }
             Wake::PickFile => {
-                // Modal native dialog on the UI thread. Filter is the
-                // conservative product association set (not every WIC type).
+                // Modal native dialog on the UI thread. Filter DERIVES from
+                // the conservative product association set (one semantic
+                // fact: formats PicoView claims to open), never a separate
+                // literal extension list.
+                let claimed_formats: Vec<&str> = crate::associations::ASSOCIATED_EXTENSIONS
+                    .iter()
+                    .map(|ext| ext.trim_start_matches('.'))
+                    .collect();
                 let picked = rfd::FileDialog::new()
                     .set_title("Open image")
-                    .add_filter("Images", &["jpg", "jpeg", "png", "bmp"])
+                    .add_filter("Images", &claimed_formats)
                     .pick_file();
                 if let Some(path) = picked {
                     log::info!("open file dialog picked {}", path.display());
@@ -623,7 +649,7 @@ impl ApplicationHandler<Wake> for Host {
             }
             if self.pending_presentation.is_pending() {
                 event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
-                    Instant::now() + Duration::from_millis(16),
+                    Instant::now() + PRESENT_RETRY_DELAY,
                 ));
                 return;
             }
@@ -693,7 +719,9 @@ impl ApplicationHandler<Wake> for Host {
             }
             winit::event::WindowEvent::MouseWheel { delta, .. } => {
                 let dy = match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, y) => -(y as f64) * 24.0,
+                    winit::event::MouseScrollDelta::LineDelta(_, y) => {
+                        -(y as f64) * WHEEL_NOTCH_LOGICAL
+                    }
                     winit::event::MouseScrollDelta::PixelDelta(p) => -p.y,
                 };
                 // Coalesce nothing here; guest accumulates high-res deltas.
@@ -792,23 +820,21 @@ impl ApplicationHandler<Wake> for Host {
 /// plus R3 producer-side pending presentation delivery (CORRECTIVE-2).
 #[cfg(test)]
 mod tests {
-    use super::{
-        FlushOutcome, PRODUCT_MIN_CLIENT_H, PRODUCT_MIN_CLIENT_W, PendingPresentation,
-        PresentationFacts, QueueOutcome,
-    };
+    use super::{FlushOutcome, PendingPresentation, PresentationFacts, QueueOutcome, product_min_client};
     use crate::runtime::{Input, coalesce_presentation_batch};
     use pocket_desktop_host::{DESKTOP_DYNAMIC_MIN, PresentationGeometry, ViewportPolicy, resolve_geometry};
     use std::sync::mpsc::sync_channel;
 
     /// D. Product minimum remains 384×240 through PicoView window/product
     /// contract. PocketJS Dynamic floor 240×180 is platform capability only
-    /// and must not replace product min.
+    /// and must not replace product min. The values derive from
+    /// guest/pocket.json (build.rs); this pins the shipped product contract.
     #[test]
     fn product_minimum_remains_384x240_through_product_contract() {
-        assert_eq!(PRODUCT_MIN_CLIENT_W, 384.0);
-        assert_eq!(PRODUCT_MIN_CLIENT_H, 240.0);
+        let (min_w, min_h) = product_min_client();
+        assert_eq!((min_w, min_h), (384.0, 240.0));
         assert_ne!(
-            (PRODUCT_MIN_CLIENT_W as u32, PRODUCT_MIN_CLIENT_H as u32),
+            (min_w as u32, min_h as u32),
             DESKTOP_DYNAMIC_MIN
         );
         assert_eq!(DESKTOP_DYNAMIC_MIN, (240, 180));

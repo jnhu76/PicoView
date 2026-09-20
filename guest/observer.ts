@@ -68,7 +68,7 @@ export interface ObserverState {
   /** True once a terminal event (ready/error) closed seenGeneration; a
    *  same-generation event after the terminal is stale and never wins. */
   seenClosed: boolean;
-  viewport?: { w: number; h: number; dpi?: number };
+  viewport?: { w: number; h: number; dpi?: number; notch?: number };
   /** Browse state (directory navigation). */
   browse: BrowseState;
 }
@@ -107,6 +107,8 @@ export interface SvcLine {
   h?: unknown;
   /** Output scale: physical pixels per UI logical unit. */
   scale?: unknown;
+  /** Logical units per wheel notch (host-owned conversion factor, C5). */
+  notch?: unknown;
   /** Pointer / mouse events (desktop host parity). */
   x?: unknown;
   y?: unknown;
@@ -146,13 +148,21 @@ function extractBrowse(v: SvcLine): Partial<BrowseState> {
   return browse;
 }
 
+/** Fallback logical units per wheel notch, used only while the host has not
+ *  delivered its own notch factor on a resize line. The host owns the
+ *  notches→logical-units conversion (native WHEEL_NOTCH_LOGICAL, C5); this
+ *  fallback exists so guest tests and pre-notch hosts keep the shipped
+ *  behavior. */
+export const DEFAULT_WHEEL_NOTCH = 24;
+
 /** Apply one svc event; returns the SAME state reference when nothing
  *  applies. Stale events — older than the highest seen generation, or
  *  trailing a terminal event of the same generation — never win. */
 export function reduceObserver(state: ObserverState, v: SvcLine): ObserverState {
   if ((v.t === "hello" || v.t === "resize") && typeof v.w === "number" && typeof v.h === "number") {
     const dpi = isNumber(v.scale) && v.scale > 0 ? v.scale : (state.viewport?.dpi ?? 1);
-    return { ...state, viewport: { w: v.w, h: v.h, dpi } };
+    const notch = isNumber(v.notch) && v.notch > 0 ? v.notch : (state.viewport?.notch ?? DEFAULT_WHEEL_NOTCH);
+    return { ...state, viewport: { w: v.w, h: v.h, dpi, notch } };
   }
   if (v.t !== "current-item") return state;
   if (!isGeneration(v.g)) return state;

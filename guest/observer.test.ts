@@ -7,6 +7,7 @@
 // the observer's preserve-vs-replace policy only.
 import { expect, test } from "bun:test";
 import {
+  DEFAULT_WHEEL_NOTCH,
   displayVerdict,
   initialObserverState,
   reduceObserver,
@@ -151,11 +152,11 @@ test("several ready events in one turn collapse to the final publication", () =>
 
 test("viewport events update fit input without touching publication", () => {
   let s = reduceObserver(initialObserverState(), { t: "hello", w: 960, h: 640 });
-  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1 });
+  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1, notch: DEFAULT_WHEEL_NOTCH });
   s = reduceObserver(s, ready(1, 11, 1920, 1080));
-  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1 });
+  expect(s.viewport).toEqual({ w: 960, h: 640, dpi: 1, notch: DEFAULT_WHEEL_NOTCH });
   s = reduceObserver(s, { t: "resize", w: 1280, h: 720, scale: 1.5 });
-  expect(s.viewport).toEqual({ w: 1280, h: 720, dpi: 1.5 });
+  expect(s.viewport).toEqual({ w: 1280, h: 720, dpi: 1.5, notch: DEFAULT_WHEEL_NOTCH });
   expect(s.publication).toMatchObject({ handle: 11 });
 });
 

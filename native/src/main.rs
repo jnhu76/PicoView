@@ -25,6 +25,7 @@ mod associations;
 mod browse_session;
 mod current_item;
 mod presentation;
+mod product_facts;
 mod runtime;
 mod svc_queue;
 
