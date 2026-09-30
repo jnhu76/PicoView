@@ -684,6 +684,15 @@ fn wic_encode_jpeg(width: u32, height: u32) -> Vec<u8> {
         STREAM_SEEK_SET,
     };
 
+    // SAFETY: test-only JPEG encode helper. Invariants:
+    // - CoInitializeEx joins the MTA (S_FALSE = already joined, both fine);
+    //   factory/stream/encoder/frame are COM locals that outlive every use
+    //   below and release on drop.
+    // - CreateStreamOnHGlobal with fDeleteOnRelease=true transfers the
+    //   HGLOBAL to the stream.
+    // - All buffer arguments (WritePixels pixel slice, Read target) are
+    //   live, correctly sized slices/pointers for the duration of each
+    //   call: Read is given a 1 MiB buffer and a matching length.
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED).ok();
         let factory: IWICImagingFactory =

@@ -430,6 +430,24 @@ pub(super) mod wic {
     /// materializing O here, Product would conflate intrinsic orientation
     /// with user Rotate/Flip.
     pub fn decode_wic(bytes: &[u8]) -> Result<DecodedImage, OpenError> {
+        // SAFETY: whole-body COM/WIC call sequence over attacker bytes.
+        // Invariants:
+        // - COM: CoInitializeEx puts this thread in the MTA (S_FALSE means
+        //   already initialized; both outcomes are usable); factory, stream,
+        //   decoder, and converter are COM objects held in locals that
+        //   outlive every use below and release on drop (windows-rs handles).
+        // - Lifetime: WIC's InitializeFromMemory does not copy `bytes`; the
+        //   stream references the caller's memory. `bytes` is a shared
+        //   borrow that outlives this entire function body, and every
+        //   object created from the stream drops before return, so no WIC
+        //   reference can outlive the buffer.
+        // - Buffer: `decode_alloc_len` rejects frames above
+        //   MAX_DECODE_PIXELS before any allocation, so `pixels * 4` cannot
+        //   overflow usize and the allocation is bounded. `rgba` is sized
+        //   exactly width*height*4 and `stride = width*4` fits u32 because
+        //   the pixel cap bounds width at MAX_DECODE_PIXELS (stride at most
+        //   320 MB < 2^32). CopyPixels with a null rect writes at most
+        //   stride*height == rgba.len() bytes into that live buffer.
         unsafe {
             // OK / S_FALSE both mean a usable apartment on this thread.
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED).ok();

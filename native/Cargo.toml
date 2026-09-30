@@ -50,3 +50,13 @@ windows = { version = "0.62", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 rfd = "0.15"
+
+# Enforce the local SAFETY proof obligation at every unsafe site (private
+# items included). missing_safety_doc is deliberately NOT enabled: it only
+# covers public unsafe fn, and this crate has none — it would be a gate
+# that fires nowhere.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
