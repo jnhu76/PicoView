@@ -1,0 +1,75 @@
+You are a rust-review worker on a parallel Rust security review.
+Follow the protocol in your system prompt verbatim.
+
+Output directory: /home/hoo/Projects/PicoView/.rust-review-results/20260930T143750Z
+Finding scope root: native — finding locations MUST be inside this subtree.
+Context roots: . — read-only context for reachability, callers, wrappers, build settings, mitigations, and threat-model details. Do not file findings outside the finding scope.
+Scope root: native — legacy alias for Finding scope root.
+Threat model: REMOTE
+Severity filter: medium
+Codebase: has_unsafe=true, has_ffi=false, has_concurrency=true, has_async=false, has_packed_repr=false, has_fs_io=true
+
+<context>
+Codebase context (from output_dir/context.md — do NOT re-Read it from disk; this block IS the canonical copy):
+
+---
+threat_model: REMOTE
+severity_filter: medium
+scope_subpath: native
+finding_scope_root: native
+context_roots: .
+has_unsafe: true
+has_ffi: false
+has_concurrency: true
+has_async: false
+has_packed_repr: false
+has_fs_io: true
+output_dir: /home/hoo/Projects/PicoView/.rust-review-results/20260930T143750Z
+cargo_manifest: single-crate native/Cargo.toml (edition 2024, bin `picoview`)
+---
+
+# PicoView — Rust Security Review Context
+
+## Purpose
+
+PicoView is a released (v0.1.0) Windows 11 local image viewer built on PocketJS. The native host (`native/`, single Rust crate `picoview`) owns the Current Item authority, WIC baseline decode, PocketJS presentation, file-association installation, and the fatal-error path. Responsibility chain: Open → View → Inspect → Browse → Handle. Local-only product: no network dependency for viewing.
+
+## Scope
+
+`finding_scope_root` is `native/` — 18 `.rs` files (single crate): `src/main.rs`, `src/app.rs`, `src/runtime.rs`, `src/presentation.rs`, `src/associations.rs`, `src/browse_session.rs`, `src/svc_queue.rs`, `src/fatal.rs`, `src/assets.rs`, `src/product_facts.rs`, `src/current_item/{mod,decode,publication,pressure_probe,tests}.rs`, plus `build.rs` and two examples (`examples/admission_live_accept.rs`, `examples/gpu_cap_probe.rs`). Findings whose vulnerable location is outside `native/` are out of scope. `third_party/pocketjs` (PocketJS subtree snapshot, upstream-reviewed) and `guest/` (TypeScript guest) are read-only context only — inspect them to verify reachability/callers, but never file findings there.
+
+## Entry points
+
+- **CLI path argument** — `picoview <image-path>` from `main.rs`; path comes from the command line (also via Windows file association, where the shell passes the file path as argv).
+- **Untrusted image files** — arbitrary image files opened by the user; decoded via Windows WIC (`windows` crate, `Win32_Graphics_Imaging`) in `current_item/decode.rs`; bytes flow into RGBA8 buffers sized from decoder-reported dimensions.
+- **Containing-folder enumeration** — `browse_session.rs` reads sibling files of the opened image (untrusted directory contents).
+- **Native Open dialog** — `rfd` (trusted user choice, but the chosen file's *content* is untrusted).
+- **Registry (HKCU)** — `associations.rs` writes OpenWith associations (`Win32_System_Registry`); reads/writes user-controlled registry values.
+- **Process/memory probes** — `current_item/pressure_probe.rs` (`Win32_System_ProcessStatus`, `Win32_System_Threading`) reading process memory counters; contains `unsafe`.
+
+## Trust boundaries
+
+- Image file bytes: fully attacker-controllable (malicious file delivered by any means) — the REMOTE threat model maps here.
+- Containing-folder contents: attacker-controllable when a malicious directory is opened (sibling filenames, symlinks, special files).
+- HKCU registry: user-writable (lower trust than HKLM; a same-user local attacker is out of the REMOTE model, but malformed values written there are read back by this code).
+- PocketJS boundary: guest/native messages are expected to be bounded; native host treats PocketJS as a peer component.
+- No network surface in the viewing path.
+
+## Existing hardening
+
+- Extensive `#[cfg(windows)]` containment and module-level `mod tests` units (10 modules carry inline test suites).
+- `unsafe` is present but sparse: `app.rs`, `associations.rs`, `current_item/pressure_probe.rs`.
+- No fuzzing harness, no MIRI runs, no `clippy.toml`/`deny.toml` found in the repo.
+- Architecture invariants in `AGENTS.md`/`docs/ARCHITECTURE.md` (bounded guest/native messages, no unexplained full-image copies) — relevant context for judging resource/DoS findings.
+</context>
+
+— assignment —
+Worker id: worker-12
+Cluster id: resource-handling
+Cluster prompt: /home/hoo/.agents/skills/rust-review/prompts/clusters/resource-handling.md
+Sub-prompt paths:
+  - /home/hoo/.agents/skills/rust-review/prompts/general/raw-fd-lifecycle-finder.md
+  - /home/hoo/.agents/skills/rust-review/prompts/general/destructor-skip-finder.md
+Pass bug classes: raw-fd-lifecycle, destructor-skip
+Pass prefixes: RAWFD, DROPSKIP
+Skip subclasses: (none)

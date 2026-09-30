@@ -1,0 +1,9 @@
+# Coverage gate — worker-4 (cluster concurrency-data-race)
+
+| Pass prefix | Bug class        | Outcome                                                                                                                                                                          |
+|-------------|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ATOMICRACE  | atomic-race      | cleared (sole `Atomic*` is `OutputPermit`'s `Arc<AtomicBool>` at `runtime.rs:513`; the only conditional update is a `compare_exchange(true,false,AcqRel,Acquire)` at `runtime.rs:518` and `Drop` does an unconditional `store(true, Release)` — no load→conditional-store pair exists) |
+| UNSAFESYNC  | unsafe-sync-impl | cleared (no `unsafe impl` Send/Sync anywhere in `native/src` or examples — seed returned empty; interior-mutable fields audited: only atomics and channel endpoints)               |
+| SENDSYNCBOUND | send-sync-bounds | cleared (only spawn primitives are direct `std::thread::Builder::spawn` at `app.rs:572` (enforces `Send + 'static`) and third-party `OffloadWorker::spawn` call sites at `runtime.rs:506` / `pressure_probe.rs:154` passed owned `Send` payloads (`Vec<u8>`, `pocket_text::Engine`); no `transmute`, no `thread::scope`, no FFI thread creation in `native/`) |
+| SHMRACE     | shared-memory-race | cleared (no `MAP_SHARED`/`libc::mmap`/`memmap2`/`shm_open`/`memfd_create`/`CreateFileMapping`/`MapViewOfFile` anywhere in `native/src` or examples)                              |
+| STATICMUT   | static-mut-race  | cleared (no `static mut`, no `&raw const|mut`, no `addr_of_mut!`, no `ptr::read/write` targeting statics; only statics are three immutable `OnceLock` values)                     |

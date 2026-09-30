@@ -1,0 +1,5 @@
+# Coverage gate — worker-14 (cluster info-disclosure)
+
+| Pass prefix | Bug class        | Outcome                                                                                                                                                                                    |
+|-------------|------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| PTREXPOSE   | pointer-exposure | cleared (Phase-A seed returned zero pointer-derived values — every `as usize` hit is a numeric dimension/length conversion; no `{:p}` formatting, no `.addr()`/`.expose_provenance()`, no `transmute`; the only raw-pointer casts are transient FFI call arguments at `associations.rs:104`, `associations.rs:254`, `pressure_probe.rs:61` that are never stored, formatted, or returned; `runtime.rs` logs `live_handle()` which is a logical `Option<i32>`, not an address) |
