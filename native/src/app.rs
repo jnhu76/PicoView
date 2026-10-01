@@ -41,6 +41,9 @@ fn app_window_icon() -> Option<winit::window::Icon> {
     use winit::platform::windows::IconExtWindows;
     use windows::Win32::UI::WindowsAndMessaging::{SM_CXSMICON, GetSystemMetrics};
 
+    // SAFETY: GetSystemMetrics is a pointer-free system-metrics query — no
+    // handle, buffer, or lifetime is involved. A zero result (metric not
+    // available) is clamped to 16 instead of being trusted as an icon size.
     let size = unsafe { GetSystemMetrics(SM_CXSMICON) }.max(16) as u32;
     winit::window::Icon::from_resource(1, Some(PhysicalSize::new(size, size))).ok()
 }

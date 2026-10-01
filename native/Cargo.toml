@@ -2,6 +2,12 @@
 name = "picoview"
 version = "0.1.0"
 edition = "2024"
+# Build floor actually required by this crate and its locked dependencies:
+# the language floor is Rust 1.88 (edition 2024 + let-chains in production
+# code, app.rs try_send_input), but Cargo.lock pins cosmic-text 0.19.0 and
+# smol_str 0.3.6, which declare rustc 1.89 — verified empirically:
+# `cargo +1.88.0 check` fails at resolution, `cargo +1.89.0 check` resolves.
+rust-version = "1.89"
 license = "MIT"
 description = "PicoView native host: Current Item authority, WIC baseline decode, PocketJS presentation"
 
@@ -50,3 +56,13 @@ windows = { version = "0.62", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 rfd = "0.15"
+
+# Enforce the local SAFETY proof obligation at every unsafe site (private
+# items included). missing_safety_doc is deliberately NOT enabled: it only
+# covers public unsafe fn, and this crate has none — it would be a gate
+# that fires nowhere.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"

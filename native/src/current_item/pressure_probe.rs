@@ -55,6 +55,12 @@ fn process_memory() -> Option<(u64, u64)> {
     use windows::Win32::System::Threading::GetCurrentProcess;
     let mut counters = PROCESS_MEMORY_COUNTERS_EX::default();
     counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
+    // SAFETY: GetCurrentProcess returns a pseudo-handle that must not be
+    // closed. PROCESS_MEMORY_COUNTERS_EX is repr(C) with
+    // PROCESS_MEMORY_COUNTERS as its declared prefix (EX only appends
+    // PrivateUsage), so the cast to the base pointer type is the documented
+    // K32GetProcessMemoryInfo pattern; `cb` declares the full EX size, so
+    // the API fills — and reads back nothing beyond — this exact buffer.
     let ok = unsafe {
         GetProcessMemoryInfo(
             GetCurrentProcess(),
