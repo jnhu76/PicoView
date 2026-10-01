@@ -1,6 +1,0 @@
-# Coverage gate — worker-13 (cluster input-os-safety)
-
-| Pass prefix | Bug class           | Outcome                                                                                                                        |
-|-------------|---------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| PATHJOIN    | path-traversal-join | cleared (seed `.join(|.push(|PathBuf`: all production joins are build-time literals or test fixtures; the guest `open` path (runtime.rs:144) is used directly with no base-dir join and no intended root, and the guest is the trusted product bundle; CLI/dialog paths are user intent, the product's core function) |
-| TOCTOU      | toctou              | cleared (seed `.exists()|.metadata(|symlink_metadata`: decode.rs:57 `read_encoded_bounded` does probe-path → open-path, but no security decision rides on the probe (error classification only) and the authoritative checks run on the opened handle (`file.metadata()`) and on bytes actually read (`take_bounded` caps at limit+1 structurally) — the open-then-fstat mitigation; `browse_session` `is_file()` gates navigation order only) |

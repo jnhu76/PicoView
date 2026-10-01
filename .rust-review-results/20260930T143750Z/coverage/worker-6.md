@@ -1,5 +1,0 @@
-# Coverage gate — worker-6 (cluster recursion-dos-1)
-
-| Pass prefix | Bug class                              | Outcome                                                                                                                                                                                                                                                 |
-|-------------|----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| RECURSEDES  | recursive-deserialize-stack-overflow   | cleared (rec_map has zero crate-local recursive types — all 21 enums/structs inspected; only recursive library type is `serde_json::Value` at runtime.rs:158/457, parsed with default serde_json 128-frame limit (no `disable_recursion_limit` anywhere) from svc lines produced by the trusted embedded guest — not an external trust boundary; build.rs parses repo-owned `guest/pocket.json` at build time) |

@@ -1,5 +1,0 @@
-# Coverage gate — worker-8 (cluster recursion-dos-3)
-
-| Pass prefix | Bug class                           | Outcome                                                                                                                                                                                                     |
-|-------------|-------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| RECURSEDROP | recursive-drop-stack-overflow       | cleared (no crate-local recursive types and no `Box<Self>`/`Vec<Self>`/`Rc<Self>` chains — rg Phase-A seeds empty; the only recursive type dropped is `serde_json::Value`, whose sole construction path is the serde_json parser with the enforced 128-depth cap on every path, so drop recursion is depth-bounded at 128; no manual-Drop types beyond `OutputPermit` which holds only an `Arc<AtomicBool>`) |

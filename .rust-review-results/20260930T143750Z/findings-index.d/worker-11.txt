@@ -1,2 +1,0 @@
-/home/hoo/Projects/PicoView/.rust-review-results/20260930T143750Z/findings/CARGOLINT-001.md
-/home/hoo/Projects/PicoView/.rust-review-results/20260930T143750Z/findings/MSRV-001.md
