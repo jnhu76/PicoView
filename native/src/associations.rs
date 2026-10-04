@@ -182,25 +182,24 @@ fn set_sz(key: &OwnedKey, name: &str, value: &str) -> anyhow::Result<()> {
     use windows::core::{HSTRING, PCWSTR};
 
     let hname = HSTRING::from(name);
-    let hval = HSTRING::from(value);
-    // SAFETY: `hval` is a live NUL-terminated UTF-16 HSTRING, so
-    // `(len + 1) * 2` bytes starting at `as_ptr()` are exactly its UTF-16
-    // data including the terminator — all readable for the call — and the
-    // `*const u16 as *const u8` view covers the same allocation.
-    // `PCWSTR(hname.as_ptr())` is NUL-terminated and live. `key` is an open
-    // HKEY owned by the caller's guard.
-    let bytes =
-        unsafe { std::slice::from_raw_parts(hval.as_ptr() as *const u8, (hval.len() + 1) * 2) };
-    // SAFETY: `key` is an open guard-owned HKEY; `bytes` is the readable
-    // UTF-16 view built above; `PCWSTR(hname.as_ptr())` is NUL-terminated
-    // and live for the call.
+    // REG_SZ data as little-endian UTF-16 bytes including the NUL
+    // terminator — byte-identical to the former HSTRING pointer view
+    // (UNSAFE-AUDIT §9.1), built without any raw-pointer reinterpretation.
+    let bytes: Vec<u8> = value
+        .encode_utf16()
+        .chain([0u16])
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    // SAFETY: `key` is an open guard-owned HKEY; `bytes` is the live
+    // UTF-16 REG_SZ data built above; `PCWSTR(hname.as_ptr())` is
+    // NUL-terminated and live for the call.
     let status = unsafe {
         RegSetValueExW(
             key.key(),
             PCWSTR(hname.as_ptr()),
             Some(0),
             REG_SZ,
-            Some(bytes),
+            Some(bytes.as_slice()),
         )
     };
     if status != ERROR_SUCCESS {
